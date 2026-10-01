@@ -995,11 +995,15 @@ def gera_matriz_migracao_grupos():
 ## Tabela acima do minimo ##
 
 # ------------------------------------------------------------------
-# Regra de consumo mínimo por categoria
-# Mínimo da matrícula = consumo mínimo da categoria (m³ por economia)
-#                       x quantidade de economias da ligação.
+# Regra de consumo mínimo
+# Mínimo da matrícula:
+#   - ligação com UM tipo de economia  -> mínimo da Categoria x qtd. de economias
+#   - ligação MISTA (2+ tipos)         -> soma de (qtd. de cada tipo x mínimo do tipo)
+#       ex.: 2 residenciais + 1 comercial = 2x15 + 1x20 = 50 m³
+# "Qtd. Economia Outros" não entra. Ligações sem economia ou sem consumo ficam fora.
 # Acima  = Consumo Faturado maior que o mínimo da matrícula.
 # Abaixo = Consumo Faturado igual ou menor que o mínimo (faturado no mínimo).
+# Categorias sem mínimo cadastrado ficam fora e geram um alerta (pop-up) no relatório.
 # ------------------------------------------------------------------
 import unicodedata
 
@@ -1014,28 +1018,53 @@ CONSUMO_MINIMO_POR_CATEGORIA = {   # m³ por economia
     "INDUSTRIAL": 20,
 }
 
+# Coluna de economia -> mínimo (m³) por economia daquele tipo
+MINIMO_POR_TIPO_ECONOMIA = {
+    "Qtd. Economia Residencial": CONSUMO_MINIMO_POR_CATEGORIA["RESIDENCIAL"],
+    "Qtd. Economia Comercial":   CONSUMO_MINIMO_POR_CATEGORIA["COMERCIAL"],
+    "Qtd. Economia Industrial":  CONSUMO_MINIMO_POR_CATEGORIA["INDUSTRIAL"],
+    "Qtd. Economia Publica":     CONSUMO_MINIMO_POR_CATEGORIA["PUBLICA"],
+}
+
 def _normaliza_categoria(categoria):
     texto = unicodedata.normalize("NFKD", str(categoria)).encode("ascii", "ignore").decode("ascii")
     return " ".join(texto.upper().split())
 
-_categorias_sem_minimo = set()
+_categorias_sem_minimo = {}          # categoria -> nº de economias que ficaram fora
+alerta_minimo_html = ""              # pop-up exibido no relatório
 
-def classifica_acima_abaixo_minimo(categoria, consumo_faturado, economias=1):
-    cat = _normaliza_categoria(categoria)
-    minimo_por_economia = CONSUMO_MINIMO_POR_CATEGORIA.get(cat)
-    if minimo_por_economia is None:
-        _categorias_sem_minimo.add(str(categoria))
+def calcula_minimo_matricula(linha):
+    """Devolve o mínimo (m³) da matrícula, ou None se a categoria não tem mínimo cadastrado."""
+    qtds = {c: float(linha.get(c, 0) or 0) for c in MINIMO_POR_TIPO_ECONOMIA}
+    tipos_presentes = [c for c, q in qtds.items() if q > 0]
+    if len(tipos_presentes) > 1:                      # ligação mista
+        return sum(q * MINIMO_POR_TIPO_ECONOMIA[c] for c, q in qtds.items())
+    minimo_cat = CONSUMO_MINIMO_POR_CATEGORIA.get(_normaliza_categoria(linha.get("Categoria", "")))
+    if minimo_cat is None:
         return None
-    try:
-        qtd_economias = float(economias)
-    except (TypeError, ValueError):
-        qtd_economias = 0
-    if not qtd_economias or qtd_economias < 1:
-        qtd_economias = 1          # ligação sem economia informada conta como 1
-    minimo_matricula = minimo_por_economia * qtd_economias
-    return "Acima" if consumo_faturado > minimo_matricula else "Abaixo"
+    return minimo_cat * sum(qtds.values())
+
+def gera_alerta_categorias_sem_minimo():
+    if not _categorias_sem_minimo:
+        return ""
+    itens = "".join(
+        f"<li><strong>{html.escape(str(c))}</strong> — {int(q):,} economias".replace(",", ".") + "</li>"
+        for c, q in sorted(_categorias_sem_minimo.items())
+    )
+    return f"""
+<div id="alerta-minimo" role="alertdialog" aria-modal="true" aria-labelledby="alerta-minimo-titulo"
+     style="position:fixed;inset:0;background:rgba(5,5,13,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;">
+  <div style="background:#fff;max-width:460px;width:100%;border-radius:10px;padding:22px 24px;border-top:4px solid #C2560C;box-shadow:0 12px 40px rgba(5,5,13,.35);font-family:'IBM Plex Sans',sans-serif;color:#1A2740;">
+    <h3 id="alerta-minimo-titulo" style="margin:0 0 8px;font-size:1.05rem;color:#05050D;">Categorias sem consumo mínimo cadastrado</h3>
+    <p style="margin:0 0 10px;font-size:.88rem;line-height:1.45;">Estas categorias <strong>ficaram fora</strong> da tabela “Economias Acima/Abaixo do Consumo Mínimo”. Cadastre o mínimo delas no script para incluí-las:</p>
+    <ul style="margin:0 0 16px;padding-left:18px;font-size:.88rem;line-height:1.6;">{itens}</ul>
+    <button onclick="document.getElementById('alerta-minimo').remove()"
+            style="background:#1A2740;color:#fff;border:0;border-radius:6px;padding:8px 18px;font-size:.88rem;cursor:pointer;">Entendi</button>
+  </div>
+</div>"""
 
 def gera_tabela_acima_abaixo_minimo():
+    global alerta_minimo_html
     print("📊 Montando tabela Acima x Abaixo do Consumo Mínimo...")
     df = base_final.copy()
 
@@ -1043,24 +1072,35 @@ def gera_tabela_acima_abaixo_minimo():
         html_vazio = "<div class='card'><h2>Economias Acima/Abaixo do Consumo Mínimo</h2><p>Coluna 'Categoria' não encontrada</p></div>"
         return html_vazio, pd.DataFrame(columns=["Grupo","Acima_Atual","Acima_Ant","Abaixo_Atual","Abaixo_Ant"])
 
-    # ------------------------------------------------------------------
-    # Filtra apenas Rubrica AGUA para não duplicar economia (AGUA + ESGOTO)
-    # ------------------------------------------------------------------
+    # Somente rubrica AGUA (evita duplicar economia com ESGOTO) e só os dois meses comparados
     df = df[df["Rubrica"].str.contains("AGUA", case=False, na=False)]
+    df = df[df["Referencia de Leitura"].isin([REF_ATUAL, REF_ANTERIOR])].copy()
 
     df["Consumo Faturado"] = pd.to_numeric(df.get("Consumo Faturado", 0), errors="coerce").fillna(0)
-    df["Classificacao_Minimo"] = df.apply(
-        lambda r: classifica_acima_abaixo_minimo(r["Categoria"], r["Consumo Faturado"], r.get("Economias_Totais", 1)), axis=1
-    )
+    for c in MINIMO_POR_TIPO_ECONOMIA:
+        df[c] = pd.to_numeric(df.get(c, 0), errors="coerce").fillna(0)
+    df["Economias_Totais"] = df[list(MINIMO_POR_TIPO_ECONOMIA)].sum(axis=1)
+
+    # Fora: sem consumo faturado ou sem economia
+    df = df[(df["Consumo Faturado"] > 0) & (df["Economias_Totais"] > 0)].copy()
+
+    df["Minimo_Matricula"] = df.apply(calcula_minimo_matricula, axis=1)
+
+    sem_minimo = df[df["Minimo_Matricula"].isna()]
+    _categorias_sem_minimo.clear()
+    for cat, qtd in sem_minimo.groupby(sem_minimo["Categoria"].astype(str))["Economias_Totais"].sum().items():
+        _categorias_sem_minimo[cat] = qtd
     if _categorias_sem_minimo:
         print("⚠️ Categorias sem consumo mínimo cadastrado (ficam fora da tabela):", ", ".join(sorted(_categorias_sem_minimo)))
-    df = df[df["Classificacao_Minimo"].isin(["Acima", "Abaixo"])]
+    alerta_minimo_html = gera_alerta_categorias_sem_minimo()
+
+    df = df[df["Minimo_Matricula"].notna()].copy()
+    df["Classificacao_Minimo"] = (df["Consumo Faturado"] > df["Minimo_Matricula"]).map({True: "Acima", False: "Abaixo"})
 
     def conta_por(referencia, classe):
         subset = df[
             (df["Referencia de Leitura"] == referencia) &
-            (df["Classificacao_Minimo"] == classe) &
-            (df["Consumo Faturado"] > 0)
+            (df["Classificacao_Minimo"] == classe)
         ]
         return subset.groupby("Grupo")["Economias_Totais"].sum()
 
@@ -2379,7 +2419,7 @@ html_final = f"""
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-
+{alerta_minimo_html}
 <div class="header-exec">
   <div class="header-inner">
     <div class="header-badge">Águas do Rio · Relatório Executivo</div>
