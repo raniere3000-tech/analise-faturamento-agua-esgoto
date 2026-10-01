@@ -131,7 +131,7 @@ body.relatorio-aberto { overflow: hidden; }
 .painel-top20 .lead { margin: 0 0 14px; font-size: .9rem; }
 .tabela-rolagem { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
 .tabela-top20 { width: 100%; border-collapse: collapse; font-size: .84rem; }
-.tabela-top20 th { background: var(--marinho); color: #fff; font-weight: 600; text-align: left; padding: 8px 10px; white-space: nowrap; }
+.tabela-top20 th { position: sticky; top: 0; z-index: 1; background: var(--marinho); color: #fff; font-weight: 600; text-align: left; padding: 8px 10px; white-space: nowrap; }
 .tabela-top20 th.num, .tabela-top20 td.num { text-align: right; }
 .tabela-top20 th.ordenavel { cursor: pointer; user-select: none; }
 .tabela-top20 th.ordenavel:hover { background: var(--azul); }
@@ -204,8 +204,9 @@ body.relatorio-aberto { overflow: hidden; }
     <div class="badge">Etapa 2 · Conferência</div>
     <h2 id="top20Titulo">Top 20 clientes com maior consumo</h2>
     <p class="lead"><span id="textoFiltro"></span>Maiores <b>Consumo Faturado</b> do mês atual. Se quiser, altere o consumo ou o valor total (água + esgoto) de algum cliente. Ao aplicar, toda a análise e a comparação usam os valores alterados. Os arquivos da pasta não são modificados.</p>
-    <p class="nota" id="avisoTop20" hidden style="color:var(--laranja-texto);font-weight:600;margin:0 0 10px;">A coluna "Situacao Conta" não foi encontrada nos arquivos, então o Top 20 abaixo considera todas as contas.</p>
-    <div class="tabela-rolagem">
+    <p class="nota" id="avisoTop20" hidden style="color:var(--laranja-texto);font-weight:600;margin:0 0 10px;">A coluna "Situacao Conta" não foi encontrada nos arquivos, então abaixo aparece o Top 20 de maior consumo de todas as contas.</p>
+    <input type="search" id="buscaTop20" placeholder="Filtrar por ligação, cliente ou grupo…" aria-label="Filtrar clientes" style="width:100%;max-width:360px;margin:0 0 10px;padding:8px 12px;font:inherit;font-size:.88rem;border:1px solid var(--line);border-radius:8px;">
+    <div class="tabela-rolagem" style="max-height:62vh;overflow-y:auto;">
       <table class="tabela-top20">
         <thead><tr>
           <th>#</th><th>Ligação</th><th>Grupo</th><th>Cliente</th><th>Categoria</th><th>Situação conta</th>
@@ -464,9 +465,12 @@ body.relatorio-aberto { overflow: hidden; }
   function mostraTop20({ refAtual, linhas, colunaSituacao }) {
     linhasTop20 = linhas;
     progresso.hidden = true;
-    $("top20Titulo").textContent = `Top 20 clientes com maior consumo — ${nomeMes(refAtual)}`;
+    $("top20Titulo").textContent = colunaSituacao
+      ? `Clientes em análise — ${nomeMes(refAtual)} (${linhas.length})`
+      : `Top 20 clientes com maior consumo — ${nomeMes(refAtual)}`;
     $("avisoTop20").hidden = !!colunaSituacao;
-    $("textoFiltro").textContent = colunaSituacao ? "Aparecem só as contas com Situação Conta = EM ANALISE. " : "";
+    $("textoFiltro").textContent = colunaSituacao ? "Aparecem todos os clientes com Situação Conta = EM ANALISE. " : "";
+    $("buscaTop20").value = "";
     const corpo = $("corpoTop20");
     corpo.innerHTML = "";
     linhas.forEach((l, i) => {
@@ -544,6 +548,14 @@ body.relatorio-aberto { overflow: hidden; }
   document.querySelectorAll(".tabela-top20 th.ordenavel").forEach((th) => {
     th.addEventListener("click", () => ordenaTabela(th.dataset.ordem));
     th.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ordenaTabela(th.dataset.ordem); } });
+  });
+
+  $("buscaTop20").addEventListener("input", () => {
+    const termo = $("buscaTop20").value.trim().toLowerCase();
+    document.querySelectorAll("#corpoTop20 tr").forEach((tr) => {
+      const l = linhasTop20[+tr.dataset.indice];
+      tr.hidden = !!termo && !(`${l.ligacao} ${l.cliente} ${l.grupo}`.toLowerCase().includes(termo));
+    });
   });
 
   function atualizaContador() {

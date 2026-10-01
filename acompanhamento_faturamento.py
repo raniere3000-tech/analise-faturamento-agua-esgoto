@@ -525,8 +525,8 @@ def _normaliza_texto(t):
     return " ".join(txt.upper().split())
 
 def calcula_top20_maior_consumo(n=20):
-    """Top n ligações por Consumo Faturado no mês atual (rubrica VALOR DE AGUA),
-    considerando só contas com Situacao Conta = EM ANALISE.
+    """Todas as ligações com Situacao Conta = EM ANALISE no mês atual (rubrica VALOR DE AGUA),
+    ordenadas por Consumo Faturado. Sem a coluna Situacao Conta, devolve só o Top n.
     Valor = água + esgoto da ligação no mês atual."""
     ref = _ref_atual_base()
     mes = base_final[base_final["Referencia de Leitura"] == ref].copy()
@@ -537,7 +537,9 @@ def calcula_top20_maior_consumo(n=20):
     col_sit = _coluna_situacao_conta()
     if col_sit:
         agua = agua[agua[col_sit].map(_normaliza_texto) == "EM ANALISE"]
-    agua = agua.sort_values("Consumo Faturado", ascending=False).drop_duplicates("N. Ligação").head(n)
+    agua = agua.sort_values("Consumo Faturado", ascending=False).drop_duplicates("N. Ligação")
+    if not col_sit:            # sem a coluna Situacao Conta, limita ao Top n para não listar a base toda
+        agua = agua.head(n)
     linhas = []
     for _, r in agua.iterrows():
         linhas.append({
@@ -580,10 +582,10 @@ def aplica_ajustes_top20(ajustes):
                 base_final.loc[mask, "Valor (R$)"] = novos
         feitos += 1
     if feitos:
-        print(f"✏️ {feitos} ligação(ões) do Top 20 ajustada(s) manualmente.")
+        print(f"✏️ {feitos} ligação(ões) ajustada(s) manualmente.")
         aviso_ajustes_html = (
             f'<div class="card" style="border-left:4px solid #C2560C;padding:10px 16px;font-size:.88rem;">'
-            f'<strong>Atenção:</strong> este relatório usa {feitos} ligação(ões) do Top 20 de maior consumo '
+            f'<strong>Atenção:</strong> este relatório usa {feitos} ligação(ões) da conferência '
             f'com valores ajustados manualmente (referência {ref}).</div>'
         )
 
