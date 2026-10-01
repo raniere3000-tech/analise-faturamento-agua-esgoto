@@ -133,6 +133,9 @@ body.relatorio-aberto { overflow: hidden; }
 .tabela-top20 { width: 100%; border-collapse: collapse; font-size: .84rem; }
 .tabela-top20 th { background: var(--marinho); color: #fff; font-weight: 600; text-align: left; padding: 8px 10px; white-space: nowrap; }
 .tabela-top20 th.num, .tabela-top20 td.num { text-align: right; }
+.tabela-top20 th.ordenavel { cursor: pointer; user-select: none; }
+.tabela-top20 th.ordenavel:hover { background: var(--azul); }
+.tabela-top20 .seta { font-size: .7rem; opacity: .9; }
 .tabela-top20 td { padding: 5px 10px; border-top: 1px solid var(--line); vertical-align: middle; }
 .tabela-top20 tr:nth-child(even) td { background: #F7F8FA; }
 .tabela-top20 td.cli { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -206,7 +209,7 @@ body.relatorio-aberto { overflow: hidden; }
       <table class="tabela-top20">
         <thead><tr>
           <th>#</th><th>Ligação</th><th>Grupo</th><th>Cliente</th><th>Categoria</th><th>Situação conta</th>
-          <th class="num">Consumo Faturado (m³)</th><th class="num">Valor total (R$)</th>
+          <th class="num ordenavel" data-ordem="consumo" tabindex="0" title="Ordenar">Consumo Faturado (m³) <span class="seta"></span></th><th class="num ordenavel" data-ordem="valor" tabindex="0" title="Ordenar">Valor total (R$) <span class="seta"></span></th>
         </tr></thead>
         <tbody id="corpoTop20"></tbody>
       </table>
@@ -490,8 +493,10 @@ body.relatorio-aberto { overflow: hidden; }
         td.append(inp, orig);
         tr.appendChild(td);
       });
+      tr.dataset.indice = i;
       corpo.appendChild(tr);
     });
+    ordenaTabela("consumo", true);
     atualizaContador();
     $("etapaTop20").hidden = false;
     document.body.classList.add("relatorio-aberto");
@@ -516,6 +521,30 @@ body.relatorio-aberto { overflow: hidden; }
     });
     return { ajustes: Array.from(mapa.values()), invalido };
   }
+
+
+  // Ordena as linhas (padrão: maior para menor). Clicar de novo no mesmo título inverte.
+  let ordemAtual = { campo: "consumo", desc: true };
+  function ordenaTabela(campo, forcaDesc) {
+    const desc = forcaDesc ? true : (ordemAtual.campo === campo ? !ordemAtual.desc : true);
+    ordemAtual = { campo, desc };
+    const corpo = $("corpoTop20");
+    const valorLinha = (tr) => {
+      const inp = tr.querySelector(`input[data-campo="${campo}"]`);
+      const n = lerNumero(inp.value);
+      return Number.isNaN(n) ? linhasTop20[+tr.dataset.indice][campo] : n;
+    };
+    const trs = Array.from(corpo.children).sort((a, b) =>
+      (desc ? valorLinha(b) - valorLinha(a) : valorLinha(a) - valorLinha(b)) || (+a.dataset.indice - +b.dataset.indice));
+    trs.forEach((tr, pos) => { tr.firstChild.textContent = pos + 1; corpo.appendChild(tr); });
+    document.querySelectorAll(".tabela-top20 th.ordenavel").forEach((th) => {
+      th.querySelector(".seta").textContent = th.dataset.ordem === campo ? (desc ? "▼" : "▲") : "";
+    });
+  }
+  document.querySelectorAll(".tabela-top20 th.ordenavel").forEach((th) => {
+    th.addEventListener("click", () => ordenaTabela(th.dataset.ordem));
+    th.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ordenaTabela(th.dataset.ordem); } });
+  });
 
   function atualizaContador() {
     const { ajustes, invalido } = leAjustes();
