@@ -531,6 +531,13 @@ data_atual = pd.to_datetime(REF_ATUAL, format="%m/%Y")
 REF_ANTERIOR = (data_atual - pd.DateOffset(months=1)).strftime("%m/%Y")
 MES_ATUAL = nome_mes(REF_ATUAL)
 MES_ANTERIOR = nome_mes(REF_ANTERIOR)
+
+def nome_mes_curto(ref):
+    m, a = ref.split("/")
+    return f"{MESES_PT[int(m)-1][:3]}/{a[-2:]}"
+
+MES_ATUAL_CURTO = nome_mes_curto(REF_ATUAL)
+MES_ANTERIOR_CURTO = nome_mes_curto(REF_ANTERIOR)
 print(f"📅 {REF_ANTERIOR} ({MES_ANTERIOR}) vs {REF_ATUAL} ({MES_ATUAL})\n")
 
 df_atual = base_final[base_final["Referencia de Leitura"] == REF_ATUAL].copy()
@@ -701,18 +708,18 @@ def gera_tabela(comp, titulo, slug):
         <th colspan="1">Δ Ticket Médio</th>
     </tr>
     <tr class="header-sub">
-        <th>{MES_ATUAL}</th><th>{MES_ANTERIOR}</th>
-        <th>{MES_ATUAL}</th><th>{MES_ANTERIOR}</th>
+        <th title="{MES_ATUAL}">{MES_ATUAL_CURTO}</th><th title="{MES_ANTERIOR}">{MES_ANTERIOR_CURTO}</th>
+        <th title="{MES_ATUAL}">{MES_ATUAL_CURTO}</th><th title="{MES_ANTERIOR}">{MES_ANTERIOR_CURTO}</th>
         <th></th>
-        <th>{MES_ATUAL}</th><th>{MES_ANTERIOR}</th>
+        <th title="{MES_ATUAL}">{MES_ATUAL_CURTO}</th><th title="{MES_ANTERIOR}">{MES_ANTERIOR_CURTO}</th>
         <th>%</th><th>Abs</th>
-        <th>{MES_ATUAL}</th><th>{MES_ANTERIOR}</th>
+        <th title="{MES_ATUAL}">{MES_ATUAL_CURTO}</th><th title="{MES_ANTERIOR}">{MES_ANTERIOR_CURTO}</th>
         <th>%</th><th>Abs</th>
-        <th>{MES_ATUAL}</th><th>{MES_ANTERIOR}</th>
+        <th title="{MES_ATUAL}">{MES_ATUAL_CURTO}</th><th title="{MES_ANTERIOR}">{MES_ANTERIOR_CURTO}</th>
         <th></th>
-        <th>{MES_ATUAL}</th><th>{MES_ANTERIOR}</th>
+        <th title="{MES_ATUAL}">{MES_ATUAL_CURTO}</th><th title="{MES_ANTERIOR}">{MES_ANTERIOR_CURTO}</th>
         <th></th>
-        <th>{MES_ATUAL}</th><th>{MES_ANTERIOR}</th>
+        <th title="{MES_ATUAL}">{MES_ATUAL_CURTO}</th><th title="{MES_ANTERIOR}">{MES_ANTERIOR_CURTO}</th>
         <th></th>
     </tr>
     """
@@ -1850,10 +1857,10 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--azul-claro);
 .insight-card li::marker { color:var(--azul-claro); }
 
 /* ===== Tabelas ===== */
-table { border-collapse:collapse; width:100%; font-family:var(--fonte-cond); font-size:12.5px; font-variant-numeric:tabular-nums; }
-th, td { border:1px solid var(--linha); padding:5px 8px; text-align:center; }
+table { border-collapse:collapse; width:100%; font-family:var(--fonte-cond); font-size:11px; line-height:1.35; font-variant-numeric:tabular-nums; }
+th, td { border:1px solid var(--linha); padding:3px 5px; text-align:center; }
 td { white-space:nowrap; }
-th { background:var(--marinho); color:#FFFFFF; font-weight:600; font-size:12px; }
+th { background:var(--marinho); color:#FFFFFF; font-weight:600; font-size:10.5px; }
 .header-sub th { background:var(--azul); font-weight:500; }
 tbody tr:nth-child(even) td { background-color:var(--zebra); }
 tbody tr:hover td { background-color:var(--tint); }
