@@ -496,7 +496,7 @@ body.relatorio-aberto { overflow: hidden; }
       tr.dataset.indice = i;
       corpo.appendChild(tr);
     });
-    ordenaTabela("consumo", true);
+    ordenaTabela("valor", true);
     atualizaContador();
     $("etapaTop20").hidden = false;
     document.body.classList.add("relatorio-aberto");
@@ -523,8 +523,8 @@ body.relatorio-aberto { overflow: hidden; }
   }
 
 
-  // Ordena as linhas (padrão: maior para menor). Clicar de novo no mesmo título inverte.
-  let ordemAtual = { campo: "consumo", desc: true };
+  // Ordena as linhas (padrão: Valor total, maior para menor). Clicar de novo no mesmo título inverte.
+  let ordemAtual = { campo: "valor", desc: true };
   function ordenaTabela(campo, forcaDesc) {
     const desc = forcaDesc ? true : (ordemAtual.campo === campo ? !ordemAtual.desc : true);
     ordemAtual = { campo, desc };
