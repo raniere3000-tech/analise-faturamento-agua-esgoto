@@ -200,11 +200,12 @@ body.relatorio-aberto { overflow: hidden; }
   <div class="painel-top20">
     <div class="badge">Etapa 2 · Conferência</div>
     <h2 id="top20Titulo">Top 20 clientes com maior consumo</h2>
-    <p class="lead">Maiores <b>Consumo Faturado</b> do mês atual. Se quiser, altere o consumo ou o valor total (água + esgoto) de algum cliente. Ao aplicar, toda a análise e a comparação usam os valores alterados. Os arquivos da pasta não são modificados.</p>
+    <p class="lead"><span id="textoFiltro"></span>Maiores <b>Consumo Faturado</b> do mês atual. Se quiser, altere o consumo ou o valor total (água + esgoto) de algum cliente. Ao aplicar, toda a análise e a comparação usam os valores alterados. Os arquivos da pasta não são modificados.</p>
+    <p class="nota" id="avisoTop20" hidden style="color:var(--laranja-texto);font-weight:600;margin:0 0 10px;">A coluna "Situacao Conta" não foi encontrada nos arquivos, então o Top 20 abaixo considera todas as contas.</p>
     <div class="tabela-rolagem">
       <table class="tabela-top20">
         <thead><tr>
-          <th>#</th><th>Ligação</th><th>Grupo</th><th>Cliente</th><th>Categoria</th>
+          <th>#</th><th>Ligação</th><th>Grupo</th><th>Cliente</th><th>Categoria</th><th>Situação conta</th>
           <th class="num">Consumo Faturado (m³)</th><th class="num">Valor total (R$)</th>
         </tr></thead>
         <tbody id="corpoTop20"></tbody>
@@ -457,16 +458,18 @@ body.relatorio-aberto { overflow: hidden; }
     return /^-?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : NaN;
   }
 
-  function mostraTop20({ refAtual, linhas }) {
+  function mostraTop20({ refAtual, linhas, colunaSituacao }) {
     linhasTop20 = linhas;
     progresso.hidden = true;
     $("top20Titulo").textContent = `Top 20 clientes com maior consumo — ${nomeMes(refAtual)}`;
+    $("avisoTop20").hidden = !!colunaSituacao;
+    $("textoFiltro").textContent = colunaSituacao ? "Aparecem só as contas com Situação Conta = EM ANALISE. " : "";
     const corpo = $("corpoTop20");
     corpo.innerHTML = "";
     linhas.forEach((l, i) => {
       const tr = document.createElement("tr");
       const cel = (txt, cls) => { const td = document.createElement("td"); td.textContent = txt; if (cls) td.className = cls; return td; };
-      tr.append(cel(i + 1), cel(l.ligacao), cel(l.grupo), cel(l.cliente, "cli"), cel(l.categoria));
+      tr.append(cel(i + 1), cel(l.ligacao), cel(l.grupo), cel(l.cliente, "cli"), cel(l.categoria), cel(l.situacao || "—"));
       tr.lastChild.previousSibling.title = l.cliente;
       [["consumo", 0], ["valor", 2]].forEach(([campo, dec]) => {
         const td = document.createElement("td");

@@ -30,6 +30,7 @@ python acompanhamento_faturamento.py
 
 ## Premissas
 
+- Na conferência do Top 20, só entram contas com `Situacao Conta` = EM ANALISE (coluna do arquivo de fatura ou consumo)
 - O nome do arquivo de consumo contém o mês (ex.: `09-2026`)
 - O nº da ligação é o mesmo em todas as bases
 - Só considera as rubricas `VALOR DE AGUA` e `VALOR DE ESGOTO`

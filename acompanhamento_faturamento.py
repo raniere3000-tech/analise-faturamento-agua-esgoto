@@ -513,8 +513,20 @@ aviso_ajustes_html = ""
 def _ref_atual_base():
     return base_final["Referencia de Leitura"].dropna().max()
 
+def _coluna_situacao_conta():
+    for c in base_final.columns:
+        if _normaliza_texto(c).startswith("SITUACAO CONTA"):
+            return c
+    return None
+
+def _normaliza_texto(t):
+    import unicodedata as _u
+    txt = _u.normalize("NFKD", str(t)).encode("ascii", "ignore").decode("ascii")
+    return " ".join(txt.upper().split())
+
 def calcula_top20_maior_consumo(n=20):
-    """Top n ligações por Consumo Faturado no mês atual (rubrica VALOR DE AGUA).
+    """Top n ligações por Consumo Faturado no mês atual (rubrica VALOR DE AGUA),
+    considerando só contas com Situacao Conta = EM ANALISE.
     Valor = água + esgoto da ligação no mês atual."""
     ref = _ref_atual_base()
     mes = base_final[base_final["Referencia de Leitura"] == ref].copy()
@@ -522,6 +534,9 @@ def calcula_top20_maior_consumo(n=20):
     mes["Valor (R$)"] = pd.to_numeric(mes["Valor (R$)"], errors="coerce").fillna(0)
     valor_total = mes.groupby("N. Ligação")["Valor (R$)"].sum()
     agua = mes[mes["Rubrica"].str.contains("AGUA", case=False, na=False)]
+    col_sit = _coluna_situacao_conta()
+    if col_sit:
+        agua = agua[agua[col_sit].map(_normaliza_texto) == "EM ANALISE"]
     agua = agua.sort_values("Consumo Faturado", ascending=False).drop_duplicates("N. Ligação").head(n)
     linhas = []
     for _, r in agua.iterrows():
@@ -530,10 +545,11 @@ def calcula_top20_maior_consumo(n=20):
             "grupo": str(r.get("Grupo", "")),
             "cliente": "" if pd.isna(r.get("Nome Cliente")) else str(r.get("Nome Cliente")),
             "categoria": "" if pd.isna(r.get("Categoria")) else str(r.get("Categoria")),
+            "situacao": str(r[col_sit]) if col_sit else "",
             "consumo": float(r["Consumo Faturado"]),
             "valor": round(float(valor_total.get(r["N. Ligação"], 0)), 2),
         })
-    return {"refAtual": ref, "linhas": linhas}
+    return {"refAtual": ref, "linhas": linhas, "colunaSituacao": col_sit or ""}
 
 def aplica_ajustes_top20(ajustes):
     """ajustes: lista de {ligacao, consumo, valor} (campo None = não alterado).
