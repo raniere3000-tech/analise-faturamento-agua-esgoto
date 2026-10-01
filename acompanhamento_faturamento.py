@@ -613,8 +613,8 @@ def gera_tabela(comp, titulo, slug):
     def td(campo, valor):
         return f'<td data-field="{campo}">{valor}</td>'
     def deltac(campo, valor, dec=2, pct=False):
-        cor = "#c00000" if valor<0 else "#000"
-        fundo = "#f9c9c9" if valor<0 else "transparent"
+        cor = "#C2560C" if valor<0 else "#05050D"
+        fundo = "#FCE4D2" if valor<0 else "transparent"
         txt = f"{valor*100:.1f}%".replace(".", ",") if pct else fmt_num(valor,dec)
         return f'<td data-field="{campo}" style="text-align:center; color:{cor}; background:{fundo};">{txt}</td>'
     def linha(grupo, d, is_media=False):
@@ -794,8 +794,8 @@ def monta_quadro_ciclos_situacao():
 
     linhas_html = ""
     for _, r in df_ciclo.iterrows():
-        cor_dif_ativa = "#c00000" if r["Dif_Ativas"]<0 else "#000"
-        cor_dif_cort = "#c00000" if r["Dif_Cortadas"]<0 else "#000"
+        cor_dif_ativa = "#C2560C" if r["Dif_Ativas"]<0 else "#05050D"
+        cor_dif_cort = "#C2560C" if r["Dif_Cortadas"]<0 else "#05050D"
         linhas_html += f"""
         <tr data-grupo="{r['Grupo']}"
             data-ativa-atual="{r['Ativa_Atual']}" data-ativa-anterior="{r['Ativa_Ant']}"
@@ -809,8 +809,8 @@ def monta_quadro_ciclos_situacao():
             <td style="text-align:center; color:{cor_dif_cort};">{fmt(r['Dif_Cortadas'])}</td>
         </tr>
         """
-    cor_total_ativa = "#c00000" if total_dif_ativa<0 else "#000"
-    cor_total_cort = "#c00000" if total_dif_cort<0 else "#000"
+    cor_total_ativa = "#C2560C" if total_dif_ativa<0 else "#05050D"
+    cor_total_cort = "#C2560C" if total_dif_cort<0 else "#05050D"
     linhas_html += f"""
     <tr class="linha-total">
         <td style="text-align:center;">Total</td>
@@ -904,14 +904,14 @@ def gera_matriz_migracao_grupos():
         if valor <= 0:
             return "transparent"
         if go == gd:
-            return "#e8f5e9"
+            return "#F2F2F2"
         if gd == "Sem Faturamento Atual":
-            return "#fddede"
+            return "#FCE4D2"
         if go == "Sem Faturamento Anterior":
-            return "#e3f0fb"
+            return "#E1E7F0"
         intensidade = min(1.0, valor / max_desvio)
-        r1, g1, b1 = 255, 243, 224
-        r2, g2, b2 = 255, 138, 0
+        r1, g1, b1 = 185, 198, 217   # #B9C6D9
+        r2, g2, b2 = 57, 77, 115     # #394D73
         r = int(r1 + (r2 - r1) * intensidade)
         g = int(g1 + (g2 - g1) * intensidade)
         b = int(b1 + (b2 - b1) * intensidade)
@@ -934,7 +934,13 @@ def gera_matriz_migracao_grupos():
             valor = int(crosstab.loc[go, gd]) if (go in crosstab.index and gd in crosstab.columns) else 0
             total_linha += valor
             cor = cor_desvio(valor, go, gd)
-            fonte_cor = "#7a1f00" if (valor > 0 and go != gd and gd != "Sem Faturamento Atual" and go != "Sem Faturamento Anterior") else "#000"
+            migrou = valor > 0 and go != gd and gd != "Sem Faturamento Atual" and go != "Sem Faturamento Anterior"
+            if migrou:
+                fonte_cor = "#FFFFFF" if valor / max_desvio > 0.5 else "#05050D"
+            elif valor > 0 and gd == "Sem Faturamento Atual":
+                fonte_cor = "#C2560C"
+            else:
+                fonte_cor = "#05050D"
             peso = "font-weight:700;" if (valor > 0 and go != gd) else ""
             tds += (
                 f'<td data-destino="{esc(gd)}" data-valor="{valor}" '
@@ -944,7 +950,7 @@ def gera_matriz_migracao_grupos():
         <tr data-grupo="{esc(go)}">
             <td style="text-align:left; font-weight:600;">{html.escape(str(go))}</td>
             {tds}
-            <td data-field="total-linha" style="font-weight:700; background:#eef2f7;">{fmt_int_br(total_linha)}</td>
+            <td data-field="total-linha" style="font-weight:700; background:#E1E7F0;">{fmt_int_br(total_linha)}</td>
         </tr>
         """
 
@@ -958,19 +964,19 @@ def gera_matriz_migracao_grupos():
     <tr class="linha-total">
         <td style="text-align:left;">Total</td>
         {tds_total}
-        <td data-field="total-geral" style="background:#eef2f7;">{fmt_int_br(total_geral)}</td>
+        <td data-field="total-geral" style="background:#E1E7F0;">{fmt_int_br(total_geral)}</td>
     </tr>
     """
 
     return f"""
     <div class="card">
     <h2>🔄 Matriz de Migração de Grupos — {MES_ANTERIOR} → {MES_ATUAL}</h2>
-    <p style="font-size:0.8em; color:#666; margin-top:-6px;">
+    <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Cada linha mostra em quais grupos as economias que faturaram em <b>{MES_ANTERIOR}</b> estão faturando em <b>{MES_ATUAL}</b>.<br>
-        <span style="background:#e8f5e9; padding:2px 6px; border-radius:4px;">🟢 Verde</span> = permaneceu no mesmo grupo &nbsp;|&nbsp;
-        <span style="background:#ff8a00; color:#fff; padding:2px 6px; border-radius:4px;">🟠 Laranja</span> = migrou para outro grupo &nbsp;|&nbsp;
-        <span style="background:#fddede; padding:2px 6px; border-radius:4px;">🔴 Vermelho</span> = deixou de faturar &nbsp;|&nbsp;
-        <span style="background:#e3f0fb; padding:2px 6px; border-radius:4px;">🔵 Azul</span> = novo faturamento
+        <span style="background:#F2F2F2; border:1px solid #DCE1E9; padding:2px 6px; border-radius:4px;">Cinza</span> = permaneceu no mesmo grupo &nbsp;|&nbsp;
+        <span style="background:#394D73; color:#FFFFFF; padding:2px 6px; border-radius:4px;">Azul</span> = migrou para outro grupo (mais escuro = mais ligações) &nbsp;|&nbsp;
+        <span style="background:#FCE4D2; color:#C2560C; padding:2px 6px; border-radius:4px;">Laranja</span> = deixou de faturar &nbsp;|&nbsp;
+        <span style="background:#E1E7F0; padding:2px 6px; border-radius:4px;">Azul claro</span> = novo faturamento
     </p>
     <table class="tabela-matriz-grupo">
         <thead>{cabecalho}</thead>
@@ -1063,8 +1069,8 @@ def gera_tabela_acima_abaixo_minimo():
 
     linhas_html = ""
     for _, r in df_tab.iterrows():
-        cor_dif_acima = "#c00000" if r["Dif_Acima"] < 0 else "#1e8449"
-        cor_dif_abaixo = "#c00000" if r["Dif_Abaixo"] > 0 else "#1e8449"
+        cor_dif_acima = "#C2560C" if r["Dif_Acima"] < 0 else "#1A2740"
+        cor_dif_abaixo = "#C2560C" if r["Dif_Abaixo"] > 0 else "#1A2740"
         linhas_html += f"""
         <tr data-grupo="{r['Grupo']}"
             data-acima-atual="{r['Acima_Atual']}" data-acima-anterior="{r['Acima_Ant']}"
@@ -1079,8 +1085,8 @@ def gera_tabela_acima_abaixo_minimo():
         </tr>
         """
 
-    cor_total_acima = "#c00000" if total_dif_acima < 0 else "#1e8449"
-    cor_total_abaixo = "#c00000" if total_dif_abaixo > 0 else "#1e8449"
+    cor_total_acima = "#C2560C" if total_dif_acima < 0 else "#1A2740"
+    cor_total_abaixo = "#C2560C" if total_dif_abaixo > 0 else "#1A2740"
     linhas_html += f"""
     <tr class="linha-total">
         <td style="text-align:center;">Total</td>
@@ -1111,7 +1117,7 @@ def gera_tabela_acima_abaixo_minimo():
     html_tabela = f"""
     <div class="card">
     <h2>📉 Economias Acima x Abaixo do Consumo Mínimo — {MES_ATUAL} vs {MES_ANTERIOR}</h2>
-    <p style="font-size:0.8em; color:#666; margin-top:-6px;">
+    <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Classificação por categoria do cliente comparando o Consumo Faturado com o mínimo tarifário definido.
     </p>
     <table class="tabela-min-consumo">{cab}{linhas_html}</table>
@@ -1188,14 +1194,13 @@ def gera_cards_kpis_html(df_resumo):
     def card(icone, titulo, field, valor_at, valor_ant, moeda=False, sufixo="", dec=0):
         pct = delta_pct(valor_at, valor_ant)
         seta = "▲" if pct >= 0 else "▼"
-        cor = "#1e8449" if pct >= 0 else "#c00000"
+        cor = "#1A2740" if pct >= 0 else "#C2560C"
         if moeda:
             valor_txt = "R$ " + fmt_num(valor_at, 2)
         else:
             valor_txt = fmt_num(valor_at, dec) + sufixo
         return f"""
-        <div class="kpi-card">
-            <div class="kpi-icone">{icone}</div>
+        <div class="kpi-card{' negativo' if pct < 0 else ''}">
             <h3>{titulo}</h3>
             <p class="kpi-valor" data-field="{field}-valor">{valor_txt}</p>
             <p class="kpi-delta" data-field="{field}-delta" style="color:{cor};">{seta} {abs(pct):.1f}% vs mês anterior</p>
@@ -1225,19 +1230,19 @@ def gera_grafico_faturamento_html(df_resumo):
     for at, ant in zip(atuais, anteriores):
         variacao = ((at - ant) / ant) if ant else 0
         if variacao > 0.4:
-            cores_atual.append("#b45309")   # âmbar escuro — crescimento atípico
+            cores_atual.append("#49668C")   # azul médio — crescimento atípico
         elif variacao < -0.4:
-            cores_atual.append("#991b1b")   # vermelho escuro — queda atípica
+            cores_atual.append("#E8710A")   # laranja — queda atípica
         else:
-            cores_atual.append("#0b2447")   # azul marinho padrão
+            cores_atual.append("#1A2740")   # azul marinho padrão
 
     return f"""
     <div class="card">
     <h2>📈 Faturamento Total por Grupo — {MES_ATUAL} vs {MES_ANTERIOR}</h2>
-    <p style="font-size:0.78em; color:#666; margin-top:-6px;">
-        <span style="background:#0b2447; color:#fff; padding:2px 6px; border-radius:4px;">Normal</span>
-        <span style="background:#b45309; color:#fff; padding:2px 6px; border-radius:4px;">Crescimento atípico (+40%)</span>
-        <span style="background:#991b1b; color:#fff; padding:2px 6px; border-radius:4px;">Queda atípica (-40%)</span>
+    <p style="font-size:0.78em; color:#49668C; margin-top:-6px;">
+        <span style="background:#1A2740; color:#FFFFFF; padding:2px 6px; border-radius:4px;">Normal</span>
+        <span style="background:#49668C; color:#FFFFFF; padding:2px 6px; border-radius:4px;">Crescimento atípico (+40%)</span>
+        <span style="background:#E8710A; color:#FFFFFF; padding:2px 6px; border-radius:4px;">Queda atípica (-40%)</span>
         &nbsp;|&nbsp; Passe o mouse sobre as barras para ver os valores exatos.
     </p>
     <canvas id="graficoFaturamento" height="110"></canvas>
@@ -1283,7 +1288,7 @@ def gera_grafico_faturamento_html(df_resumo):
                     const alturaBarra = chart.chartArea.bottom - bar.y;
                     if (alturaBarra < alturaMinima) return;
 
-                    ctx.fillStyle = '#0b2447';
+                    ctx.fillStyle = '#1A2740';
                     ctx.font = 'bold 10px Segoe UI, Arial, sans-serif';
                     ctx.fillText(formatoCompacto(valor), bar.x, bar.y - 4);
                 }});
@@ -1299,7 +1304,7 @@ def gera_grafico_faturamento_html(df_resumo):
                     {{
                         label: '{MES_ANTERIOR}',
                         data: listaAnterior,
-                        backgroundColor: '#a9bdd6',
+                        backgroundColor: '#A7B5CB',
                         borderRadius: 3,
                         categoryPercentage: 0.65,
                         barPercentage: 0.85
@@ -1328,18 +1333,18 @@ def gera_grafico_faturamento_html(df_resumo):
                             font: {{ size: 11 }},
                             generateLabels: function(chart) {{
                                 return [
-                                    {{ text: '{MES_ANTERIOR}', fillStyle: '#a9bdd6', strokeStyle: '#a9bdd6', pointStyle: 'circle' }},
-                                    {{ text: '{MES_ATUAL}', fillStyle: '#0b2447', strokeStyle: '#0b2447', pointStyle: 'circle' }},
-                                    {{ text: 'Alerta (±40%)', fillStyle: '#b45309', strokeStyle: '#b45309', pointStyle: 'circle' }}
+                                    {{ text: '{MES_ANTERIOR}', fillStyle: '#A7B5CB', strokeStyle: '#A7B5CB', pointStyle: 'circle' }},
+                                    {{ text: '{MES_ATUAL}', fillStyle: '#1A2740', strokeStyle: '#1A2740', pointStyle: 'circle' }},
+                                    {{ text: 'Alerta (±40%)', fillStyle: '#E8710A', strokeStyle: '#E8710A', pointStyle: 'circle' }}
                                 ];
                             }}
                         }}
                     }},
                     tooltip: {{
                         enabled: true,
-                        backgroundColor: '#0b2447',
-                        titleColor: '#fff',
-                        bodyColor: '#fff',
+                        backgroundColor: '#1A2740',
+                        titleColor: '#FFFFFF',
+                        bodyColor: '#FFFFFF',
                         padding: 10,
                         cornerRadius: 6,
                         callbacks: {{
@@ -1353,7 +1358,7 @@ def gera_grafico_faturamento_html(df_resumo):
                 scales: {{
                     x: {{
                         grid: {{ display: false, drawBorder: false }},
-                        ticks: {{ font: {{ size: 11 }}, color: '#334155' }}
+                        ticks: {{ font: {{ size: 11 }}, color: '#394D73' }}
                     }},
                     y: {{
                         beginAtZero: true,
@@ -1376,7 +1381,7 @@ def gera_card_leitura_html(df_resumo):
     dias_at = df_resumo["Dias_Leitura_Atual"].mean() if len(df_resumo) else 0
     dias_ant = df_resumo["Dias_Leitura_Anterior"].mean() if len(df_resumo) else 0
     diff = dias_at - dias_ant
-    cor = "#c00000" if diff < 0 else "#1e8449"
+    cor = "#C2560C" if diff < 0 else "#1A2740"
     return f"""
     <div class="card">
     <h2>🗓️ Dias de Leitura — Média Geral</h2>
@@ -1619,16 +1624,16 @@ def gera_tabela_top100_html(df, titulo, slug):
             alinhamento = "left" if c in ("Nome_Cliente", "Grupo", "Categoria") else "center"
             destaque = ""
             if c == "Queda_%" and isinstance(v, (int, float)) and v >= 50:
-                destaque = "color:#c00000; font-weight:700;"
+                destaque = "color:#C2560C; font-weight:700;"
             tds += f"<td style='text-align:{alinhamento}; {destaque}'>{texto}</td>"
         linhas_html += f"<tr>{tds}</tr>"
 
     return f"""
     <div class="card">
     <h2>🏆 Top 100 Clientes com Maior Queda de Consumo — {titulo}</h2>
-    <p style="font-size:0.8em; color:#666; margin-top:-6px;">
+    <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Ranking dos clientes com maior redução de consumo faturado entre os dois meses comparados.
-        <span style="color:#c00000; font-weight:700;">Vermelho</span> = queda igual ou superior a 50%.
+        <span style="color:#C2560C; font-weight:700;">Laranja</span> = queda igual ou superior a 50%.
     </p>
     <table class="tabela-top100-{slug}">
         <thead><tr>{ths}</tr></thead>
@@ -1725,10 +1730,10 @@ justificativa_html = f"""
         <div>
             <button class="btn-just" onclick="adicionarJustificativa()">➕ Adicionar</button>
             <button class="btn-just" id="btnEditarJust" onclick="toggleEdicaoJustificativa()">✏️ Editar</button>
-            <button class="btn-just" onclick="limparJustificativas()" style="background:#c00000;">🗑️ Limpar</button>
+            <button class="btn-just" onclick="limparJustificativas()" style="background:#C2560C;">🗑️ Limpar</button>
         </div>
     </div>
-    <div id="lista-justificativas" style="font-size:0.9em; color:#333; line-height:1.6;">
+    <div id="lista-justificativas" style="font-size:0.9em; color:#1A2740; line-height:1.6;">
         {texto_justificativa}
     </div>
 </div>
@@ -1767,8 +1772,10 @@ filtro_html = f"""
 
 html_style = """
 <style>
+/* Paleta: #05050D texto | #1A2740 marinho (principal/positivo) | #394D73 e #49668C azuis secundários
+   #F2F2F2 fundo | #E8710A laranja (negativo) | #C2560C laranja para texto */
 * { box-sizing: border-box; }
-body { font-family:'Segoe UI', Arial, sans-serif; background:#f4f6f9; margin:0; }
+body { font-family:'Segoe UI', Arial, sans-serif; background:#F2F2F2; margin:0; }
 
 .header-exec {
     background: linear-gradient(135deg, #0b2447 0%, #14375e 60%, #1b4a76 100%);
@@ -1794,57 +1801,58 @@ body { font-family:'Segoe UI', Arial, sans-serif; background:#f4f6f9; margin:0; 
 #view-resumo, #view-tabelas { display:none; }
 #view-resumo.ativo, #view-tabelas.ativo { display:block; }
 .toggle { display:flex; justify-content:center; margin:16px 0; }
-.toggle button { padding:8px 18px; border:none; border-radius:5px; background:#14375e; color:#fff; margin:0 4px; cursor:pointer; font-weight:600; font-size:0.85em; }
-.toggle button.active { background:#1b9e82; }
+.toggle button { padding:8px 18px; border:none; border-radius:5px; background:#1A2740; color:#FFFFFF; margin:0 4px; cursor:pointer; font-weight:600; font-size:0.85em; }
+.toggle button.active { background:#49668C; }
 
-.card { background:#fff; margin:16px auto; padding:16px; max-width:1300px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1); overflow-x:auto; }
-.card h2 { font-size:1.05em; margin:0 0 12px 0; color:#14375e; }
+.card { background:#FFFFFF; margin:16px auto; padding:16px; max-width:1300px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1); overflow-x:auto; }
+.card h2 { font-size:1.05em; margin:0 0 12px 0; color:#1A2740; }
 
-.kpis-grid { display:flex; flex-wrap:wrap; gap:16px; justify-content:center; margin:20px 16px; }
-.kpi-card { background:#fff; padding:14px 18px; border-radius:14px; min-width:180px; text-align:center; box-shadow:0 4px 14px rgba(20,55,94,0.08); border-top: 4px solid #1b9e82; transition: transform .15s; }
-.kpi-card:hover { transform: translateY(-3px); }
-.kpi-icone { font-size:1.3em; margin-bottom:4px; }
-.kpi-card h3 { font-size:0.7em; color:#556; margin:0 0 6px 0; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
-.kpi-valor { font-size:1.05em; font-weight:800; margin:2px 0; color:#0b2447; }
-.kpi-delta { font-size:0.72em; margin:4px 0 0 0; font-weight:700; }
+.kpis-grid { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:10px; max-width:1300px; margin:16px auto; padding:0 16px; }
+.kpi-card { background:#FFFFFF; padding:9px 6px 8px; border-radius:10px; text-align:center; box-shadow:0 2px 8px rgba(26,39,64,0.08); border-top:4px solid #1A2740; min-width:0; }
+.kpi-card.negativo { border-top-color:#E8710A; }
+.kpi-card h3 { font-size:0.6em; color:#49668C; margin:0 0 4px 0; font-weight:700; text-transform:uppercase; letter-spacing:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-valor { font-size:0.95em; font-weight:800; margin:0; color:#05050D; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-delta { font-size:0.66em; margin:3px 0 0 0; font-weight:700; white-space:nowrap; }
+@media (max-width: 1100px) { .kpis-grid { grid-template-columns:repeat(4, minmax(0,1fr)); } }
+@media (max-width: 560px)  { .kpis-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
 
-.obs-dias { font-size:0.82em; color:#444; margin-top:10px; text-align:center; }
+.obs-dias { font-size:0.82em; color:#394D73; margin-top:10px; text-align:center; }
 
 .insights-secao { margin-bottom: 22px; }
 .insights-grid { display:flex; flex-wrap:wrap; gap:14px; }
-.insight-card { background:#fafcff; border:1px solid #e6ebf1; border-radius:10px; padding:14px 18px; flex:1 1 300px; box-shadow:0 2px 6px rgba(0,0,0,0.03); }
-.insight-card h4 { font-size:0.82em; margin:0 0 8px 0; color:#14375e; font-weight:700; }
-.insight-card ul { margin:0; padding-left:18px; font-size:0.82em; color:#333; line-height:1.6; }
+.insight-card { background:#FFFFFF; border:1px solid #DCE1E9; border-radius:10px; padding:14px 18px; flex:1 1 300px; box-shadow:0 2px 6px rgba(0,0,0,0.03); }
+.insight-card h4 { font-size:0.82em; margin:0 0 8px 0; color:#1A2740; font-weight:700; }
+.insight-card ul { margin:0; padding-left:18px; font-size:0.82em; color:#1A2740; line-height:1.6; }
 .insight-card li { margin-bottom:5px; }
-.insight-card li::marker { color:#1b9e82; }
+.insight-card li::marker { color:#49668C; }
 
 table { border-collapse:collapse; width:100%; font-size:0.62em; }
-th, td { border:1px solid #ddd; padding:3px 5px; text-align:center; }
-th { background:#14375e; color:#fff; font-size:0.85em; }
-.linha-media, .linha-total { font-weight:700; background:#eef2f7; }
+th, td { border:1px solid #DCE1E9; padding:3px 5px; text-align:center; }
+th { background:#1A2740; color:#FFFFFF; font-size:0.85em; }
+.linha-media, .linha-total { font-weight:700; background:#E1E7F0; }
 
-.tabela-wrap { display: block; width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #14375e #e2e8f0; cursor: grab; }
+.tabela-wrap { display: block; width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #1A2740 #E1E7F0; cursor: grab; }
 .tabela-wrap::-webkit-scrollbar { height: 10px; }
-.tabela-wrap::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 6px; }
-.tabela-wrap::-webkit-scrollbar-thumb { background: #14375e; border-radius: 6px; }
+.tabela-wrap::-webkit-scrollbar-track { background: #E1E7F0; border-radius: 6px; }
+.tabela-wrap::-webkit-scrollbar-thumb { background: #1A2740; border-radius: 6px; }
 .tabela-wrap.grabbing { cursor: grabbing; }
 
 .filtro-wrap { margin:16px auto; max-width:1300px; position:relative; }
-.btn-filtro { padding:8px 14px; border-radius:6px; border:none; background:#14375e; color:#fff; cursor:pointer; font-size:0.85em; }
-.painel-filtro { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:100; background:#fff; border:1px solid #ddd; border-radius:6px; padding:12px; max-height:320px; overflow-y:auto; box-shadow:0 6px 18px rgba(0,0,0,0.15); min-width:260px; }
+.btn-filtro { padding:8px 14px; border-radius:6px; border:none; background:#1A2740; color:#FFFFFF; cursor:pointer; font-size:0.85em; }
+.painel-filtro { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:100; background:#FFFFFF; border:1px solid #DCE1E9; border-radius:6px; padding:12px; max-height:320px; overflow-y:auto; box-shadow:0 6px 18px rgba(0,0,0,0.15); min-width:260px; }
 .painel-filtro.aberto { display:block; }
 .painel-acoes { display:flex; gap:8px; margin-bottom:10px; }
 .check-item { display:block; margin:4px 0; font-size:0.85em; }
 .check-list { display:flex; flex-direction:column; gap:6px; }
-.mini-btn { margin-right:8px; padding:4px 10px; border:none; border-radius:4px; background:#ccc; cursor:pointer; font-size:0.8em; }
-.badge { background:#1b9e82; color:#fff; border-radius:10px; padding:1px 8px; font-size:0.75em; margin-left:6px; }
+.mini-btn { margin-right:8px; padding:4px 10px; border:none; border-radius:4px; background:#DCE1E9; cursor:pointer; font-size:0.8em; }
+.badge { background:#49668C; color:#FFFFFF; border-radius:10px; padding:1px 8px; font-size:0.75em; margin-left:6px; }
 
-.btn-just { padding: 5px 12px; border: none; border-radius: 6px; background: #14375e; color: #fff; font-size: 0.78em; cursor: pointer; margin-left: 6px; font-weight: 600; }
-.btn-just:hover { background: #1b6f8f; }
+.btn-just { padding: 5px 12px; border: none; border-radius: 6px; background: #1A2740; color: #FFFFFF; font-size: 0.78em; cursor: pointer; margin-left: 6px; font-weight: 600; }
+.btn-just:hover { background: #394D73; }
 #lista-justificativas p { position: relative; padding: 6px 8px; border-radius: 6px; margin: 6px 0; }
-#lista-justificativas.modo-edicao p { outline: 1px dashed #1b9e82; background: #fafcff; }
-#lista-justificativas.modo-edicao p:hover { background: #eef7f2; }
-.btn-remover-item { display: none; position: absolute; top: 2px; right: 4px; background: #c00000; color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 0.7em; cursor: pointer; line-height: 1; }
+#lista-justificativas.modo-edicao p { outline: 1px dashed #49668C; background: #FFFFFF; }
+#lista-justificativas.modo-edicao p:hover { background: #F2F2F2; }
+.btn-remover-item { display: none; position: absolute; top: 2px; right: 4px; background: #C2560C; color: #FFFFFF; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 0.7em; cursor: pointer; line-height: 1; }
 #lista-justificativas.modo-edicao .btn-remover-item { display: block; }
 </style>
 """
@@ -1973,7 +1981,7 @@ function recalcularTotais() {{
         function setDelta(campo, valor, pct) {{
             const el = linhaTotal.querySelector('[data-field="' + campo + '"]');
             if (!el) return;
-            const cor = valor < 0 ? '#c00000' : '#000';
+            const cor = valor < 0 ? '#C2560C' : '#05050D';
             el.style.color = cor;
             el.innerText = pct ? (valor * 100).toFixed(1).replace('.', ',') + '%' : fmt(valor, 0);
         }}
@@ -2028,9 +2036,9 @@ function recalcularTotalAtivaCortada() {{
     const elAtiva = linhaTotal.querySelector('[data-field="delta-ativa"]');
     const elCort = linhaTotal.querySelector('[data-field="delta-cortada"]');
     elAtiva.innerText = fmt(deltaAtiva);
-    elAtiva.style.color = deltaAtiva < 0 ? '#c00000' : '#000';
+    elAtiva.style.color = deltaAtiva < 0 ? '#C2560C' : '#05050D';
     elCort.innerText = fmt(deltaCort);
-    elCort.style.color = deltaCort < 0 ? '#c00000' : '#000';
+    elCort.style.color = deltaCort < 0 ? '#C2560C' : '#05050D';
 }}
 
 function recalcularTabelaMinimo() {{
@@ -2058,9 +2066,9 @@ function recalcularTabelaMinimo() {{
     const elAcima = linhaTotal.querySelector('[data-field="delta-acima"]');
     const elAbaixo = linhaTotal.querySelector('[data-field="delta-abaixo"]');
     elAcima.innerText = fmt(deltaAcima);
-    elAcima.style.color = deltaAcima < 0 ? '#c00000' : '#1e8449';
+    elAcima.style.color = deltaAcima < 0 ? '#C2560C' : '#1A2740';
     elAbaixo.innerText = fmt(deltaAbaixo);
-    elAbaixo.style.color = deltaAbaixo > 0 ? '#c00000' : '#1e8449';
+    elAbaixo.style.color = deltaAbaixo > 0 ? '#C2560C' : '#1A2740';
 }}
 
 function recalcularMatrizGrupos() {{
@@ -2142,10 +2150,12 @@ function recalcularKPIsResumo() {{
         if (elDelta) {{
             const delta = valorAtual - valorAnterior;
             const pct = valorAnterior ? (delta / valorAnterior * 100) : 0;
-            const cor = delta < 0 ? '#c00000' : '#1e8449';
+            const cor = delta < 0 ? '#C2560C' : '#1A2740';
             const seta = delta < 0 ? '▼' : '▲';
             elDelta.innerText = seta + ' ' + Math.abs(pct).toFixed(1).replace('.', ',') + '% vs mês anterior';
             elDelta.style.color = cor;
+            const card = elDelta.closest('.kpi-card');
+            if (card) card.classList.toggle('negativo', delta < 0);
         }}
     }}
 
@@ -2182,8 +2192,8 @@ function configurarTooltipGrafico() {{
     const chart = window.graficoFaturamentoChart;
     if (!chart.options.plugins) chart.options.plugins = {{}};
     chart.options.plugins.tooltip = {{
-        enabled: true, backgroundColor: '#0a2540', titleColor: '#ffffff', bodyColor: '#ffffff',
-        borderColor: '#1e3a5f', borderWidth: 1, padding: 12, cornerRadius: 8,
+        enabled: true, backgroundColor: '#05050D', titleColor: '#FFFFFF', bodyColor: '#FFFFFF',
+        borderColor: '#394D73', borderWidth: 1, padding: 12, cornerRadius: 8,
         titleFont: {{ size: 13, weight: 'bold' }}, bodyFont: {{ size: 12 }}, displayColors: true,
         callbacks: {{
             title: function(context) {{ return 'Grupo ' + context[0].label; }},
@@ -2226,13 +2236,13 @@ function toggleEdicaoJustificativa() {{
         lista.classList.remove('modo-edicao');
         lista.querySelectorAll('p').forEach(p => p.contentEditable = false);
         btn.innerText = '✏️ Editar';
-        btn.style.background = '#14375e';
+        btn.style.background = '#1A2740';
         salvarJustificativas();
     }} else {{
         lista.classList.add('modo-edicao');
         lista.querySelectorAll('p').forEach(p => p.contentEditable = true);
         btn.innerText = '💾 Salvar';
-        btn.style.background = '#1e8449';
+        btn.style.background = '#1A2740';
     }}
 }}
 
