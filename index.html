@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Análise de Faturamento — Água e Esgoto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <meta name="description" content="Selecione a pasta com os arquivos e gere o relatório comparativo de água e esgoto no navegador.">
 <style>
 :root {
@@ -24,7 +27,8 @@
 html, body { height: 100%; }
 body {
   margin: 0;
-  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
   color: var(--text);
   background: linear-gradient(135deg, var(--preto) 0%, var(--marinho) 55%, var(--azul) 100%);
   background-attachment: fixed;
@@ -49,12 +53,12 @@ body {
 }
 .badge {
   display: inline-block;
-  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  font-size: 12px; font-weight: 600;
   color: var(--azul);
   background: #E1E7F0;
   padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;
 }
-h1 { margin: 0 0 6px; font-size: clamp(1.45rem, 4vw, 1.85rem); line-height: 1.2; color: var(--marinho); }
+h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 4vw, 1.9rem); line-height: 1.2; font-weight: 600; letter-spacing: -.015em; color: var(--marinho); }
 .lead { margin: 0 0 22px; color: var(--muted); }
 
 .btn {
@@ -63,8 +67,9 @@ h1 { margin: 0 0 6px; font-size: clamp(1.45rem, 4vw, 1.85rem); line-height: 1.2;
   font: inherit; font-weight: 700; text-decoration: none;
 }
 .btn:disabled { opacity: .6; cursor: wait; }
+.btn:focus-visible { outline: 2px solid var(--azul-claro); outline-offset: 2px; }
 .btn-principal {
-  width: 100%; padding: 15px 20px; font-size: 1.05rem;
+  width: 100%; padding: 15px 20px; font-size: 1rem; font-weight: 600;
   background: var(--marinho); color: #FFFFFF;
 }
 .btn-principal:hover:not(:disabled) { background: var(--azul); }
@@ -75,7 +80,7 @@ h1 { margin: 0 0 6px; font-size: clamp(1.45rem, 4vw, 1.85rem); line-height: 1.2;
 .btn-secundario:hover:not(:disabled) { border-color: var(--azul-claro); color: var(--azul-claro); }
 
 .orientacoes { margin: 24px 0 0; padding: 18px 20px; background: var(--cinza); border-radius: 12px; }
-.orientacoes h2 { margin: 0 0 8px; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--azul); }
+.orientacoes h2 { margin: 0 0 8px; font-size: .92rem; font-weight: 600; color: var(--marinho); }
 .orientacoes ul { margin: 0; padding-left: 18px; font-size: .9rem; }
 .orientacoes li { margin-bottom: 6px; }
 .orientacoes li:last-child { margin-bottom: 0; }
@@ -111,7 +116,7 @@ code { font-family: Consolas, "Courier New", monospace; font-size: .9em; backgro
 }
 .barra-relatorio .titulo { font-weight: 700; font-size: .92rem; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .btn-barra {
-  padding: 7px 12px; font-size: .82rem; border-radius: 8px;
+  padding: 7px 12px; font-size: .82rem; font-weight: 600; border-radius: 6px;
   background: rgba(255,255,255,.1); color: #FFFFFF; border: 1px solid rgba(255,255,255,.25);
 }
 .btn-barra:hover { background: rgba(255,255,255,.2); }
@@ -128,11 +133,11 @@ body.relatorio-aberto { overflow: hidden; }
 
 <main class="inicio" id="inicio">
   <div class="painel">
-    <div class="badge">Relatório comparativo</div>
+    <div class="badge">Águas do Rio · Relatório executivo</div>
     <h1>Análise de Faturamento de Água e Esgoto</h1>
     <p class="lead">Selecione a pasta com os arquivos do mês. O relatório abre sozinho quando a análise chegar a 100%.</p>
 
-    <button type="button" class="btn btn-principal" id="btnPasta">📂 Selecionar pasta e analisar</button>
+    <button type="button" class="btn btn-principal" id="btnPasta">Selecionar pasta e analisar</button>
     <button type="button" class="btn btn-secundario" id="btnAtualizar" hidden></button>
     <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
 
@@ -166,8 +171,8 @@ body.relatorio-aberto { overflow: hidden; }
   <div class="barra-relatorio">
     <span class="titulo" id="relatorioTitulo">Relatório</span>
     <span id="downloads" style="display:contents"></span>
-    <button type="button" class="btn btn-barra" id="btnAtualizarBarra" hidden>🔄 Atualizar</button>
-    <button type="button" class="btn btn-barra" id="btnVoltar">📂 Outra pasta</button>
+    <button type="button" class="btn btn-barra" id="btnAtualizarBarra" hidden>Atualizar</button>
+    <button type="button" class="btn btn-barra" id="btnVoltar">Outra pasta</button>
   </div>
   <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto"></iframe>
 </div>
@@ -176,9 +181,9 @@ body.relatorio-aberto { overflow: hidden; }
 (() => {
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
-    "Relatorio_Comparativo.html": { rotulo: "⬇ Relatório", tipo: "text/html" },
-    "Top100_Quedas_Consumo.xlsx": { rotulo: "⬇ Top 100 (Excel)", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
-    "Base_Compilada_HISTORICO.xlsx": { rotulo: "⬇ Base histórica (Excel)", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    "Relatorio_Comparativo.html": { rotulo: "Baixar relatório", tipo: "text/html" },
+    "Top100_Quedas_Consumo.xlsx": { rotulo: "Baixar Top 100 (Excel)", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    "Base_Compilada_HISTORICO.xlsx": { rotulo: "Baixar base histórica (Excel)", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
   };
   const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -370,7 +375,7 @@ body.relatorio-aberto { overflow: hidden; }
         const handle = await window.showDirectoryPicker({ id: "faturamento", mode: "read" });
         pastaHandle = handle;
         btnAtualizar.hidden = false;
-        btnAtualizar.textContent = `🔄 Atualizar com a pasta "${handle.name}"`;
+        btnAtualizar.textContent = `Atualizar com a pasta "${handle.name}"`;
         analisaHandle(handle);
       } catch (e) {
         if (e.name !== "AbortError") mostraErro("Não foi possível abrir a pasta.", String(e));

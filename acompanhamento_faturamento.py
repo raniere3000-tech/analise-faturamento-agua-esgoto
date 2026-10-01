@@ -59,7 +59,7 @@ def seleciona_pasta_local():
     )
     root.destroy()
     if not pasta:
-        raise SystemExit("❌ Nenhuma pasta selecionada. Execução cancelada.")
+        raise SystemExit("Nenhuma pasta selecionada. Execução cancelada.")
     return pasta
 
 def envia_arquivos_colab(destino):
@@ -75,7 +75,7 @@ def envia_arquivos_colab(destino):
     print("   e selecione TODOS os arquivos (Ctrl+A) → Abrir.\n")
     enviados = files.upload()
     if not enviados:
-        raise SystemExit("❌ Nenhum arquivo enviado. Execução cancelada.")
+        raise SystemExit("Nenhum arquivo enviado. Execução cancelada.")
     for nome, conteudo in enviados.items():
         if not nome.lower().endswith(EXTENSOES_VALIDAS):
             print(f"   ⚠️ Ignorado (extensão não suportada): {nome}")
@@ -837,7 +837,7 @@ def monta_quadro_ciclos_situacao():
     """
     html_tabela = f"""
     <div class="card">
-    <h2>Economias Faturadas por Ciclo — Ativa x Cortada</h2>
+    <h2>Economias faturadas por ciclo — ativas x cortadas</h2>
     <table class="tabela-ativa-cortada">{cab}{linhas_html}</table>
     </div>
     """
@@ -970,7 +970,7 @@ def gera_matriz_migracao_grupos():
 
     return f"""
     <div class="card">
-    <h2>🔄 Matriz de Migração de Grupos — {MES_ANTERIOR} → {MES_ATUAL}</h2>
+    <h2>Matriz de migração de grupos — {MES_ANTERIOR} → {MES_ATUAL}</h2>
     <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Cada linha mostra em quais grupos as economias que faturaram em <b>{MES_ANTERIOR}</b> estão faturando em <b>{MES_ATUAL}</b>.<br>
         <span style="background:#F2F2F2; border:1px solid #DCE1E9; padding:2px 6px; border-radius:4px;">Cinza</span> = permaneceu no mesmo grupo &nbsp;|&nbsp;
@@ -1116,7 +1116,7 @@ def gera_tabela_acima_abaixo_minimo():
 
     html_tabela = f"""
     <div class="card">
-    <h2>📉 Economias Acima x Abaixo do Consumo Mínimo — {MES_ATUAL} vs {MES_ANTERIOR}</h2>
+    <h2>Economias acima x abaixo do consumo mínimo — {MES_ATUAL} vs {MES_ANTERIOR}</h2>
     <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Classificação por categoria do cliente comparando o Consumo Faturado com o mínimo tarifário definido.
     </p>
@@ -1208,14 +1208,14 @@ def gera_cards_kpis_html(df_resumo):
         """.replace(".1f}", ".1f}".replace(",", "."))
 
     cards = ""
-    cards += card("💧", "Faturamento Água", "fatagua", t_fatagua_at, t_fatagua_ant, moeda=True)
-    cards += card("🚰", "Faturamento Esgoto", "fatesgoto", t_fatesgoto_at, t_fatesgoto_ant, moeda=True)
-    cards += card("🏠", "Economias Faturadas", "eco", t_eco_at, t_eco_ant)
-    cards += card("📦", "Volume Faturado", "volfat", t_vol_at, t_vol_ant, sufixo=" m³")
-    cards += card("💰", "Tarifa Média", "tarifa", tarifa_at, tarifa_ant, moeda=True)
-    cards += card("📊", "Volume Médio", "vm", vm_at, vm_ant, sufixo=" m³", dec=2)
-    cards += card("🎫", "Ticket Médio", "ticket", ticket_at, ticket_ant, moeda=True)
-    cards += card("⬆️", "Acima do Mínimo", "acima", t_acima_at, t_acima_ant)
+    cards += card("", "Faturamento Água", "fatagua", t_fatagua_at, t_fatagua_ant, moeda=True)
+    cards += card("", "Faturamento Esgoto", "fatesgoto", t_fatesgoto_at, t_fatesgoto_ant, moeda=True)
+    cards += card("", "Economias Faturadas", "eco", t_eco_at, t_eco_ant)
+    cards += card("", "Volume Faturado", "volfat", t_vol_at, t_vol_ant, sufixo=" m³")
+    cards += card("", "Tarifa Média", "tarifa", tarifa_at, tarifa_ant, moeda=True)
+    cards += card("", "Volume Médio", "vm", vm_at, vm_ant, sufixo=" m³", dec=2)
+    cards += card("", "Ticket Médio", "ticket", ticket_at, ticket_ant, moeda=True)
+    cards += card("", "Acima do Mínimo", "acima", t_acima_at, t_acima_ant)
     return cards
 
 ## NOVO — Gráfico de Faturamento (Chart.js) ##
@@ -1238,14 +1238,9 @@ def gera_grafico_faturamento_html(df_resumo):
 
     return f"""
     <div class="card">
-    <h2>📈 Faturamento Total por Grupo — {MES_ATUAL} vs {MES_ANTERIOR}</h2>
-    <p style="font-size:0.78em; color:#49668C; margin-top:-6px;">
-        <span style="background:#1A2740; color:#FFFFFF; padding:2px 6px; border-radius:4px;">Normal</span>
-        <span style="background:#49668C; color:#FFFFFF; padding:2px 6px; border-radius:4px;">Crescimento atípico (+40%)</span>
-        <span style="background:#E8710A; color:#FFFFFF; padding:2px 6px; border-radius:4px;">Queda atípica (-40%)</span>
-        &nbsp;|&nbsp; Passe o mouse sobre as barras para ver os valores exatos.
-    </p>
-    <canvas id="graficoFaturamento" height="110"></canvas>
+    <h2>Faturamento total por grupo — {MES_ATUAL} vs {MES_ANTERIOR}</h2>
+    <p class="nota-secao">Barras do mês atual em laranja indicam queda acima de 40%; em azul médio, crescimento acima de 40%. Passe o mouse sobre as barras para ver os valores.</p>
+    <div class="grafico-area"><canvas id="graficoFaturamento"></canvas></div>
     <script>
     (function() {{
         const ctx = document.getElementById('graficoFaturamento').getContext('2d');
@@ -1289,13 +1284,15 @@ def gera_grafico_faturamento_html(df_resumo):
                     if (alturaBarra < alturaMinima) return;
 
                     ctx.fillStyle = '#1A2740';
-                    ctx.font = 'bold 10px Segoe UI, Arial, sans-serif';
+                    ctx.font = "600 11px 'IBM Plex Sans Condensed', 'Segoe UI', Arial, sans-serif";
                     ctx.fillText(formatoCompacto(valor), bar.x, bar.y - 4);
                 }});
                 ctx.restore();
             }}
         }};
 
+        Chart.defaults.font.family = "'IBM Plex Sans', 'Segoe UI', Arial, sans-serif";
+        Chart.defaults.color = '#394D73';
         window.graficoFaturamentoChart = new Chart(ctx, {{
             type: 'bar',
             data: {{
@@ -1321,6 +1318,7 @@ def gera_grafico_faturamento_html(df_resumo):
             }},
             options: {{
                 responsive: true,
+                maintainAspectRatio: false,
                 layout: {{
                     padding: {{ top: 28 }}
                 }},
@@ -1383,8 +1381,8 @@ def gera_card_leitura_html(df_resumo):
     diff = dias_at - dias_ant
     cor = "#C2560C" if diff < 0 else "#1A2740"
     return f"""
-    <div class="card">
-    <h2>🗓️ Dias de Leitura — Média Geral</h2>
+    <div class="card card-faixa">
+    <h2>Dias de leitura (média)</h2>
     <p class="obs-dias">
         {MES_ATUAL}: <b>{fmt_num(dias_at,1)}</b> dias &nbsp;|&nbsp;
         {MES_ANTERIOR}: <b>{fmt_num(dias_ant,1)}</b> dias &nbsp;|&nbsp;
@@ -1412,7 +1410,7 @@ def gera_cards_insights_html(comp_agua, comp_esgoto, df_ciclos, top_agua_df, top
 
     card_cortes = f"""
     <div class="insight-card">
-        <h4>✂️ Cortes</h4>
+        <h4>Cortes</h4>
         <ul>
             <li>{fmt_int_br(total_cort_at)} ligações cortadas ({fmt_int_br(total_cort_at-total_cort_ant)} vs {MES_ANTERIOR})</li>
             <li>{fmt_int_br(total_ativa_at)} ligações ativas ({fmt_int_br(total_ativa_at-total_ativa_ant)} vs {MES_ANTERIOR})</li>
@@ -1422,25 +1420,25 @@ def gera_cards_insights_html(comp_agua, comp_esgoto, df_ciclos, top_agua_df, top
 
     card_cresc_esgoto = f"""
     <div class="insight-card">
-        <h4>📈 Crescimento — Esgoto</h4>
+        <h4>Crescimento — Esgoto</h4>
         <ul>{top_variacao(comp_esgoto, crescimento=True)}</ul>
     </div>
     """
     card_cresc_agua = f"""
     <div class="insight-card">
-        <h4>📈 Crescimento — Água</h4>
+        <h4>Crescimento — Água</h4>
         <ul>{top_variacao(comp_agua, crescimento=True)}</ul>
     </div>
     """
     card_queda_esgoto = f"""
     <div class="insight-card">
-        <h4>📉 Queda — Esgoto</h4>
+        <h4>Queda — Esgoto</h4>
         <ul>{top_variacao(comp_esgoto, crescimento=False)}</ul>
     </div>
     """
     card_queda_agua = f"""
     <div class="insight-card">
-        <h4>📉 Queda — Água</h4>
+        <h4>Queda — Água</h4>
         <ul>{top_variacao(comp_agua, crescimento=False)}</ul>
     </div>
     """
@@ -1456,13 +1454,13 @@ def gera_cards_insights_html(comp_agua, comp_esgoto, df_ciclos, top_agua_df, top
 
     card_top100_esgoto = f"""
     <div class="insight-card">
-        <h4>🏆 Top100 Esgoto</h4>
+        <h4>Top 100 — Esgoto</h4>
         <ul>{top_clientes(top_esg_df)}</ul>
     </div>
     """
     card_top100_agua = f"""
     <div class="insight-card">
-        <h4>🏆 Top100 Água</h4>
+        <h4>Top 100 — Água</h4>
         <ul>{top_clientes(top_agua_df)}</ul>
     </div>
     """
@@ -1508,7 +1506,7 @@ def gera_tabela_dados_resumo_html(df_resumo):
     """
     return f"""
     <div class="card">
-    <h2>📋 Resumo Consolidado por Grupo</h2>
+    <h2>Resumo consolidado por grupo</h2>
     <table id="tabela-dados-resumo">
         <thead>{cab}</thead>
         <tbody>{linhas_html}</tbody>
@@ -1595,7 +1593,7 @@ def exporta_top100(df_atual, df_anterior, ref_atual, ref_anterior):
 
 def gera_tabela_top100_html(df, titulo, slug):
     if df.empty:
-        return f"<div class='card'><h2>🏆 Top 100 Clientes com Maior Queda de Consumo — {titulo}</h2><p>Sem dados</p></div>"
+        return f"<div class='card'><h2>Top 100 clientes com maior queda de consumo — {titulo}</h2><p>Sem dados</p></div>"
 
     colunas = df.columns.tolist()
 
@@ -1630,7 +1628,7 @@ def gera_tabela_top100_html(df, titulo, slug):
 
     return f"""
     <div class="card">
-    <h2>🏆 Top 100 Clientes com Maior Queda de Consumo — {titulo}</h2>
+    <h2>Top 100 clientes com maior queda de consumo — {titulo}</h2>
     <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Ranking dos clientes com maior redução de consumo faturado entre os dois meses comparados.
         <span style="color:#C2560C; font-weight:700;">Laranja</span> = queda igual ou superior a 50%.
@@ -1716,9 +1714,9 @@ _vars_necessarias = [
 _faltando = [v for v in _vars_necessarias if v not in globals()]
 if _faltando:
     raise RuntimeError(
-        "❌ A Parte 6 não pode ser executada ainda. Faltam variáveis: "
+        "A Parte 6 não pode ser executada ainda. Faltam variáveis: "
         + ", ".join(_faltando)
-        + "\n\n👉 Execute as células na ordem correta."
+        + "\n\nExecute as células na ordem correta."
     )
 
 _chave_justificativa = "justificativas_" + MES_ATUAL.replace(" ", "_").replace("/", "_")
@@ -1726,11 +1724,11 @@ _chave_justificativa = "justificativas_" + MES_ATUAL.replace(" ", "_").replace("
 justificativa_html = f"""
 <div class="card" id="card-justificativa">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-        <h2 style="margin:0;">📝 Justificativas / Observações do mês {MES_ATUAL}</h2>
+        <h2 style="margin:0;">Justificativas e observações — {MES_ATUAL}</h2>
         <div>
-            <button class="btn-just" onclick="adicionarJustificativa()">➕ Adicionar</button>
-            <button class="btn-just" id="btnEditarJust" onclick="toggleEdicaoJustificativa()">✏️ Editar</button>
-            <button class="btn-just" onclick="limparJustificativas()" style="background:#C2560C;">🗑️ Limpar</button>
+            <button class="btn-just" onclick="adicionarJustificativa()">Adicionar</button>
+            <button class="btn-just" id="btnEditarJust" onclick="toggleEdicaoJustificativa()">Editar</button>
+            <button class="btn-just" onclick="limparJustificativas()" style="color:#C2560C;">Limpar</button>
         </div>
     </div>
     <div id="lista-justificativas" style="font-size:0.9em; color:#1A2740; line-height:1.6;">
@@ -1755,7 +1753,7 @@ for g in grupos_disponiveis:
 filtro_html = f"""
 <div class="filtro-wrap">
 <button id="btnFiltro" class="btn-filtro" onclick="toggleFiltro(event)">
-    <span>🔎 Filtrar Ciclo/Grupo</span>
+    <span>Filtrar grupos</span>
     <span id="badgeFiltro" class="badge">{len(grupos_disponiveis)}</span>
 </button>
 <div id="painelFiltro" class="painel-filtro">
@@ -1773,10 +1771,18 @@ filtro_html = f"""
 html_style = """
 <style>
 /* Paleta: #05050D texto | #1A2740 marinho (principal/positivo) | #394D73 e #49668C azuis secundários
-   #F2F2F2 fundo | #E8710A laranja (negativo) | #C2560C laranja para texto */
+   #F2F2F2 fundo | #E8710A laranja (negativo) | #C2560C laranja para texto
+   O cabeçalho "Águas do Rio · Relatório Executivo" mantém as cores originais. */
+:root {
+    --preto:#05050D; --marinho:#1A2740; --azul:#394D73; --azul-claro:#49668C; --cinza:#F2F2F2;
+    --linha:#DCE1E9; --tint:#E1E7F0; --zebra:#F7F8FA; --laranja:#E8710A; --laranja-texto:#C2560C;
+    --fonte:'IBM Plex Sans','Segoe UI',Arial,sans-serif;
+    --fonte-cond:'IBM Plex Sans Condensed','Segoe UI',Arial,sans-serif;
+}
 * { box-sizing: border-box; }
-body { font-family:'Segoe UI', Arial, sans-serif; background:#F2F2F2; margin:0; }
+body { font-family:var(--fonte); background:var(--cinza); margin:0; color:var(--preto); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
 
+/* ===== Cabeçalho (cores originais) ===== */
 .header-exec {
     background: linear-gradient(135deg, #0b2447 0%, #14375e 60%, #1b4a76 100%);
     padding: 28px 32px;
@@ -1797,63 +1803,94 @@ body { font-family:'Segoe UI', Arial, sans-serif; background:#F2F2F2; margin:0; 
 }
 .header-exec h1 { font-size: 1.9em; font-weight: 800; margin: 0 0 6px 0; line-height: 1.2; }
 .header-exec p { font-size: 0.9em; color: #cbd5e1; margin: 0; }
+.header-exec { padding: 26px 16px 28px; }
+.header-inner { max-width:1240px; margin:0 auto; }
+.header-exec h1 { font-family:var(--fonte); font-size:26px; font-weight:600; letter-spacing:-.01em; }
+.header-exec p { font-size:14px; }
 
-#view-resumo, #view-tabelas { display:none; }
+/* ===== Barra de abas + filtro ===== */
+.toolbar { max-width:1272px; margin:18px auto 0; padding:0 16px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.toggle { display:inline-flex; background:#FFFFFF; border:1px solid var(--linha); border-radius:8px; padding:3px; }
+.toggle button { padding:7px 20px; border:0; border-radius:6px; background:transparent; color:var(--azul); cursor:pointer; font-family:inherit; font-size:13px; font-weight:600; }
+.toggle button:hover { color:var(--marinho); }
+.toggle button.active { background:var(--marinho); color:#FFFFFF; }
+button:focus-visible, input:focus-visible { outline:2px solid var(--azul-claro); outline-offset:2px; }
+
+#view-resumo, #view-tabelas { display:none; padding:0 16px 48px; }
 #view-resumo.ativo, #view-tabelas.ativo { display:block; }
-.toggle { display:flex; justify-content:center; margin:16px 0; }
-.toggle button { padding:8px 18px; border:none; border-radius:5px; background:#1A2740; color:#FFFFFF; margin:0 4px; cursor:pointer; font-weight:600; font-size:0.85em; }
-.toggle button.active { background:#49668C; }
 
-.card { background:#FFFFFF; margin:16px auto; padding:16px; max-width:1300px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1); overflow-x:auto; }
-.card h2 { font-size:1.05em; margin:0 0 12px 0; color:#1A2740; }
+/* ===== Seções ===== */
+.card { background:#FFFFFF; margin:16px auto; padding:20px 22px; max-width:1240px; border:1px solid var(--linha); border-radius:8px; overflow-x:auto; }
+.card h2 { font-size:15px; font-weight:600; margin:0 0 14px 0; color:var(--marinho); letter-spacing:-.005em; }
+.card p { font-size:13px; }
+.nota-secao { margin:-8px 0 12px; color:var(--azul-claro); font-size:12.5px; }
+.card-faixa { display:flex; align-items:baseline; gap:8px 24px; flex-wrap:wrap; padding:14px 22px; }
+.card-faixa h2 { margin:0; }
+.grafico-area { position:relative; height:340px; }
+@media (max-width: 640px) { .grafico-area { height:260px; } }
+.obs-dias { margin:0; font-size:13px; color:var(--azul); font-variant-numeric:tabular-nums; }
+.obs-dias b { color:var(--preto); font-weight:600; }
 
-.kpis-grid { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:10px; max-width:1300px; margin:16px auto; padding:0 16px; }
-.kpi-card { background:#FFFFFF; padding:9px 6px 8px; border-radius:10px; text-align:center; box-shadow:0 2px 8px rgba(26,39,64,0.08); border-top:4px solid #1A2740; min-width:0; }
-.kpi-card.negativo { border-top-color:#E8710A; }
-.kpi-card h3 { font-size:0.6em; color:#49668C; margin:0 0 4px 0; font-weight:700; text-transform:uppercase; letter-spacing:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.kpi-valor { font-size:0.95em; font-weight:800; margin:0; color:#05050D; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.kpi-delta { font-size:0.66em; margin:3px 0 0 0; font-weight:700; white-space:nowrap; }
+/* ===== KPIs: faixa única ===== */
+.kpis-grid { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:1px; max-width:1240px; margin:16px auto; background:var(--linha); border:1px solid var(--linha); border-radius:8px; overflow:hidden; }
+.kpi-card { background:#FFFFFF; padding:12px 14px 12px; border-top:3px solid var(--marinho); min-width:0; }
+.kpi-card.negativo { border-top-color:var(--laranja); }
+.kpi-card h3 { font-family:var(--fonte); font-size:12px; font-weight:500; color:var(--azul-claro); margin:0 0 4px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-valor { font-family:var(--fonte-cond); font-size:19px; font-weight:600; margin:0; color:var(--preto); letter-spacing:-.01em; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-delta { font-size:12px; margin:3px 0 0 0; font-weight:600; white-space:nowrap; font-variant-numeric:tabular-nums; }
 @media (max-width: 1100px) { .kpis-grid { grid-template-columns:repeat(4, minmax(0,1fr)); } }
 @media (max-width: 560px)  { .kpis-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
 
-.obs-dias { font-size:0.82em; color:#394D73; margin-top:10px; text-align:center; }
+/* ===== Destaques ===== */
+.insights-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:18px 28px; }
+.insight-card { border-top:2px solid var(--tint); padding-top:10px; }
+.insight-card h4 { font-size:13px; margin:0 0 6px 0; color:var(--marinho); font-weight:600; }
+.insight-card ul { margin:0; padding-left:16px; font-size:13px; color:var(--preto); line-height:1.55; font-variant-numeric:tabular-nums; }
+.insight-card li { margin-bottom:3px; }
+.insight-card li::marker { color:var(--azul-claro); }
 
-.insights-secao { margin-bottom: 22px; }
-.insights-grid { display:flex; flex-wrap:wrap; gap:14px; }
-.insight-card { background:#FFFFFF; border:1px solid #DCE1E9; border-radius:10px; padding:14px 18px; flex:1 1 300px; box-shadow:0 2px 6px rgba(0,0,0,0.03); }
-.insight-card h4 { font-size:0.82em; margin:0 0 8px 0; color:#1A2740; font-weight:700; }
-.insight-card ul { margin:0; padding-left:18px; font-size:0.82em; color:#1A2740; line-height:1.6; }
-.insight-card li { margin-bottom:5px; }
-.insight-card li::marker { color:#49668C; }
+/* ===== Tabelas ===== */
+table { border-collapse:collapse; width:100%; font-family:var(--fonte-cond); font-size:12.5px; font-variant-numeric:tabular-nums; }
+th, td { border:1px solid var(--linha); padding:5px 8px; text-align:center; }
+td { white-space:nowrap; }
+th { background:var(--marinho); color:#FFFFFF; font-weight:600; font-size:12px; }
+.header-sub th { background:var(--azul); font-weight:500; }
+tbody tr:nth-child(even) td { background-color:var(--zebra); }
+tbody tr:hover td { background-color:var(--tint); }
+tbody tr.linha-media td, tbody tr.linha-total td { font-weight:700; background-color:var(--tint); }
 
-table { border-collapse:collapse; width:100%; font-size:0.62em; }
-th, td { border:1px solid #DCE1E9; padding:3px 5px; text-align:center; }
-th { background:#1A2740; color:#FFFFFF; font-size:0.85em; }
-.linha-media, .linha-total { font-weight:700; background:#E1E7F0; }
+.tabela-wrap { display:block; width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:var(--azul-claro) var(--tint); cursor:grab; }
+.tabela-wrap::-webkit-scrollbar { height:8px; }
+.tabela-wrap::-webkit-scrollbar-track { background:var(--tint); border-radius:6px; }
+.tabela-wrap::-webkit-scrollbar-thumb { background:var(--azul-claro); border-radius:6px; }
+.tabela-wrap.grabbing { cursor:grabbing; }
 
-.tabela-wrap { display: block; width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #1A2740 #E1E7F0; cursor: grab; }
-.tabela-wrap::-webkit-scrollbar { height: 10px; }
-.tabela-wrap::-webkit-scrollbar-track { background: #E1E7F0; border-radius: 6px; }
-.tabela-wrap::-webkit-scrollbar-thumb { background: #1A2740; border-radius: 6px; }
-.tabela-wrap.grabbing { cursor: grabbing; }
-
-.filtro-wrap { margin:16px auto; max-width:1300px; position:relative; }
-.btn-filtro { padding:8px 14px; border-radius:6px; border:none; background:#1A2740; color:#FFFFFF; cursor:pointer; font-size:0.85em; }
-.painel-filtro { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:100; background:#FFFFFF; border:1px solid #DCE1E9; border-radius:6px; padding:12px; max-height:320px; overflow-y:auto; box-shadow:0 6px 18px rgba(0,0,0,0.15); min-width:260px; }
+/* ===== Filtro ===== */
+.filtro-wrap { position:relative; }
+.btn-filtro { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:8px; border:1px solid var(--linha); background:#FFFFFF; color:var(--marinho); cursor:pointer; font-family:inherit; font-size:13px; font-weight:600; }
+.btn-filtro:hover { border-color:var(--azul-claro); }
+.badge { background:var(--marinho); color:#FFFFFF; border-radius:10px; padding:1px 8px; font-size:11px; font-variant-numeric:tabular-nums; }
+.painel-filtro { display:none; position:absolute; top:calc(100% + 6px); right:0; z-index:100; background:#FFFFFF; border:1px solid var(--linha); border-radius:8px; padding:12px; max-height:320px; overflow-y:auto; box-shadow:0 8px 24px rgba(5,5,13,0.12); min-width:240px; }
 .painel-filtro.aberto { display:block; }
 .painel-acoes { display:flex; gap:8px; margin-bottom:10px; }
-.check-item { display:block; margin:4px 0; font-size:0.85em; }
 .check-list { display:flex; flex-direction:column; gap:6px; }
-.mini-btn { margin-right:8px; padding:4px 10px; border:none; border-radius:4px; background:#DCE1E9; cursor:pointer; font-size:0.8em; }
-.badge { background:#49668C; color:#FFFFFF; border-radius:10px; padding:1px 8px; font-size:0.75em; margin-left:6px; }
+.check-item { display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
+.check-item input { accent-color:var(--marinho); }
+.mini-btn { padding:4px 10px; border:1px solid var(--linha); border-radius:6px; background:var(--cinza); color:var(--marinho); cursor:pointer; font-family:inherit; font-size:12px; font-weight:600; }
 
-.btn-just { padding: 5px 12px; border: none; border-radius: 6px; background: #1A2740; color: #FFFFFF; font-size: 0.78em; cursor: pointer; margin-left: 6px; font-weight: 600; }
-.btn-just:hover { background: #394D73; }
-#lista-justificativas p { position: relative; padding: 6px 8px; border-radius: 6px; margin: 6px 0; }
-#lista-justificativas.modo-edicao p { outline: 1px dashed #49668C; background: #FFFFFF; }
-#lista-justificativas.modo-edicao p:hover { background: #F2F2F2; }
-.btn-remover-item { display: none; position: absolute; top: 2px; right: 4px; background: #C2560C; color: #FFFFFF; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 0.7em; cursor: pointer; line-height: 1; }
-#lista-justificativas.modo-edicao .btn-remover-item { display: block; }
+/* ===== Justificativas ===== */
+.btn-just { padding:6px 12px; border:1px solid var(--linha); border-radius:6px; background:#FFFFFF; color:var(--marinho); font-family:inherit; font-size:12.5px; cursor:pointer; margin-left:6px; font-weight:600; }
+.btn-just:hover { border-color:var(--azul-claro); }
+#lista-justificativas p { position:relative; padding:6px 8px; border-radius:6px; margin:6px 0; font-size:13.5px; }
+#lista-justificativas.modo-edicao p { outline:1px dashed var(--azul-claro); background:var(--zebra); }
+#lista-justificativas.modo-edicao p:hover { background:var(--tint); }
+.btn-remover-item { display:none; position:absolute; top:2px; right:4px; background:var(--laranja-texto); color:#FFFFFF; border:none; border-radius:50%; width:20px; height:20px; font-size:0.7em; cursor:pointer; line-height:1; }
+#lista-justificativas.modo-edicao .btn-remover-item { display:block; }
+
+@media (max-width: 640px) {
+    .header-exec h1 { font-size:21px; }
+    .card { padding:16px; }
+}
 </style>
 """
 
@@ -2235,14 +2272,12 @@ function toggleEdicaoJustificativa() {{
     if (emEdicao) {{
         lista.classList.remove('modo-edicao');
         lista.querySelectorAll('p').forEach(p => p.contentEditable = false);
-        btn.innerText = '✏️ Editar';
-        btn.style.background = '#1A2740';
+        btn.innerText = 'Editar';
         salvarJustificativas();
     }} else {{
         lista.classList.add('modo-edicao');
         lista.querySelectorAll('p').forEach(p => p.contentEditable = true);
-        btn.innerText = '💾 Salvar';
-        btn.style.background = '#1A2740';
+        btn.innerText = 'Salvar';
     }}
 }}
 
@@ -2253,7 +2288,7 @@ function adicionarJustificativa() {{
     novoP.contentEditable = lista.classList.contains('modo-edicao');
     const btnRemover = document.createElement('button');
     btnRemover.className = 'btn-remover-item';
-    btnRemover.innerText = '✕';
+    btnRemover.innerText = '';
     btnRemover.onclick = function () {{ novoP.remove(); salvarJustificativas(); }};
     novoP.appendChild(btnRemover);
     lista.appendChild(novoP);
@@ -2274,7 +2309,7 @@ function aplicarBotoesRemover() {{
         if (p.querySelector('.btn-remover-item')) return;
         const btnRemover = document.createElement('button');
         btnRemover.className = 'btn-remover-item';
-        btnRemover.innerText = '✕';
+        btnRemover.innerText = '';
         btnRemover.onclick = function () {{ p.remove(); salvarJustificativas(); }};
         p.appendChild(btnRemover);
     }});
@@ -2299,29 +2334,35 @@ html_final = f"""
 <head>
 <meta charset="UTF-8">
 <title>Relatório Comparativo Água x Esgoto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 {html_style}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
 <div class="header-exec">
+  <div class="header-inner">
     <div class="header-badge">Águas do Rio · Relatório Executivo</div>
     <h1>Comparativo de Água e Esgoto — {MES_ATUAL} vs {MES_ANTERIOR}</h1>
-    <p>Faturamento, economias, volumes e migração de ciclo consolidados automaticamente</p>
+    <p>Faturamento, economias, volumes e migração de ciclo</p>
+  </div>
 </div>
 
-{filtro_html}
-
-<div class="toggle">
-    <button id="btn-resumo" class="active" onclick="mostrarView('resumo')">📊 Resumo</button>
-    <button id="btn-tabelas" onclick="mostrarView('tabelas')">📋 Tabelas</button>
+<div class="toolbar">
+  <div class="toggle" role="tablist" aria-label="Visualização">
+    <button id="btn-resumo" class="active" onclick="mostrarView('resumo')">Resumo</button>
+    <button id="btn-tabelas" onclick="mostrarView('tabelas')">Tabelas</button>
+  </div>
+  {filtro_html}
 </div>
 
 <div id="view-resumo" class="ativo">
     <div class="kpis-grid">{cards_kpis_html}</div>
     {grafico_faturamento_html}
     {card_leitura_html}
-    <div class="card"><h2>💡 Insights do mês {MES_ATUAL}</h2>{cards_insights_html}</div>
+    <div class="card"><h2>Destaques do mês — {MES_ATUAL}</h2>{cards_insights_html}</div>
     {tabela_dados_resumo_html}
     {justificativa_html}
 </div>
