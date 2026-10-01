@@ -38,9 +38,35 @@ def _instala_barra_web(progresso):
     sys.modules["tqdm.auto"] = mod_auto
 
 
-def executar(pasta, codigo_script, progresso):
+MARCADOR = "# @@PONTO_DE_EDICAO@@"
+_estado = {}
+
+
+def _saida_json(obj):
+    import json
+    return json.dumps(obj, ensure_ascii=False)
+
+
+def preparar(pasta, codigo_script, progresso):
+    """Fase 1: lê a pasta, monta a base e devolve o Top 20 (JSON) para o usuário conferir."""
     _instala_barra_web(progresso)
     os.environ["FATURAMENTO_PASTA"] = pasta
+    antes, achou, depois = codigo_script.partition(MARCADOR)
+    if not achou:
+        raise RuntimeError("Marcador do ponto de edição não encontrado no script.")
     escopo = {"__name__": "__main__"}
-    exec(compile(codigo_script, "acompanhamento_faturamento.py", "exec"), escopo)
+    exec(compile(antes, "acompanhamento_faturamento.py (parte 1)", "exec"), escopo)
+    _estado.clear()
+    _estado.update({"escopo": escopo, "depois": depois})
+    return _saida_json(escopo["calcula_top20_maior_consumo"]())
+
+
+def continuar(ajustes_json):
+    """Fase 2: aplica os ajustes do usuário (se houver) e gera os relatórios."""
+    import json
+    escopo, depois = _estado["escopo"], _estado["depois"]
+    ajustes = json.loads(ajustes_json or "[]")
+    if ajustes:
+        escopo["aplica_ajustes_top20"](ajustes)
+    exec(compile(depois, "acompanhamento_faturamento.py (parte 2)", "exec"), escopo)
     return escopo.get("REF_ATUAL"), escopo.get("REF_ANTERIOR")

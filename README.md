@@ -7,7 +7,7 @@ Pipeline em Python (pandas) que compara o faturamento de água e esgoto do mês 
 
 ## Pelo site (sem instalar nada)
 
-Abra https://raniere3000-tech.github.io/analise-faturamento-agua-esgoto/, clique em **Selecionar pasta e analisar** e escolha a pasta com os arquivos. Quando a análise chega a 100%, o relatório abre sozinho em tela cheia, com botões para baixar o HTML e o Top 100 em Excel. No Chrome e no Edge, o botão **Atualizar** relê a mesma pasta depois que você coloca arquivos novos nela.
+Abra https://raniere3000-tech.github.io/analise-faturamento-agua-esgoto/, clique em **Selecionar pasta e analisar** e escolha a pasta com os arquivos. Depois de ler os arquivos, o site mostra o **Top 20 clientes com maior consumo** (Consumo Faturado do mês atual): você pode alterar o consumo ou o valor total (água + esgoto) de cada um e clicar em **Aplicar alterações e gerar relatório** (ou **Pular**). A alteração vale só para essa análise e só para o mês atual; os arquivos da pasta não mudam, e o relatório avisa quando há valores ajustados. Quando a análise chega a 100%, o relatório abre sozinho em tela cheia, com botões para baixar o HTML e o Top 100 em Excel. No Chrome e no Edge, o botão **Atualizar** relê a mesma pasta depois que você coloca arquivos novos nela.
 
 O processamento roda no navegador: o site executa este mesmo script Python com o [Pyodide](https://pyodide.org) (`analisador.worker.js` + `executor_web.py`). Os arquivos não são enviados para nenhum servidor. Na primeira vez, o navegador baixa o Python (cerca de 30 MB), que depois fica em cache.
 

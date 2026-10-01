@@ -52,38 +52,55 @@ function mensagemAmigavel(erro) {
   return { resumo: ultima.replace(/^\w+(Error|Exception|Exit):\s*/, ""), detalhe: texto };
 }
 
+async function iniciaPyodide() {
+  if (!pyodidePronto) {
+    pyodidePronto = preparaPython().catch((e) => { pyodidePronto = null; throw e; });
+  }
+  return pyodidePronto;
+}
+
+// Fase 1: lê a pasta e devolve o Top 20 para o usuário conferir
+async function fasePreparar(arquivos) {
+  const pyodide = await iniciaPyodide();
+  avisa("etapa", { texto: "Copiando os arquivos para análise…" });
+  limpaPasta(pyodide);
+  for (const arq of arquivos) {
+    pyodide.FS.writeFile(`${PASTA}/${arq.nome}`, new Uint8Array(arq.conteudo));
+  }
+  const script = await (await fetch("acompanhamento_faturamento.py", { cache: "no-cache" })).text();
+  avisa("etapa", { texto: "Lendo e cruzando os arquivos…" });
+  const preparar = pyodide.globals.get("preparar");
+  const progresso = (n, desc) => avisa("progresso", { pct: n, texto: desc });
+  const json = preparar(PASTA, script, progresso);
+  preparar.destroy();
+  avisa("top20", { dados: JSON.parse(json) });
+}
+
+// Fase 2: aplica os ajustes (se houver) e gera o relatório
+async function faseContinuar(ajustes) {
+  const pyodide = await iniciaPyodide();
+  avisa("etapa", { texto: "Processando…" });
+  const continuar = pyodide.globals.get("continuar");
+  const refs = continuar(JSON.stringify(ajustes || [])).toJs();
+  continuar.destroy();
+
+  const saidas = [];
+  for (const nome of SAIDAS) {
+    const caminho = `${PASTA}/${nome}`;
+    if (pyodide.FS.analyzePath(caminho).exists) {
+      const bytes = pyodide.FS.readFile(caminho);
+      saidas.push({ nome, conteudo: bytes.buffer });
+    }
+  }
+  avisa("concluido", { saidas, refAtual: refs[0], refAnterior: refs[1] },
+    saidas.map((s) => s.conteudo));
+}
+
 self.onmessage = async (evento) => {
-  const { arquivos } = evento.data;
+  const { fase, arquivos, ajustes } = evento.data;
   try {
-    if (!pyodidePronto) {
-      pyodidePronto = preparaPython().catch((e) => { pyodidePronto = null; throw e; });
-    }
-    const pyodide = await pyodidePronto;
-
-    avisa("etapa", { texto: "Copiando os arquivos para análise…" });
-    limpaPasta(pyodide);
-    for (const arq of arquivos) {
-      pyodide.FS.writeFile(`${PASTA}/${arq.nome}`, new Uint8Array(arq.conteudo));
-    }
-
-    const script = await (await fetch("acompanhamento_faturamento.py", { cache: "no-cache" })).text();
-
-    avisa("etapa", { texto: "Processando…" });
-    const executar = pyodide.globals.get("executar");
-    const progresso = (n, desc) => avisa("progresso", { pct: n, texto: desc });
-    const refs = executar(PASTA, script, progresso).toJs();
-    executar.destroy();
-
-    const saidas = [];
-    for (const nome of SAIDAS) {
-      const caminho = `${PASTA}/${nome}`;
-      if (pyodide.FS.analyzePath(caminho).exists) {
-        const bytes = pyodide.FS.readFile(caminho);
-        saidas.push({ nome, conteudo: bytes.buffer });
-      }
-    }
-    avisa("concluido", { saidas, refAtual: refs[0], refAnterior: refs[1] },
-      saidas.map((s) => s.conteudo));
+    if (fase === "continuar") await faseContinuar(ajustes);
+    else await fasePreparar(arquivos);
   } catch (erro) {
     avisa("erro", mensagemAmigavel(erro));
   }

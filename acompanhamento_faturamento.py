@@ -500,6 +500,79 @@ print(f"✅ Coluna 'Economias_Totais' criada — soma de {len(colunas_economia_t
 
 atualiza_progresso(52, "Base final pronta")
 
+# ------------------------------------------------------------------
+# Top 20 maiores consumos — conferência/ajuste manual (opcional)
+# O site pausa aqui, mostra o Top 20 para o usuário editar e depois continua
+# com os valores ajustados. Rodando o script direto, nada muda.
+# Só vale para o mês atual; os arquivos originais não são alterados.
+# ------------------------------------------------------------------
+import json as _json
+
+aviso_ajustes_html = ""
+
+def _ref_atual_base():
+    return base_final["Referencia de Leitura"].dropna().max()
+
+def calcula_top20_maior_consumo(n=20):
+    """Top n ligações por Consumo Faturado no mês atual (rubrica VALOR DE AGUA).
+    Valor = água + esgoto da ligação no mês atual."""
+    ref = _ref_atual_base()
+    mes = base_final[base_final["Referencia de Leitura"] == ref].copy()
+    mes["Consumo Faturado"] = pd.to_numeric(mes["Consumo Faturado"], errors="coerce").fillna(0)
+    mes["Valor (R$)"] = pd.to_numeric(mes["Valor (R$)"], errors="coerce").fillna(0)
+    valor_total = mes.groupby("N. Ligação")["Valor (R$)"].sum()
+    agua = mes[mes["Rubrica"].str.contains("AGUA", case=False, na=False)]
+    agua = agua.sort_values("Consumo Faturado", ascending=False).drop_duplicates("N. Ligação").head(n)
+    linhas = []
+    for _, r in agua.iterrows():
+        linhas.append({
+            "ligacao": str(r["N. Ligação"]),
+            "grupo": str(r.get("Grupo", "")),
+            "cliente": "" if pd.isna(r.get("Nome Cliente")) else str(r.get("Nome Cliente")),
+            "categoria": "" if pd.isna(r.get("Categoria")) else str(r.get("Categoria")),
+            "consumo": float(r["Consumo Faturado"]),
+            "valor": round(float(valor_total.get(r["N. Ligação"], 0)), 2),
+        })
+    return {"refAtual": ref, "linhas": linhas}
+
+def aplica_ajustes_top20(ajustes):
+    """ajustes: lista de {ligacao, consumo, valor} (campo None = não alterado).
+    Consumo Faturado vale para todas as linhas da ligação no mês atual.
+    O valor total novo é repartido entre água e esgoto mantendo a proporção original
+    (se o original era 0, vai tudo para a linha de água)."""
+    global base_final, aviso_ajustes_html
+    ref = _ref_atual_base()
+    feitos = 0
+    for a in ajustes or []:
+        lig = str(a.get("ligacao"))
+        mask = (base_final["N. Ligação"].astype(str) == lig) & (base_final["Referencia de Leitura"] == ref)
+        if not mask.any():
+            continue
+        if a.get("consumo") is not None:
+            base_final.loc[mask, "Consumo Faturado"] = float(a["consumo"])
+        if a.get("valor") is not None:
+            novo = float(a["valor"])
+            vals = pd.to_numeric(base_final.loc[mask, "Valor (R$)"], errors="coerce").fillna(0)
+            antigo = vals.sum()
+            if antigo > 0:
+                base_final.loc[mask, "Valor (R$)"] = vals * (novo / antigo)
+            else:
+                novos = vals * 0
+                eh_agua = base_final.loc[mask, "Rubrica"].str.contains("AGUA", case=False, na=False)
+                alvo = (eh_agua[eh_agua].index[:1].tolist() or vals.index[:1].tolist())
+                novos.loc[alvo] = novo
+                base_final.loc[mask, "Valor (R$)"] = novos
+        feitos += 1
+    if feitos:
+        print(f"✏️ {feitos} ligação(ões) do Top 20 ajustada(s) manualmente.")
+        aviso_ajustes_html = (
+            f'<div class="card" style="border-left:4px solid #C2560C;padding:10px 16px;font-size:.88rem;">'
+            f'<strong>Atenção:</strong> este relatório usa {feitos} ligação(ões) do Top 20 de maior consumo '
+            f'com valores ajustados manualmente (referência {ref}).</div>'
+        )
+
+# @@PONTO_DE_EDICAO@@
+
 print("Colunas relacionadas à situação de leitura/lançamento:",
       [c for c in base_final.columns if "situa" in c.lower() or "lanc" in c.lower() or "lanç" in c.lower()])
 
@@ -2428,6 +2501,7 @@ html_final = f"""
   </div>
 </div>
 
+{aviso_ajustes_html}
 <div class="toolbar">
   <div class="toggle" role="tablist" aria-label="Visualização">
     <button id="btn-resumo" class="active" onclick="mostrarView('resumo')">Resumo</button>
