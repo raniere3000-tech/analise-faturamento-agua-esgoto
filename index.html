@@ -117,6 +117,40 @@ pre code { background: none; color: inherit; padding: 0; }
 
 footer { margin-top: 56px; padding: 26px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: .88rem; }
 
+/* Analisador */
+[hidden] { display: none !important; }
+button.btn { border: none; cursor: pointer; font-family: inherit; }
+button.btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,.4); }
+button.btn:disabled { opacity: .55; cursor: wait; }
+.privacidade { margin: 18px 0 0; font-size: .85rem; color: #cbd5e1; }
+
+#execucao { padding-top: 28px; }
+.status-topo { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.status-topo b { color: var(--navy-900); }
+.status-topo span { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 700; }
+.barra { height: 10px; background: #e6ebf1; border-radius: 6px; overflow: hidden; margin: 10px 0 8px; }
+.barra-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--navy-700), var(--teal)); transition: width .3s; }
+.status.erro { border-color: #e7a3a3; background: #fff5f5; }
+.status.erro .barra-fill { background: #c00000; }
+.status-nota { margin: 0; font-size: .88rem; color: var(--muted); }
+.status.erro .status-nota { color: #9b1c1c; }
+.arquivos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.arquivo { font-size: .8rem; background: #eef2f7; color: var(--navy-900); padding: 3px 10px; border-radius: 12px; }
+.log { margin-top: 12px; }
+.log summary { cursor: pointer; color: var(--navy-700); font-size: .88rem; font-weight: 600; }
+.log pre { margin-top: 8px; max-height: 260px; font-size: .78rem; white-space: pre-wrap; }
+
+#resultado { padding-top: 28px; }
+.resultado-topo { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
+.resultado-topo .sub { margin: 0; }
+.downloads { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn-claro { background: #fff; color: var(--navy-700); border: 1px solid var(--line); font-size: .85rem; padding: 9px 14px; }
+.btn-claro:hover { border-color: var(--teal); color: var(--teal); }
+#quadroRelatorio { width: 100%; min-height: 400px; border: 1px solid var(--line); border-radius: 12px; background: #f4f6f9; display: block; }
+
+#sobre { margin-top: 40px; }
+.sobre-titulo { font-size: 1.1rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+
 @media (max-width: 520px) {
   header.hero { padding: 40px 0 44px; }
   section { padding-top: 36px; }
@@ -129,16 +163,50 @@ footer { margin-top: 56px; padding: 26px 0; border-top: 1px solid var(--line); c
   <div class="wrap">
     <div class="badge">Pipeline Python · ETL + Relatório</div>
     <h1>Análise de Faturamento<br>de Água e Esgoto</h1>
-    <p class="lead">Lê os arquivos de consumo, faturamento e cronograma, compara o mês atual com o anterior
-      e gera automaticamente uma base histórica, o ranking das maiores quedas de consumo e um relatório HTML com KPIs e insights.</p>
+    <p class="lead">Escolha a pasta com os arquivos de consumo, faturamento e cronograma. A página compara o mês atual
+      com o anterior e mostra aqui o relatório completo, com KPIs, insights, tabelas e o Top 100 de quedas de consumo.</p>
     <div class="btns">
-      <a class="btn btn-primary" href="acompanhamento_faturamento.py" download>⬇ Baixar o script</a>
-      <a class="btn btn-ghost" href="#como-usar">Como usar</a>
+      <button type="button" class="btn btn-primary" id="btnPasta">📂 Selecionar pasta e analisar</button>
+      <button type="button" class="btn btn-ghost" id="btnAtualizar" hidden>🔄 Atualizar com a mesma pasta</button>
+      <a class="btn btn-ghost" href="acompanhamento_faturamento.py" download>⬇ Baixar o script</a>
     </div>
+    <p class="privacidade">🔒 Os arquivos são processados no seu próprio navegador e não são enviados para nenhum servidor.</p>
+    <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
   </div>
 </header>
 
 <main class="wrap">
+
+  <section id="execucao" hidden>
+    <div class="card status">
+      <div class="status-topo">
+        <b id="statusTexto">Preparando…</b>
+        <span id="statusPct">0%</span>
+      </div>
+      <div class="barra"><div class="barra-fill" id="barraFill"></div></div>
+      <p class="status-nota" id="statusNota">Na primeira vez o navegador baixa o Python (cerca de 30 MB). Depois fica em cache.</p>
+      <div class="arquivos" id="listaArquivos"></div>
+      <details class="log">
+        <summary>Detalhes da execução</summary>
+        <pre id="logExecucao"></pre>
+      </details>
+    </div>
+  </section>
+
+  <section id="resultado" hidden>
+    <div class="resultado-topo">
+      <div>
+        <h2 id="resultadoTitulo">Relatório</h2>
+        <p class="sub" id="resultadoSub"></p>
+      </div>
+      <div class="downloads" id="downloads"></div>
+    </div>
+    <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto"></iframe>
+  </section>
+</main>
+
+<div class="wrap" id="sobre">
+  <h2 class="sobre-titulo">Sobre o projeto</h2>
 
   <section id="fluxo">
     <h2>Como funciona</h2>
@@ -170,7 +238,7 @@ footer { margin-top: 56px; padding: 26px 0; border-top: 1px solid var(--line); c
 
   <section id="como-usar">
     <h2>Como usar</h2>
-    <p class="sub">Escolha a origem dos arquivos alterando <code>MODO_ORIGEM</code> no início do script.</p>
+    <p class="sub">O jeito mais rápido é o botão <b>Selecionar pasta e analisar</b>, no topo desta página. Para rodar o script fora do site, escolha a origem dos arquivos em <code>MODO_ORIGEM</code>.</p>
     <div class="modes">
       <div class="card mode">
         <div class="tag">Google Colab</div>
@@ -241,11 +309,244 @@ python acompanhamento_faturamento.py</code></pre>
     </div>
   </section>
 
-</main>
+</div>
 
 <footer>
   <div class="wrap">Análise de Faturamento de Água e Esgoto · código em Python (pandas)</div>
 </footer>
 
+<script>
+(() => {
+  const EXTENSOES = [".csv", ".xlsx", ".xls"];
+  const SAIDAS = {
+    "Relatorio_Comparativo.html": { rotulo: "Relatório (HTML)", tipo: "text/html" },
+    "Base_Compilada_HISTORICO.xlsx": { rotulo: "Base histórica (Excel)", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    "Top100_Quedas_Consumo.xlsx": { rotulo: "Top 100 quedas (Excel)", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+  };
+  const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  const $ = (id) => document.getElementById(id);
+  const btnPasta = $("btnPasta"), btnAtualizar = $("btnAtualizar"), inputPasta = $("inputPasta");
+  const secExec = $("execucao"), secResultado = $("resultado"), cardStatus = secExec.querySelector(".status");
+
+  let worker = null;
+  let pastaHandle = null;      // acesso à pasta (Chrome/Edge), permite reler sem escolher de novo
+  let rodando = false;
+  let urlsCriadas = [];
+
+  const ehEntrada = (nome) =>
+    EXTENSOES.some((ext) => nome.toLowerCase().endsWith(ext)) && !(nome in SAIDAS) && !nome.startsWith("~$");
+
+  const nomeMes = (ref) => {
+    if (!ref || !ref.includes("/")) return ref || "";
+    const [m, a] = ref.split("/");
+    return `${MESES[parseInt(m, 10) - 1]}/${a}`;
+  };
+
+  function pegaWorker() {
+    if (!worker) {
+      worker = new Worker("analisador.worker.js");
+      worker.onmessage = (e) => trataMensagem(e.data);
+      worker.onerror = (e) => mostraErro("Não foi possível iniciar o processamento.", e.message || "");
+    }
+    return worker;
+  }
+
+  function setStatus(texto, pct) {
+    $("statusTexto").textContent = texto;
+    if (typeof pct === "number") {
+      const p = Math.max(0, Math.min(100, pct));
+      $("barraFill").style.width = p + "%";
+      $("statusPct").textContent = Math.round(p) + "%";
+    }
+  }
+
+  function bloqueia(sim) {
+    rodando = sim;
+    btnPasta.disabled = sim;
+    btnAtualizar.disabled = sim;
+  }
+
+  function mostraErro(resumo, detalhe) {
+    cardStatus.classList.add("erro");
+    setStatus("Não foi possível gerar o relatório");
+    $("statusNota").textContent = resumo;
+    if (detalhe) $("logExecucao").textContent += "\n" + detalhe;
+    secExec.querySelector("details").open = true;
+    bloqueia(false);
+  }
+
+  function trataMensagem(msg) {
+    if (msg.tipo === "etapa") setStatus(msg.texto);
+    else if (msg.tipo === "progresso") setStatus(msg.texto, msg.pct);
+    else if (msg.tipo === "log") {
+      const log = $("logExecucao");
+      log.textContent += msg.linha + "\n";
+      log.scrollTop = log.scrollHeight;
+    }
+    else if (msg.tipo === "erro") mostraErro(msg.resumo, msg.detalhe);
+    else if (msg.tipo === "concluido") mostraResultado(msg);
+  }
+
+  function mostraResultado({ saidas, refAtual, refAnterior }) {
+    setStatus("Relatório atualizado", 100);
+    $("statusNota").textContent = `Concluído às ${new Date().toLocaleTimeString("pt-BR")}.`;
+    bloqueia(false);
+
+    urlsCriadas.forEach(URL.revokeObjectURL);
+    urlsCriadas = [];
+    const downloads = $("downloads");
+    downloads.innerHTML = "";
+    let htmlRelatorio = null, urlRelatorio = null;
+
+    for (const { nome, conteudo } of saidas) {
+      const info = SAIDAS[nome] || { rotulo: nome, tipo: "application/octet-stream" };
+      const url = URL.createObjectURL(new Blob([conteudo], { type: info.tipo }));
+      urlsCriadas.push(url);
+      const a = document.createElement("a");
+      a.className = "btn btn-claro";
+      a.href = url;
+      a.download = nome;
+      a.textContent = "⬇ " + info.rotulo;
+      downloads.appendChild(a);
+      if (nome === "Relatorio_Comparativo.html") {
+        htmlRelatorio = new TextDecoder("utf-8").decode(conteudo);
+        urlRelatorio = url;
+      }
+    }
+
+    if (urlRelatorio) {
+      const abrir = document.createElement("a");
+      abrir.className = "btn btn-claro";
+      abrir.href = urlRelatorio;
+      abrir.target = "_blank";
+      abrir.rel = "noopener";
+      abrir.textContent = "↗ Abrir em nova aba";
+      downloads.prepend(abrir);
+    }
+
+    $("resultadoTitulo").textContent = `Relatório — ${nomeMes(refAtual)} vs ${nomeMes(refAnterior)}`;
+    $("resultadoSub").textContent = pastaHandle
+      ? "Use as abas e o filtro dentro do relatório. Colocou arquivos novos na pasta? Clique em Atualizar no topo."
+      : "Use as abas e o filtro dentro do relatório. Para atualizar, selecione a pasta de novo.";
+    secResultado.hidden = false;
+
+    const quadro = $("quadroRelatorio");
+    if (htmlRelatorio) {
+      quadro.onload = () => ajustaAltura(quadro);
+      quadro.srcdoc = htmlRelatorio;
+    }
+    secResultado.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function ajustaAltura(quadro) {
+    const doc = quadro.contentDocument;
+    if (!doc) return;
+    const ajusta = () => { quadro.style.height = Math.ceil(doc.body.getBoundingClientRect().height) + 4 + "px"; };
+    ajusta();
+    new ResizeObserver(ajusta).observe(doc.body);
+  }
+
+  async function lerPastaHandle(handle) {
+    const lidos = [];
+    for await (const entrada of handle.values()) {
+      if (entrada.kind === "file" && ehEntrada(entrada.name)) {
+        const arq = await entrada.getFile();
+        lidos.push({ nome: arq.name, conteudo: await arq.arrayBuffer() });
+      }
+    }
+    return lidos;
+  }
+
+  async function lerListaArquivos(lista) {
+    const lidos = [];
+    for (const arq of lista) {
+      const partes = (arq.webkitRelativePath || arq.name).split("/");
+      if (partes.length > 2) continue;            // ignora subpastas, como o script
+      if (!ehEntrada(arq.name)) continue;
+      lidos.push({ nome: arq.name, conteudo: await arq.arrayBuffer() });
+    }
+    return lidos;
+  }
+
+  function iniciaExecucao() {
+    secExec.hidden = false;
+    cardStatus.classList.remove("erro");
+    $("logExecucao").textContent = "";
+    $("listaArquivos").innerHTML = "";
+    $("statusNota").textContent = worker
+      ? "Lendo os arquivos da pasta…"
+      : "Na primeira vez o navegador baixa o Python (cerca de 30 MB). Depois fica em cache.";
+    setStatus("Lendo a pasta…", 0);
+    bloqueia(true);
+    pegaWorker();                                 // já começa a carregar o Python
+    secExec.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function enviaParaAnalise(arquivos, nomePasta) {
+    if (!arquivos.length) {
+      mostraErro(`Nenhum arquivo CSV, XLSX ou XLS encontrado na pasta "${nomePasta}".`);
+      return;
+    }
+    const lista = $("listaArquivos");
+    arquivos.forEach((a) => {
+      const tag = document.createElement("span");
+      tag.className = "arquivo";
+      tag.textContent = a.nome;
+      lista.appendChild(tag);
+    });
+    $("statusNota").textContent = `${arquivos.length} arquivo(s) lido(s) de "${nomePasta}".`;
+    pegaWorker().postMessage({ arquivos }, arquivos.map((a) => a.conteudo));
+  }
+
+  async function analisaHandle(handle) {
+    iniciaExecucao();
+    try {
+      if ((await handle.queryPermission({ mode: "read" })) !== "granted" &&
+          (await handle.requestPermission({ mode: "read" })) !== "granted") {
+        mostraErro("O acesso à pasta não foi liberado.");
+        return;
+      }
+      enviaParaAnalise(await lerPastaHandle(handle), handle.name);
+    } catch (e) {
+      mostraErro("Não foi possível ler a pasta.", String(e));
+    }
+  }
+
+  btnPasta.addEventListener("click", async () => {
+    if (rodando) return;
+    if ("showDirectoryPicker" in window) {
+      try {
+        const handle = await window.showDirectoryPicker({ id: "faturamento", mode: "read" });
+        pastaHandle = handle;
+        btnAtualizar.hidden = false;
+        btnAtualizar.textContent = `🔄 Atualizar "${handle.name}"`;
+        analisaHandle(handle);
+      } catch (e) {
+        if (e.name !== "AbortError") mostraErro("Não foi possível abrir a pasta.", String(e));
+      }
+    } else {
+      inputPasta.value = "";
+      inputPasta.click();
+    }
+  });
+
+  btnAtualizar.addEventListener("click", () => {
+    if (!rodando && pastaHandle) analisaHandle(pastaHandle);
+  });
+
+  inputPasta.addEventListener("change", async () => {
+    const lista = Array.from(inputPasta.files || []);
+    if (!lista.length) return;
+    iniciaExecucao();
+    const nomePasta = (lista[0].webkitRelativePath || "").split("/")[0] || "pasta";
+    try {
+      enviaParaAnalise(await lerListaArquivos(lista), nomePasta);
+    } catch (e) {
+      mostraErro("Não foi possível ler os arquivos.", String(e));
+    }
+  });
+})();
+</script>
 </body>
 </html>

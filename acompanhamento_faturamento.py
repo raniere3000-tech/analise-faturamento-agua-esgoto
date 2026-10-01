@@ -86,7 +86,11 @@ def envia_arquivos_colab(destino):
     return destino
 
 def define_pasta_arquivos():
-    if MODO_ORIGEM == "local" or not em_colab():
+    # Pasta definida de fora (ex.: o site no navegador ou um agendador)
+    pasta_externa = os.environ.get("FATURAMENTO_PASTA")
+    if pasta_externa:
+        pasta = pasta_externa
+    elif MODO_ORIGEM == "local" or not em_colab():
         pasta = seleciona_pasta_local()
     elif MODO_ORIGEM == "drive":
         from google.colab import drive
@@ -369,6 +373,14 @@ arquivos_fatura     = [c["caminho"] for c in classificados if c["tipo"]=="fatura
 arquivos_cronograma = [c["caminho"] for c in classificados if c["tipo"]=="cronograma"]
 
 print(f"📁 Consumo: {len(arquivos_consumo)} | Fatura: {len(arquivos_fatura)} | Cronograma: {len(arquivos_cronograma)}")
+
+faltando = [nome for nome, lista in (("FATURA", arquivos_fatura), ("CONSUMO", arquivos_consumo)) if not lista]
+if faltando:
+    raise FileNotFoundError(
+        "Nenhum arquivo de " + " nem de ".join(faltando) + " foi identificado na pasta. "
+        "Confira se os arquivos têm as colunas esperadas "
+        f"(fatura: {sorted(COLUNAS_FATURA)}; consumo: {sorted(COLUNAS_CONSUMO)})."
+    )
 
 # ==================================================================
 # ETAPA 2/6 — PROCESSAMENTO DE CADA GRUPO DE ARQUIVOS
