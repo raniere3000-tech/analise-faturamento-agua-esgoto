@@ -995,16 +995,45 @@ def gera_matriz_migracao_grupos():
 ## Tabela acima do minimo ##
 
 # ------------------------------------------------------------------
-# Regra de consumo mínimo por categoria.
-# A função classifica_acima_abaixo_minimo(categoria, consumo_faturado)
-# não veio no arquivo exportado do Colab. Enquanto ela não for incluída
-# aqui (retornando "Acima" ou "Abaixo"), a tabela Acima x Abaixo do
-# Mínimo fica sem dados e o restante do relatório é gerado normalmente.
+# Regra de consumo mínimo por categoria
+# Mínimo da matrícula = consumo mínimo da categoria (m³ por economia)
+#                       x quantidade de economias da ligação.
+# Acima  = Consumo Faturado maior que o mínimo da matrícula.
+# Abaixo = Consumo Faturado igual ou menor que o mínimo (faturado no mínimo).
 # ------------------------------------------------------------------
-if "classifica_acima_abaixo_minimo" not in globals():
-    def classifica_acima_abaixo_minimo(categoria, consumo_faturado):
+import unicodedata
+
+CONSUMO_MINIMO_POR_CATEGORIA = {   # m³ por economia
+    "COMERCIAL": 20,
+    "PEQ. COMERCIO": 10,
+    "PUB. ESTADUAL": 10,
+    "PUBLICA": 10,
+    "RESIDENCIAL": 15,
+    "SOCIAL": 15,
+    "SOCIAL ESPECIAL": 15,
+    "INDUSTRIAL": 20,
+}
+
+def _normaliza_categoria(categoria):
+    texto = unicodedata.normalize("NFKD", str(categoria)).encode("ascii", "ignore").decode("ascii")
+    return " ".join(texto.upper().split())
+
+_categorias_sem_minimo = set()
+
+def classifica_acima_abaixo_minimo(categoria, consumo_faturado, economias=1):
+    cat = _normaliza_categoria(categoria)
+    minimo_por_economia = CONSUMO_MINIMO_POR_CATEGORIA.get(cat)
+    if minimo_por_economia is None:
+        _categorias_sem_minimo.add(str(categoria))
         return None
-    print("⚠️ Regra de consumo mínimo não definida: a tabela Acima x Abaixo do Mínimo ficará sem dados.")
+    try:
+        qtd_economias = float(economias)
+    except (TypeError, ValueError):
+        qtd_economias = 0
+    if not qtd_economias or qtd_economias < 1:
+        qtd_economias = 1          # ligação sem economia informada conta como 1
+    minimo_matricula = minimo_por_economia * qtd_economias
+    return "Acima" if consumo_faturado > minimo_matricula else "Abaixo"
 
 def gera_tabela_acima_abaixo_minimo():
     print("📊 Montando tabela Acima x Abaixo do Consumo Mínimo...")
@@ -1021,8 +1050,10 @@ def gera_tabela_acima_abaixo_minimo():
 
     df["Consumo Faturado"] = pd.to_numeric(df.get("Consumo Faturado", 0), errors="coerce").fillna(0)
     df["Classificacao_Minimo"] = df.apply(
-        lambda r: classifica_acima_abaixo_minimo(r["Categoria"], r["Consumo Faturado"]), axis=1
+        lambda r: classifica_acima_abaixo_minimo(r["Categoria"], r["Consumo Faturado"], r.get("Economias_Totais", 1)), axis=1
     )
+    if _categorias_sem_minimo:
+        print("⚠️ Categorias sem consumo mínimo cadastrado (ficam fora da tabela):", ", ".join(sorted(_categorias_sem_minimo)))
     df = df[df["Classificacao_Minimo"].isin(["Acima", "Abaixo"])]
 
     def conta_por(referencia, classe):
@@ -1125,7 +1156,7 @@ def gera_tabela_acima_abaixo_minimo():
     <div class="card">
     <h2>Economias acima x abaixo do consumo mínimo — {MES_ATUAL} vs {MES_ANTERIOR}</h2>
     <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
-        Classificação por categoria do cliente comparando o Consumo Faturado com o mínimo tarifário definido.
+        Mínimo da matrícula = consumo mínimo da categoria × quantidade de economias. Acima: consumo faturado maior que o mínimo; abaixo: faturado igual ou menor que o mínimo.
     </p>
     <table class="tabela-min-consumo">{cab}{linhas_html}</table>
     </div>
