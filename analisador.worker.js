@@ -27,7 +27,7 @@ async function preparaPython() {
   avisa("etapa", { texto: "Instalando pandas e leitores de Excel…" });
   await pyodide.loadPackage(["pandas", "micropip"]);
   const micropip = pyodide.pyimport("micropip");
-  await micropip.install(["openpyxl", "xlrd"]);
+  await micropip.install(["openpyxl", "xlrd", "xlsxwriter"]);
 
   const executor = await (await fetch("executor_web.py", { cache: "no-cache" })).text();
   pyodide.runPython(executor);

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Análise de Faturamento — Água e Esgoto</title>
-<meta name="description" content="Pipeline em Python que compara o faturamento de água e esgoto mês a mês e gera relatórios em Excel e HTML.">
+<meta name="description" content="Selecione a pasta com os arquivos e gere o relatório comparativo de água e esgoto no navegador.">
 <style>
 :root {
   --navy-900: #0b2447;
@@ -12,325 +12,180 @@
   --navy-500: #1b4a76;
   --teal: #1b9e82;
   --mint: #5ee7c8;
-  --bg: #f4f6f9;
-  --card: #ffffff;
   --text: #1f2a37;
   --muted: #5b6878;
   --line: #e3e8ef;
-  --warn-bg: #fff6e6;
-  --warn-line: #f0c36d;
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
 body {
   margin: 0;
   font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
-  background: var(--bg);
   color: var(--text);
-  line-height: 1.6;
-}
-a { color: var(--teal); }
-.wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
-
-/* Topo */
-header.hero {
   background: linear-gradient(135deg, var(--navy-900) 0%, var(--navy-700) 60%, var(--navy-500) 100%);
-  color: #fff;
-  padding: 56px 0 64px;
+  background-attachment: fixed;
+  line-height: 1.55;
+}
+
+/* ===== Tela inicial ===== */
+.inicio {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+.painel {
+  width: 100%;
+  max-width: 620px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.25);
+  padding: 32px 32px 26px;
 }
 .badge {
   display: inline-block;
   font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--mint);
-  border: 1px solid rgba(255,255,255,.25);
-  background: rgba(255,255,255,.1);
-  padding: 5px 14px; border-radius: 20px; margin-bottom: 18px;
+  color: var(--teal);
+  background: #e8f6f2;
+  padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;
 }
-.hero h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.15; margin: 0 0 14px; font-weight: 800; }
-.hero p.lead { font-size: 1.08rem; color: #cbd5e1; max-width: 680px; margin: 0 0 28px; }
-.btns { display: flex; flex-wrap: wrap; gap: 12px; }
+h1 { margin: 0 0 6px; font-size: clamp(1.45rem, 4vw, 1.85rem); line-height: 1.2; color: var(--navy-900); }
+.lead { margin: 0 0 22px; color: var(--muted); }
+
 .btn {
-  display: inline-block; padding: 11px 20px; border-radius: 8px;
-  font-weight: 700; font-size: .92rem; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: none; border-radius: 10px; cursor: pointer;
+  font: inherit; font-weight: 700; text-decoration: none;
 }
-.btn-primary { background: var(--teal); color: #fff; }
-.btn-primary:hover { background: #17876f; }
-.btn-ghost { border: 1px solid rgba(255,255,255,.4); color: #fff; }
-.btn-ghost:hover { background: rgba(255,255,255,.1); }
-
-/* Seções */
-section { padding: 48px 0 8px; }
-h2 { color: var(--navy-700); font-size: 1.45rem; margin: 0 0 6px; }
-.sub { color: var(--muted); margin: 0 0 24px; }
-.card {
-  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-  padding: 20px 22px; box-shadow: 0 2px 8px rgba(20,55,94,.05);
+.btn:disabled { opacity: .6; cursor: wait; }
+.btn-principal {
+  width: 100%; padding: 15px 20px; font-size: 1.05rem;
+  background: var(--teal); color: #fff;
 }
-
-/* Fluxo */
-.flow { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); counter-reset: passo; }
-.flow li { counter-increment: passo; position: relative; padding-top: 44px; }
-.flow li::before {
-  content: counter(passo);
-  position: absolute; top: 16px; left: 22px;
-  width: 26px; height: 26px; border-radius: 50%;
-  background: var(--navy-700); color: #fff;
-  font-size: .8rem; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
+.btn-principal:hover:not(:disabled) { background: #17876f; }
+.btn-secundario {
+  width: 100%; margin-top: 10px; padding: 11px 16px; font-size: .92rem;
+  background: #fff; color: var(--navy-700); border: 1px solid var(--line);
 }
-.flow b { color: var(--navy-900); display: block; margin-bottom: 2px; }
-.flow span { color: var(--muted); font-size: .92rem; }
+.btn-secundario:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
 
-/* KPIs */
-.kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-.kpi { border-top: 4px solid var(--teal); }
-.kpi b { display: block; color: var(--navy-900); }
-.kpi span { color: var(--muted); font-size: .9rem; }
+.orientacoes { margin: 24px 0 0; padding: 18px 20px; background: #f6f8fb; border-radius: 12px; }
+.orientacoes h2 { margin: 0 0 8px; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--navy-700); }
+.orientacoes ul { margin: 0; padding-left: 18px; font-size: .9rem; }
+.orientacoes li { margin-bottom: 6px; }
+.orientacoes li:last-child { margin-bottom: 0; }
+code { font-family: Consolas, "Courier New", monospace; font-size: .9em; background: #e9eef5; padding: 1px 5px; border-radius: 4px; }
 
-/* Modos */
-.modes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-.mode h3 { margin: 0 0 4px; color: var(--navy-700); font-size: 1.05rem; }
-.mode .tag { font-size: .75rem; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .05em; }
-.mode ol { padding-left: 18px; margin: 10px 0 0; color: var(--text); font-size: .93rem; }
-code {
-  font-family: Consolas, "Courier New", monospace; font-size: .88em;
-  background: #eef2f7; padding: 1px 6px; border-radius: 4px; color: var(--navy-900);
-}
-pre {
-  background: var(--navy-900); color: #e2e8f0; padding: 16px 18px; border-radius: 10px;
-  overflow-x: auto; font-size: .88rem; margin: 0;
-}
-pre code { background: none; color: inherit; padding: 0; }
-
-/* Saídas */
-.outputs { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-.outputs .card b { color: var(--navy-900); display: block; font-family: Consolas, monospace; font-size: .9rem; }
-.outputs .card span { color: var(--muted); font-size: .92rem; }
-
-/* Premissas / atenção */
-.two { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-.two ul { margin: 8px 0 0; padding-left: 18px; font-size: .93rem; }
-.two li { margin-bottom: 6px; }
-.warn { background: var(--warn-bg); border-color: var(--warn-line); }
-.two h3 { margin: 0; font-size: 1.02rem; color: var(--navy-700); }
-
-footer { margin-top: 56px; padding: 26px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: .88rem; }
-
-/* Analisador */
-[hidden] { display: none !important; }
-button.btn { border: none; cursor: pointer; font-family: inherit; }
-button.btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,.4); }
-button.btn:disabled { opacity: .55; cursor: wait; }
-.privacidade { margin: 18px 0 0; font-size: .85rem; color: #cbd5e1; }
-
-#execucao { padding-top: 28px; }
-.status-topo { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-.status-topo b { color: var(--navy-900); }
-.status-topo span { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 700; }
-.barra { height: 10px; background: #e6ebf1; border-radius: 6px; overflow: hidden; margin: 10px 0 8px; }
+/* Progresso */
+.progresso { margin-top: 22px; }
+.progresso-topo { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: .95rem; }
+.progresso-topo b { color: var(--navy-900); }
+.progresso-topo span { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.barra { height: 10px; background: #e6ebf1; border-radius: 6px; overflow: hidden; margin: 8px 0; }
 .barra-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--navy-700), var(--teal)); transition: width .3s; }
-.status.erro { border-color: #e7a3a3; background: #fff5f5; }
-.status.erro .barra-fill { background: #c00000; }
-.status-nota { margin: 0; font-size: .88rem; color: var(--muted); }
-.status.erro .status-nota { color: #9b1c1c; }
-.arquivos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.arquivo { font-size: .8rem; background: #eef2f7; color: var(--navy-900); padding: 3px 10px; border-radius: 12px; }
-.log { margin-top: 12px; }
-.log summary { cursor: pointer; color: var(--navy-700); font-size: .88rem; font-weight: 600; }
-.log pre { margin-top: 8px; max-height: 260px; font-size: .78rem; white-space: pre-wrap; }
+.nota { margin: 0; font-size: .86rem; color: var(--muted); }
+.arquivos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.arquivo { font-size: .78rem; background: #eef2f7; color: var(--navy-900); padding: 2px 10px; border-radius: 12px; }
+.progresso.erro .barra-fill { background: #c00000; }
+.progresso.erro .nota { color: #9b1c1c; font-weight: 600; }
+.log { margin-top: 10px; }
+.log summary { cursor: pointer; font-size: .85rem; color: var(--navy-700); font-weight: 600; }
+.log pre {
+  margin: 8px 0 0; max-height: 220px; overflow: auto; white-space: pre-wrap;
+  background: var(--navy-900); color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: .75rem;
+}
 
-#resultado { padding-top: 28px; }
-.resultado-topo { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
-.resultado-topo .sub { margin: 0; }
-.downloads { display: flex; flex-wrap: wrap; gap: 8px; }
-.btn-claro { background: #fff; color: var(--navy-700); border: 1px solid var(--line); font-size: .85rem; padding: 9px 14px; }
-.btn-claro:hover { border-color: var(--teal); color: var(--teal); }
-#quadroRelatorio { width: 100%; min-height: 400px; border: 1px solid var(--line); border-radius: 12px; background: #f4f6f9; display: block; }
+.rodape { margin-top: 18px; text-align: center; font-size: .8rem; color: var(--muted); }
+.rodape a { color: var(--muted); }
 
-#sobre { margin-top: 40px; }
-.sobre-titulo { font-size: 1.1rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+/* ===== Relatório em tela cheia ===== */
+.visualizador { position: fixed; inset: 0; display: flex; flex-direction: column; background: #f4f6f9; z-index: 10; }
+.barra-relatorio {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; background: var(--navy-900); color: #fff;
+}
+.barra-relatorio .titulo { font-weight: 700; font-size: .92rem; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.btn-barra {
+  padding: 7px 12px; font-size: .82rem; border-radius: 8px;
+  background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.25);
+}
+.btn-barra:hover { background: rgba(255,255,255,.2); }
+.btn-barra.destaque { background: var(--teal); border-color: var(--teal); }
+#quadroRelatorio { flex: 1; width: 100%; border: 0; background: #f4f6f9; }
+body.relatorio-aberto { overflow: hidden; }
 
 @media (max-width: 520px) {
-  header.hero { padding: 40px 0 44px; }
-  section { padding-top: 36px; }
+  .painel { padding: 24px 20px 20px; }
+  .barra-relatorio .titulo { flex-basis: 100%; }
 }
 </style>
 </head>
 <body>
 
-<header class="hero">
-  <div class="wrap">
-    <div class="badge">Pipeline Python · ETL + Relatório</div>
-    <h1>Análise de Faturamento<br>de Água e Esgoto</h1>
-    <p class="lead">Escolha a pasta com os arquivos de consumo, faturamento e cronograma. A página compara o mês atual
-      com o anterior e mostra aqui o relatório completo, com KPIs, insights, tabelas e o Top 100 de quedas de consumo.</p>
-    <div class="btns">
-      <button type="button" class="btn btn-primary" id="btnPasta">📂 Selecionar pasta e analisar</button>
-      <button type="button" class="btn btn-ghost" id="btnAtualizar" hidden>🔄 Atualizar com a mesma pasta</button>
-      <a class="btn btn-ghost" href="acompanhamento_faturamento.py" download>⬇ Baixar o script</a>
-    </div>
-    <p class="privacidade">🔒 Os arquivos são processados no seu próprio navegador e não são enviados para nenhum servidor.</p>
+<main class="inicio" id="inicio">
+  <div class="painel">
+    <div class="badge">Relatório comparativo</div>
+    <h1>Análise de Faturamento de Água e Esgoto</h1>
+    <p class="lead">Selecione a pasta com os arquivos do mês. O relatório abre sozinho quando a análise chegar a 100%.</p>
+
+    <button type="button" class="btn btn-principal" id="btnPasta">📂 Selecionar pasta e analisar</button>
+    <button type="button" class="btn btn-secundario" id="btnAtualizar" hidden></button>
     <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
-  </div>
-</header>
 
-<main class="wrap">
-
-  <section id="execucao" hidden>
-    <div class="card status">
-      <div class="status-topo">
-        <b id="statusTexto">Preparando…</b>
-        <span id="statusPct">0%</span>
-      </div>
+    <div class="progresso" id="progresso" hidden>
+      <div class="progresso-topo"><b id="statusTexto">Preparando…</b><span id="statusPct">0%</span></div>
       <div class="barra"><div class="barra-fill" id="barraFill"></div></div>
-      <p class="status-nota" id="statusNota">Na primeira vez o navegador baixa o Python (cerca de 30 MB). Depois fica em cache.</p>
+      <p class="nota" id="statusNota"></p>
       <div class="arquivos" id="listaArquivos"></div>
       <details class="log">
         <summary>Detalhes da execução</summary>
         <pre id="logExecucao"></pre>
       </details>
     </div>
-  </section>
 
-  <section id="resultado" hidden>
-    <div class="resultado-topo">
-      <div>
-        <h2 id="resultadoTitulo">Relatório</h2>
-        <p class="sub" id="resultadoSub"></p>
-      </div>
-      <div class="downloads" id="downloads"></div>
+    <div class="orientacoes">
+      <h2>Antes de começar</h2>
+      <ul>
+        <li>Deixe na mesma pasta os arquivos de <b>faturamento</b>, <b>consumo</b> e <b>cronograma</b> (CSV, XLSX ou XLS), do mês atual e do anterior.</li>
+        <li>O nome de cada arquivo de consumo precisa ter o mês, por exemplo <code>Consumo 09-2026.csv</code>.</li>
+        <li>Os arquivos são processados no seu navegador e não são enviados para nenhum servidor.</li>
+        <li>Na primeira vez, o carregamento pode levar cerca de 1 minuto. Depois fica mais rápido.</li>
+        <li>No Chrome ou Edge, o botão <b>Atualizar</b> relê a mesma pasta depois que você incluir arquivos novos.</li>
+      </ul>
     </div>
-    <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto"></iframe>
-  </section>
+
+    <p class="rodape"><a href="acompanhamento_faturamento.py" download>Baixar o script Python</a></p>
+  </div>
 </main>
 
-<div class="wrap" id="sobre">
-  <h2 class="sobre-titulo">Sobre o projeto</h2>
-
-  <section id="fluxo">
-    <h2>Como funciona</h2>
-    <p class="sub">Tudo gira em torno do cruzamento entre faturamento e consumo por <code>Ligação + Referência (mês)</code>.</p>
-    <ol class="flow">
-      <li class="card"><b>Leitura</b><span>Varre a pasta e lê todos os CSV, XLSX e XLS.</span></li>
-      <li class="card"><b>Classificação</b><span>Identifica cada arquivo (consumo, fatura ou cronograma) pelas colunas.</span></li>
-      <li class="card"><b>Tratamento</b><span>Padroniza cabeçalhos, números, referências e nº de ligação.</span></li>
-      <li class="card"><b>Base única</b><span>Junta fatura + consumo + cronograma na <code>base_final</code>.</span></li>
-      <li class="card"><b>Comparação</b><span>Mês atual × mês anterior, por grupo de leitura.</span></li>
-      <li class="card"><b>Relatórios</b><span>Exporta Excel e gera o relatório HTML interativo.</span></li>
-    </ol>
-  </section>
-
-  <section id="analises">
-    <h2>O que é analisado</h2>
-    <p class="sub">Separado por água e esgoto (rubricas <code>VALOR DE AGUA</code> e <code>VALOR DE ESGOTO</code>).</p>
-    <div class="kpis">
-      <div class="card kpi"><b>Faturamento</b><span>Total em R$ e variação</span></div>
-      <div class="card kpi"><b>Volume faturado</b><span>m³ por grupo</span></div>
-      <div class="card kpi"><b>Nº de ligações</b><span>Ligações únicas faturadas</span></div>
-      <div class="card kpi"><b>Volume médio</b><span>m³ por ligação</span></div>
-      <div class="card kpi"><b>Tarifa média</b><span>R$ por m³</span></div>
-      <div class="card kpi"><b>Ticket médio</b><span>R$ por ligação</span></div>
-      <div class="card kpi"><b>Situação</b><span>Ativas × cortadas por ciclo</span></div>
-      <div class="card kpi"><b>Top 100 quedas</b><span>Clientes com maior redução de consumo</span></div>
-    </div>
-  </section>
-
-  <section id="como-usar">
-    <h2>Como usar</h2>
-    <p class="sub">O jeito mais rápido é o botão <b>Selecionar pasta e analisar</b>, no topo desta página. Para rodar o script fora do site, escolha a origem dos arquivos em <code>MODO_ORIGEM</code>.</p>
-    <div class="modes">
-      <div class="card mode">
-        <div class="tag">Google Colab</div>
-        <h3><code>"upload"</code> — botão de arquivos</h3>
-        <ol>
-          <li>Cole o script numa célula e execute.</li>
-          <li>Clique em <b>Escolher arquivos</b>, abra a pasta e selecione tudo (Ctrl+A).</li>
-          <li>Os relatórios são baixados automaticamente no final.</li>
-        </ol>
-      </div>
-      <div class="card mode">
-        <div class="tag">Google Colab</div>
-        <h3><code>"drive"</code> — pasta do Drive</h3>
-        <ol>
-          <li>Coloque os arquivos numa pasta do Google Drive.</li>
-          <li>Ajuste <code>PASTA_DRIVE</code> com o caminho dela.</li>
-          <li>Com o Drive para desktop, basta salvar os arquivos na pasta do PC.</li>
-        </ol>
-      </div>
-      <div class="card mode">
-        <div class="tag">No seu computador</div>
-        <h3><code>"local"</code> — selecionar pasta</h3>
-        <ol>
-          <li>Instale as dependências (abaixo).</li>
-          <li>Rode o script; abre a janela para escolher a pasta.</li>
-          <li>Os relatórios são salvos na mesma pasta.</li>
-        </ol>
-      </div>
-    </div>
-    <div style="margin-top:14px">
-<pre><code>pip install pandas numpy openpyxl tqdm
-python acompanhamento_faturamento.py</code></pre>
-    </div>
-  </section>
-
-  <section id="saidas">
-    <h2>Arquivos gerados</h2>
-    <p class="sub">Salvos na pasta de trabalho a cada execução.</p>
-    <div class="outputs">
-      <div class="card"><b>Base_Compilada_HISTORICO.xlsx</b><span>Base consolidada de fatura + consumo + cronograma, com indicadores de match.</span></div>
-      <div class="card"><b>Top100_Quedas_Consumo.xlsx</b><span>Ranking das 100 maiores quedas de consumo, em abas de água e esgoto.</span></div>
-      <div class="card"><b>Relatorio_Comparativo.html</b><span>Relatório com KPIs, gráfico por grupo, insights, tabelas e filtro por ciclo.</span></div>
-    </div>
-  </section>
-
-  <section id="premissas">
-    <h2>Premissas e pontos de atenção</h2>
-    <p class="sub">Vale conferir antes de confiar nos números.</p>
-    <div class="two">
-      <div class="card">
-        <h3>✅ Premissas</h3>
-        <ul>
-          <li>O nome do arquivo de consumo contém o mês (ex.: <code>09-2026</code>).</li>
-          <li>O nº da ligação é o mesmo em todas as bases.</li>
-          <li>Considera uma linha por ligação por mês.</li>
-          <li>O cronograma é cruzado por grupo, não por mês.</li>
-        </ul>
-      </div>
-      <div class="card warn">
-        <h3>⚠️ Pontos de atenção</h3>
-        <ul>
-          <li>"Economias" no relatório são, na prática, ligações únicas.</li>
-          <li>O cronograma pode perder o histórico mensal.</li>
-          <li>Clientes que somem no mês atual não entram no Top 100.</li>
-          <li>Alguns <code>except</code> genéricos podem esconder erros de leitura.</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
+<div class="visualizador" id="visualizador" hidden>
+  <div class="barra-relatorio">
+    <span class="titulo" id="relatorioTitulo">Relatório</span>
+    <span id="downloads" style="display:contents"></span>
+    <button type="button" class="btn btn-barra" id="btnAtualizarBarra" hidden>🔄 Atualizar</button>
+    <button type="button" class="btn btn-barra" id="btnVoltar">📂 Outra pasta</button>
+  </div>
+  <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto"></iframe>
 </div>
-
-<footer>
-  <div class="wrap">Análise de Faturamento de Água e Esgoto · código em Python (pandas)</div>
-</footer>
 
 <script>
 (() => {
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
-    "Relatorio_Comparativo.html": { rotulo: "Relatório (HTML)", tipo: "text/html" },
-    "Base_Compilada_HISTORICO.xlsx": { rotulo: "Base histórica (Excel)", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
-    "Top100_Quedas_Consumo.xlsx": { rotulo: "Top 100 quedas (Excel)", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    "Relatorio_Comparativo.html": { rotulo: "⬇ Relatório", tipo: "text/html" },
+    "Top100_Quedas_Consumo.xlsx": { rotulo: "⬇ Top 100 (Excel)", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    "Base_Compilada_HISTORICO.xlsx": { rotulo: "⬇ Base histórica (Excel)", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
   };
   const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
   const $ = (id) => document.getElementById(id);
-  const btnPasta = $("btnPasta"), btnAtualizar = $("btnAtualizar"), inputPasta = $("inputPasta");
-  const secExec = $("execucao"), secResultado = $("resultado"), cardStatus = secExec.querySelector(".status");
+  const btnPasta = $("btnPasta"), btnAtualizar = $("btnAtualizar"), btnAtualizarBarra = $("btnAtualizarBarra");
+  const inputPasta = $("inputPasta"), progresso = $("progresso");
 
   let worker = null;
-  let pastaHandle = null;      // acesso à pasta (Chrome/Edge), permite reler sem escolher de novo
+  let pastaHandle = null;
   let rodando = false;
   let urlsCriadas = [];
 
@@ -347,7 +202,10 @@ python acompanhamento_faturamento.py</code></pre>
     if (!worker) {
       worker = new Worker("analisador.worker.js");
       worker.onmessage = (e) => trataMensagem(e.data);
-      worker.onerror = (e) => mostraErro("Não foi possível iniciar o processamento.", e.message || "");
+      worker.onerror = (e) => {
+        worker = null;
+        mostraErro("Não foi possível carregar o Python no navegador. Verifique a internet e tente de novo.", e.message || "");
+      };
     }
     return worker;
   }
@@ -368,11 +226,13 @@ python acompanhamento_faturamento.py</code></pre>
   }
 
   function mostraErro(resumo, detalhe) {
-    cardStatus.classList.add("erro");
+    fechaRelatorio();
+    progresso.hidden = false;
+    progresso.classList.add("erro");
     setStatus("Não foi possível gerar o relatório");
     $("statusNota").textContent = resumo;
     if (detalhe) $("logExecucao").textContent += "\n" + detalhe;
-    secExec.querySelector("details").open = true;
+    progresso.querySelector("details").open = true;
     bloqueia(false);
   }
 
@@ -385,11 +245,11 @@ python acompanhamento_faturamento.py</code></pre>
       log.scrollTop = log.scrollHeight;
     }
     else if (msg.tipo === "erro") mostraErro(msg.resumo, msg.detalhe);
-    else if (msg.tipo === "concluido") mostraResultado(msg);
+    else if (msg.tipo === "concluido") abreRelatorio(msg);
   }
 
-  function mostraResultado({ saidas, refAtual, refAnterior }) {
-    setStatus("Relatório atualizado", 100);
+  function abreRelatorio({ saidas, refAtual, refAnterior }) {
+    setStatus("Relatório gerado", 100);
     $("statusNota").textContent = `Concluído às ${new Date().toLocaleTimeString("pt-BR")}.`;
     bloqueia(false);
 
@@ -397,54 +257,44 @@ python acompanhamento_faturamento.py</code></pre>
     urlsCriadas = [];
     const downloads = $("downloads");
     downloads.innerHTML = "";
-    let htmlRelatorio = null, urlRelatorio = null;
+    let htmlRelatorio = null;
 
-    for (const { nome, conteudo } of saidas) {
-      const info = SAIDAS[nome] || { rotulo: nome, tipo: "application/octet-stream" };
-      const url = URL.createObjectURL(new Blob([conteudo], { type: info.tipo }));
+    for (const nome of Object.keys(SAIDAS)) {
+      const saida = saidas.find((s) => s.nome === nome);
+      if (!saida) continue;
+      const info = SAIDAS[nome];
+      const url = URL.createObjectURL(new Blob([saida.conteudo], { type: info.tipo }));
       urlsCriadas.push(url);
       const a = document.createElement("a");
-      a.className = "btn btn-claro";
+      a.className = "btn btn-barra";
       a.href = url;
       a.download = nome;
-      a.textContent = "⬇ " + info.rotulo;
+      a.textContent = info.rotulo;
       downloads.appendChild(a);
       if (nome === "Relatorio_Comparativo.html") {
-        htmlRelatorio = new TextDecoder("utf-8").decode(conteudo);
-        urlRelatorio = url;
+        htmlRelatorio = new TextDecoder("utf-8").decode(saida.conteudo);
       }
     }
 
-    if (urlRelatorio) {
-      const abrir = document.createElement("a");
-      abrir.className = "btn btn-claro";
-      abrir.href = urlRelatorio;
-      abrir.target = "_blank";
-      abrir.rel = "noopener";
-      abrir.textContent = "↗ Abrir em nova aba";
-      downloads.prepend(abrir);
+    if (!htmlRelatorio) {
+      mostraErro("A análise terminou, mas o relatório HTML não foi gerado.");
+      return;
     }
 
-    $("resultadoTitulo").textContent = `Relatório — ${nomeMes(refAtual)} vs ${nomeMes(refAnterior)}`;
-    $("resultadoSub").textContent = pastaHandle
-      ? "Use as abas e o filtro dentro do relatório. Colocou arquivos novos na pasta? Clique em Atualizar no topo."
-      : "Use as abas e o filtro dentro do relatório. Para atualizar, selecione a pasta de novo.";
-    secResultado.hidden = false;
+    const periodo = refAtual ? `${nomeMes(refAtual)} vs ${nomeMes(refAnterior)}` : "";
+    $("relatorioTitulo").textContent = periodo ? `Relatório — ${periodo}` : "Relatório";
+    document.title = periodo ? `Relatório ${periodo}` : "Relatório";
+    btnAtualizarBarra.hidden = !pastaHandle;
 
-    const quadro = $("quadroRelatorio");
-    if (htmlRelatorio) {
-      quadro.onload = () => ajustaAltura(quadro);
-      quadro.srcdoc = htmlRelatorio;
-    }
-    secResultado.scrollIntoView({ behavior: "smooth", block: "start" });
+    $("quadroRelatorio").srcdoc = htmlRelatorio;
+    $("visualizador").hidden = false;
+    document.body.classList.add("relatorio-aberto");
   }
 
-  function ajustaAltura(quadro) {
-    const doc = quadro.contentDocument;
-    if (!doc) return;
-    const ajusta = () => { quadro.style.height = Math.ceil(doc.body.getBoundingClientRect().height) + 4 + "px"; };
-    ajusta();
-    new ResizeObserver(ajusta).observe(doc.body);
+  function fechaRelatorio() {
+    $("visualizador").hidden = true;
+    document.body.classList.remove("relatorio-aberto");
+    document.title = "Análise de Faturamento — Água e Esgoto";
   }
 
   async function lerPastaHandle(handle) {
@@ -462,7 +312,7 @@ python acompanhamento_faturamento.py</code></pre>
     const lidos = [];
     for (const arq of lista) {
       const partes = (arq.webkitRelativePath || arq.name).split("/");
-      if (partes.length > 2) continue;            // ignora subpastas, como o script
+      if (partes.length > 2) continue;             // ignora subpastas, como o script
       if (!ehEntrada(arq.name)) continue;
       lidos.push({ nome: arq.name, conteudo: await arq.arrayBuffer() });
     }
@@ -470,17 +320,15 @@ python acompanhamento_faturamento.py</code></pre>
   }
 
   function iniciaExecucao() {
-    secExec.hidden = false;
-    cardStatus.classList.remove("erro");
+    fechaRelatorio();
+    progresso.hidden = false;
+    progresso.classList.remove("erro");
     $("logExecucao").textContent = "";
     $("listaArquivos").innerHTML = "";
-    $("statusNota").textContent = worker
-      ? "Lendo os arquivos da pasta…"
-      : "Na primeira vez o navegador baixa o Python (cerca de 30 MB). Depois fica em cache.";
+    $("statusNota").textContent = worker ? "Lendo os arquivos da pasta…" : "Carregando o Python no navegador. Na primeira vez pode levar cerca de 1 minuto.";
     setStatus("Lendo a pasta…", 0);
     bloqueia(true);
-    pegaWorker();                                 // já começa a carregar o Python
-    secExec.scrollIntoView({ behavior: "smooth", block: "start" });
+    pegaWorker();                                  // já começa a carregar o Python
   }
 
   function enviaParaAnalise(arquivos, nomePasta) {
@@ -513,14 +361,14 @@ python acompanhamento_faturamento.py</code></pre>
     }
   }
 
-  btnPasta.addEventListener("click", async () => {
+  async function escolhePasta() {
     if (rodando) return;
     if ("showDirectoryPicker" in window) {
       try {
         const handle = await window.showDirectoryPicker({ id: "faturamento", mode: "read" });
         pastaHandle = handle;
         btnAtualizar.hidden = false;
-        btnAtualizar.textContent = `🔄 Atualizar "${handle.name}"`;
+        btnAtualizar.textContent = `🔄 Atualizar com a pasta "${handle.name}"`;
         analisaHandle(handle);
       } catch (e) {
         if (e.name !== "AbortError") mostraErro("Não foi possível abrir a pasta.", String(e));
@@ -529,11 +377,16 @@ python acompanhamento_faturamento.py</code></pre>
       inputPasta.value = "";
       inputPasta.click();
     }
-  });
+  }
 
-  btnAtualizar.addEventListener("click", () => {
+  function atualiza() {
     if (!rodando && pastaHandle) analisaHandle(pastaHandle);
-  });
+  }
+
+  btnPasta.addEventListener("click", escolhePasta);
+  btnAtualizar.addEventListener("click", atualiza);
+  btnAtualizarBarra.addEventListener("click", atualiza);
+  $("btnVoltar").addEventListener("click", () => { fechaRelatorio(); escolhePasta(); });
 
   inputPasta.addEventListener("change", async () => {
     const lista = Array.from(inputPasta.files || []);
