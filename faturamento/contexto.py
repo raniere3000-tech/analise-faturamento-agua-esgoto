@@ -1,0 +1,36 @@
+# -*- coding: utf-8 -*-
+"""Estado compartilhado de uma análise (substitui as variáveis globais do script antigo)."""
+from dataclasses import dataclass, field
+
+import pandas as pd
+
+from .progresso import Progresso
+
+
+@dataclass
+class Contexto:
+    pasta: str
+    progresso: Progresso
+    classificacao: dict = field(default_factory=dict)
+    base_final: pd.DataFrame = None
+    fatura_total: pd.DataFrame = None
+
+    # Meses comparados (preenchidos em `define_referencias`)
+    ref_atual: str = ""
+    ref_anterior: str = ""
+    mes_atual: str = ""
+    mes_anterior: str = ""
+    mes_atual_curto: str = ""
+    mes_anterior_curto: str = ""
+    df_atual: pd.DataFrame = None
+    df_anterior: pd.DataFrame = None
+
+    # Resultados intermediários
+    comp_agua: pd.DataFrame = None
+    comp_esgoto: pd.DataFrame = None
+    df_minimo_por_grupo: pd.DataFrame = None
+
+    # Avisos exibidos no relatório
+    aviso_ajustes_html: str = ""
+    alerta_minimo_html: str = ""
+    categorias_sem_minimo: dict = field(default_factory=dict)

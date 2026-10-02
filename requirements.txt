@@ -1,0 +1,6 @@
+pandas>=2.0
+numpy>=1.24
+openpyxl>=3.1      # leitura de .xlsx
+xlrd>=2.0          # leitura de .xls antigo
+xlsxwriter>=3.0    # gravação do Top 100 em Excel
+tqdm>=4.60         # barra de progresso no terminal (opcional)

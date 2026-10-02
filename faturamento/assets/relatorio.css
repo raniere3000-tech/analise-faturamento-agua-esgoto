@@ -1,0 +1,121 @@
+/* Paleta: #05050D texto | #1A2740 marinho (principal/positivo) | #394D73 e #49668C azuis secundários
+   #F2F2F2 fundo | #E8710A laranja (negativo) | #C2560C laranja para texto
+   O cabeçalho "Águas do Rio · Relatório Executivo" mantém as cores originais. */
+:root {
+    --preto:#05050D; --marinho:#1A2740; --azul:#394D73; --azul-claro:#49668C; --cinza:#F2F2F2;
+    --linha:#DCE1E9; --tint:#E1E7F0; --zebra:#F7F8FA; --laranja:#E8710A; --laranja-texto:#C2560C;
+    --fonte:'IBM Plex Sans','Segoe UI',Arial,sans-serif;
+    --fonte-cond:'IBM Plex Sans Condensed','Segoe UI',Arial,sans-serif;
+}
+* { box-sizing: border-box; }
+body { font-family:var(--fonte); background:var(--cinza); margin:0; color:var(--preto); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+
+/* ===== Cabeçalho (cores originais) ===== */
+.header-exec {
+    background: linear-gradient(135deg, #0b2447 0%, #14375e 60%, #1b4a76 100%);
+    padding: 28px 32px;
+    color: #fff;
+}
+.header-badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: #5ee7c8;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: 20px;
+    margin-bottom: 14px;
+}
+.header-exec h1 { font-size: 1.9em; font-weight: 800; margin: 0 0 6px 0; line-height: 1.2; }
+.header-exec p { font-size: 0.9em; color: #cbd5e1; margin: 0; }
+.header-exec { padding: 26px 16px 28px; }
+.header-inner { max-width:1240px; margin:0 auto; }
+.header-exec h1 { font-family:var(--fonte); font-size:26px; font-weight:600; letter-spacing:-.01em; }
+.header-exec p { font-size:14px; }
+
+/* ===== Barra de abas + filtro ===== */
+.toolbar { max-width:1272px; margin:18px auto 0; padding:0 16px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.toggle { display:inline-flex; background:#FFFFFF; border:1px solid var(--linha); border-radius:8px; padding:3px; }
+.toggle button { padding:7px 20px; border:0; border-radius:6px; background:transparent; color:var(--azul); cursor:pointer; font-family:inherit; font-size:13px; font-weight:600; }
+.toggle button:hover { color:var(--marinho); }
+.toggle button.active { background:var(--marinho); color:#FFFFFF; }
+button:focus-visible, input:focus-visible { outline:2px solid var(--azul-claro); outline-offset:2px; }
+
+#view-resumo, #view-tabelas { display:none; padding:0 16px 48px; }
+#view-resumo.ativo, #view-tabelas.ativo { display:block; }
+
+/* ===== Seções ===== */
+.card { background:#FFFFFF; margin:16px auto; padding:20px 22px; max-width:1240px; border:1px solid var(--linha); border-radius:8px; overflow-x:auto; }
+.card h2 { font-size:15px; font-weight:600; margin:0 0 14px 0; color:var(--marinho); letter-spacing:-.005em; }
+.card p { font-size:13px; }
+.nota-secao { margin:-8px 0 12px; color:var(--azul-claro); font-size:12.5px; }
+.card-faixa { display:flex; align-items:baseline; gap:8px 24px; flex-wrap:wrap; padding:14px 22px; }
+.card-faixa h2 { margin:0; }
+.grafico-area { position:relative; height:340px; }
+@media (max-width: 640px) { .grafico-area { height:260px; } }
+.obs-dias { margin:0; font-size:13px; color:var(--azul); font-variant-numeric:tabular-nums; }
+.obs-dias b { color:var(--preto); font-weight:600; }
+
+/* ===== KPIs: faixa única ===== */
+.kpis-grid { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:1px; max-width:1240px; margin:16px auto; background:var(--linha); border:1px solid var(--linha); border-radius:8px; overflow:hidden; }
+.kpi-card { background:#FFFFFF; padding:9px 12px 9px; border-top:3px solid var(--marinho); min-width:0; }
+.kpi-card.negativo { border-top-color:var(--laranja); }
+.kpi-card h3 { font-family:var(--fonte); font-size:11px; font-weight:500; color:var(--azul-claro); margin:0 0 4px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-valor { font-family:var(--fonte-cond); font-size:15px; font-weight:600; margin:0; color:var(--preto); letter-spacing:-.01em; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpi-delta { font-size:11px; margin:2px 0 0 0; font-weight:600; white-space:nowrap; font-variant-numeric:tabular-nums; }
+@media (max-width: 1100px) { .kpis-grid { grid-template-columns:repeat(4, minmax(0,1fr)); } }
+@media (max-width: 560px)  { .kpis-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+
+/* ===== Destaques ===== */
+.insights-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:18px 28px; }
+.insight-card { border-top:2px solid var(--tint); padding-top:10px; }
+.insight-card h4 { font-size:13px; margin:0 0 6px 0; color:var(--marinho); font-weight:600; }
+.insight-card ul { margin:0; padding-left:16px; font-size:13px; color:var(--preto); line-height:1.55; font-variant-numeric:tabular-nums; }
+.insight-card li { margin-bottom:3px; }
+.insight-card li::marker { color:var(--azul-claro); }
+
+/* ===== Tabelas ===== */
+table { border-collapse:collapse; width:100%; font-family:var(--fonte-cond); font-size:11px; line-height:1.35; font-variant-numeric:tabular-nums; }
+th, td { border:1px solid var(--linha); padding:3px 5px; text-align:center; }
+td { white-space:nowrap; }
+th { background:var(--marinho); color:#FFFFFF; font-weight:600; font-size:10.5px; }
+.header-sub th { background:var(--azul); font-weight:500; }
+tbody tr:nth-child(even) td { background-color:var(--zebra); }
+tbody tr:hover td { background-color:var(--tint); }
+tbody tr.linha-media td, tbody tr.linha-total td { font-weight:700; background-color:var(--tint); }
+
+.tabela-wrap { display:block; width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:var(--azul-claro) var(--tint); cursor:grab; }
+.tabela-wrap::-webkit-scrollbar { height:8px; }
+.tabela-wrap::-webkit-scrollbar-track { background:var(--tint); border-radius:6px; }
+.tabela-wrap::-webkit-scrollbar-thumb { background:var(--azul-claro); border-radius:6px; }
+.tabela-wrap.grabbing { cursor:grabbing; }
+
+/* ===== Filtro ===== */
+.filtro-wrap { position:relative; }
+.btn-filtro { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:8px; border:1px solid var(--linha); background:#FFFFFF; color:var(--marinho); cursor:pointer; font-family:inherit; font-size:13px; font-weight:600; }
+.btn-filtro:hover { border-color:var(--azul-claro); }
+.badge { background:var(--marinho); color:#FFFFFF; border-radius:10px; padding:1px 8px; font-size:11px; font-variant-numeric:tabular-nums; }
+.painel-filtro { display:none; position:absolute; top:calc(100% + 6px); right:0; z-index:100; background:#FFFFFF; border:1px solid var(--linha); border-radius:8px; padding:12px; max-height:320px; overflow-y:auto; box-shadow:0 8px 24px rgba(5,5,13,0.12); min-width:240px; }
+.painel-filtro.aberto { display:block; }
+.painel-acoes { display:flex; gap:8px; margin-bottom:10px; }
+.check-list { display:flex; flex-direction:column; gap:6px; }
+.check-item { display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
+.check-item input { accent-color:var(--marinho); }
+.mini-btn { padding:4px 10px; border:1px solid var(--linha); border-radius:6px; background:var(--cinza); color:var(--marinho); cursor:pointer; font-family:inherit; font-size:12px; font-weight:600; }
+
+/* ===== Justificativas ===== */
+.btn-just { padding:6px 12px; border:1px solid var(--linha); border-radius:6px; background:#FFFFFF; color:var(--marinho); font-family:inherit; font-size:12.5px; cursor:pointer; margin-left:6px; font-weight:600; }
+.btn-just:hover { border-color:var(--azul-claro); }
+#lista-justificativas p { position:relative; padding:6px 8px; border-radius:6px; margin:6px 0; font-size:13.5px; }
+#lista-justificativas.modo-edicao p { outline:1px dashed var(--azul-claro); background:var(--zebra); }
+#lista-justificativas.modo-edicao p:hover { background:var(--tint); }
+.btn-remover-item { display:none; position:absolute; top:2px; right:4px; background:var(--laranja-texto); color:#FFFFFF; border:none; border-radius:50%; width:20px; height:20px; font-size:0.7em; cursor:pointer; line-height:1; }
+#lista-justificativas.modo-edicao .btn-remover-item { display:block; }
+
+@media (max-width: 640px) {
+    .header-exec h1 { font-size:21px; }
+    .card { padding:16px; }
+}
