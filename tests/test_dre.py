@@ -92,3 +92,25 @@ def test_sem_arquivos_de_dre_o_relatorio_avisa(analise):
         html = f.read()
     assert "Nenhum arquivo de serviço avulso" in html
     assert "Orçado RF não encontrado" in html
+
+
+def test_blocos_por_mes_e_sup(sessao):
+    with open(sessao.caminho_html, encoding="utf-8") as f:
+        html = f.read()
+    for mes in ("08/2026", "09/2026"):
+        for sup in ("TODAS", "LAGOS", "LESTE", "SEM SUP"):
+            assert f'data-sup="{sup}" data-mes="{mes}"' in html
+    assert 'id="info-filtros"' in html and "Evolução mensal por classe" in html and "Ticket médio" in html
+
+
+def test_dre_do_mes_anterior(sessao):
+    ctx = sessao.ctx
+    r = dre.realizado(ctx, dre.TODAS, "08/2026")
+    av = le_avulso(os.path.dirname(sessao.caminho_html))
+    ago = pd.read_csv(os.path.join(os.path.dirname(sessao.caminho_html), "Servico avulso 09-2026.csv"), sep=";", encoding="utf-8-sig", dtype=str)
+    ago = ago[ago["Referencia de Leitura"] == "ago/26"]
+    valores = ago["Valor Parcela"].str.replace(".", "", regex=False).str.replace(",", ".", regex=False).astype(float)
+    classes = ago["Rubrica"].map(lambda x: CLASSE_INDIRETA_POR_RUBRICA.get(chave_texto(x), "OUTROS"))
+    assert r["iE"] == pytest.approx(valores[classes == "LNE"].sum())
+    assert r["dA"] != dre.realizado(ctx, dre.TODAS)["dA"]
+    assert dre.lista_meses(ctx) == ["08/2026", "09/2026"] and len(av) > 0

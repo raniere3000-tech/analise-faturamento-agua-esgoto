@@ -13,7 +13,7 @@ O processamento roda no navegador: o site executa este mesmo script Python com o
 
 ## Abas DRE e Indiretas
 
-Além do comparativo (aba **Diretas**), o relatório tem a aba **DRE** (Projeto/Linha × Orçado RF × Orçado SUP × Realizado, com Δ% e Δ R$) e a aba **Indiretas**, com seletor de superintendência (LAGOS, LESTE, SEM SUP). Coloque na mesma pasta:
+Além do comparativo (aba **Diretas**), o relatório tem a aba **DRE** (Projeto/Linha × Orçado RF × Orçado SUP × Realizado, com Δ% e Δ R$) e a aba **Indiretas**, com filtros no cabeçalho do site, como no DRE_Unificado: **Superintendência** (Todas, LAGOS, LESTE, SEM SUP), **Referência** (RF + SUP, só RF, só RF SUP), **Mês** e **Grupo** (vale para Resumo e Diretas). A aba Indiretas traz orçado × realizado por classe, evolução mensal por classe (com gráfico) e quantidade/ticket médio. Coloque na mesma pasta:
 
 | Arquivo | Como é reconhecido | Usado para |
 |---|---|---|

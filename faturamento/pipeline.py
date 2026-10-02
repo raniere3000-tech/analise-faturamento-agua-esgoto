@@ -12,7 +12,7 @@ import os
 from .analises import exporta_top100, monta_dados_resumo_grupo
 from .base import monta_base
 from .comparativo import calcula_comparativos, define_referencias
-from .dre import gera_aba_dre_html, gera_aba_indiretas_html, gera_seletor_sup_html
+from .dre import gera_aba_dre_html, gera_aba_indiretas_html, gera_filtros_dre_html, gera_info_filtros_json
 from .config import NOME_RELATORIO_HTML, NOME_TOP100_XLSX, TEXTO_JUSTIFICATIVA_PADRAO
 from .contexto import Contexto
 from .painel_html import (gera_card_leitura_html, gera_cards_insights_html, gera_cards_kpis_html,
@@ -120,7 +120,8 @@ class Sessao:
             tabela_top100_esgoto_html=tabela_top100_esgoto_html,
             aba_dre_html=gera_aba_dre_html(ctx),
             aba_indiretas_html=gera_aba_indiretas_html(ctx),
-            seletor_sup_html=gera_seletor_sup_html(ctx),
+            filtros_dre_html=gera_filtros_dre_html(ctx),
+            info_filtros_json=gera_info_filtros_json(ctx),
         )
         with open(self.caminho_html, "w", encoding="utf-8") as f:
             f.write(html_final)

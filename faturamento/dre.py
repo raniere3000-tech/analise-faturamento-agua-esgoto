@@ -9,6 +9,7 @@ Orçado: planilhas "RF" e "RF SUP" (colunas Sup, Rubrica e um mês por coluna).
 A SUP vem da cidade (Nome da Localidade) -> relação em `regras.json`.
 """
 import html
+import json
 
 import pandas as pd
 
@@ -84,6 +85,7 @@ def prepara(ctx):
         df["__sup"] = cid.map(lambda c: SUP_POR_CIDADE.get(chave_texto(c), SEM_SUP) if pd.notna(c) else SEM_SUP)
         return df
 
+    ctx.base_final = marca(ctx.base_final, "N. Ligação")
     ctx.df_atual = marca(ctx.df_atual, "N. Ligação")
     ctx.df_anterior = marca(ctx.df_anterior, "N. Ligação")
     ctx.cancelamento = marca(ctx.cancelamento, "N. da Ligacao")
@@ -115,7 +117,7 @@ def prepara(ctx):
 
 def lista_sups(ctx):
     prepara(ctx)
-    sups = set(ctx.df_atual["__sup"])
+    sups = set(ctx.base_final["__sup"])
     if len(ctx.avulso):
         sups |= set(ctx.avulso["__sup"])
     return [TODAS] + sorted(sups - {SEM_SUP}) + ([SEM_SUP] if SEM_SUP in sups else [])
@@ -133,8 +135,7 @@ def _div(a, b):
 
 def realizado(ctx, sup, ref=None):
     ref = ref or ctx.ref_atual
-    base = ctx.df_atual if ref == ctx.ref_atual else ctx.df_anterior
-    at = _filtra(base, sup)
+    at = _filtra(ctx.base_final[ctx.base_final["Referencia de Leitura"] == ref], sup)
     r = {}
     for k, rub in (("A", "AGUA"), ("E", "ESGOTO")):
         d = at[at["Rubrica"].str.contains(rub, case=False, na=False)]
@@ -197,13 +198,29 @@ def orcado(ctx, fonte, sup, ref=None):
     return completa(r)
 
 
+# ---------- meses e filtros ----------
+def lista_meses(ctx):
+    """Meses (MM/AAAA, em ordem) que têm dados de fatura, serviço avulso ou cancelamento."""
+    prepara(ctx)
+    refs = set(ctx.base_final["Referencia de Leitura"].dropna())
+    for df, col in ((ctx.avulso, "Referencia"), (ctx.cancelamento, "Referencia de Leitura")):
+        if df is not None and len(df):
+            refs |= set(df[col].dropna())
+    return sorted(refs, key=lambda r: (r[3:], r[:2]))
+
+
+def _mes_anterior(ref):
+    m, a = int(ref[:2]), int(ref[3:])
+    return f"{12 if m == 1 else m - 1:02d}/{a - 1 if m == 1 else a}"
+
+
 # ---------- HTML ----------
-def _fmt(v, formato, delta=False):
+def _fmt(v, formato):
     if v is None:
         return "-"
     if formato == "dec":
         return fmt_num(v, 2)
-    if formato == "num" or delta:
+    if formato == "num":
         return fmt_num(v, 0)
     texto = fmt_num(abs(v), 0)
     return f"R$ ({texto})" if v < 0 else f"R$ {texto}"
@@ -215,33 +232,38 @@ def _pct(real, orc):
     return real / orc - 1
 
 
-def _linha_dre(rotulo, formato, negrito, rf, sup, real, eh_canc):
-    def cel(v, cls=""):
-        return f'<td class="{cls}">{v}</td>'
+def _cel(valor, cls=""):
+    return f'<td class="{cls}">{valor}</td>'
 
-    def delta(a, b):
-        if a is None or b is None:
-            return None
-        return a - b
-    d_rf, d_sup = delta(real, rf), delta(real, sup)
-    pct = _pct(real, rf)
+
+def _celulas_delta(real, orc, formato, eh_canc, classe):
+    """Δ (%) e Δ (R$) do realizado contra um orçado. `classe`: col-rf ou col-sup (o filtro Referência esconde uma delas)."""
     dec = 2 if formato == "dec" else 0
+    d = None if real is None or orc is None else real - orc
+    pct = _pct(real, orc)
 
     def neg(v):
         return "neg" if (v is not None and v < -(0.005 if dec else 0.5) and not eh_canc) else ""
-    pct_txt = "-" if pct is None else fmt_num(pct * 100, 1) + "%"
-    cls_linha = "dre-forte" if negrito else ""
-    return (f'<tr class="{cls_linha}"><td class="dre-rotulo">{html.escape(rotulo)}</td>'
-            + cel(_fmt(rf, formato), "num") + cel(_fmt(sup, formato), "num") + cel(_fmt(real, formato), "num")
-            + cel(pct_txt, "num " + neg(pct))
-            + cel("-" if d_rf is None else fmt_num(d_rf, dec), "num " + neg(d_rf)) + '<td class="dre-esp"></td>'
-            + cel("-" if d_sup is None else fmt_num(d_sup, dec), "num " + neg(d_sup)) + "</tr>")
+    return (_cel("-" if pct is None else fmt_num(pct * 100, 1) + "%", f"num {classe} {neg(pct)}"),
+            _cel("-" if d is None else fmt_num(d, dec), f"num {classe} {neg(d)}"))
 
 
-def tabela_dre(ctx, sup):
-    real = realizado(ctx, sup)
-    rf = orcado(ctx, "rf", sup)
-    os_ = orcado(ctx, "sup", sup)
+def _linha_dre(rotulo, formato, negrito, rf, sup, real, eh_canc):
+    p_rf, d_rf = _celulas_delta(real, rf, formato, eh_canc, "col-rf")
+    p_sup, d_sup = _celulas_delta(real, sup, formato, eh_canc, "col-sup")
+    return (f'<tr class="{"dre-forte" if negrito else ""}"><td class="dre-rotulo">{html.escape(rotulo)}</td>'
+            + _cel(_fmt(rf, formato), "num") + _cel(_fmt(sup, formato), "num") + _cel(_fmt(real, formato), "num")
+            + p_rf + d_rf + p_sup + d_sup + "</tr>")
+
+
+CABECALHO_DELTAS = ('<th class="col-rf">Δ (%)</th><th class="col-rf">Δ (R$)</th>'
+                    '<th class="col-sup">Δ (%) Sup</th><th class="col-sup">Δ R$ (Orçado Sup)</th>')
+
+
+def tabela_dre(ctx, sup, ref):
+    real = realizado(ctx, sup, ref)
+    rf = orcado(ctx, "rf", sup, ref)
+    os_ = orcado(ctx, "sup", sup, ref)
     linhas = []
     for chave, rotulo, formato, negrito in LINHAS:
         if chave is None:
@@ -249,105 +271,133 @@ def tabela_dre(ctx, sup):
         else:
             linhas.append(_linha_dre(rotulo, formato, negrito, rf.get(chave), os_.get(chave), real.get(chave), chave == "canc"))
     return ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Projeto/Linha</th><th>ORÇADO - RF</th>'
-            '<th>ORÇADO - SUP</th><th>REALIZADO</th><th>Δ (%)</th><th>Δ (R$)</th><th class="dre-esp"></th>'
-            '<th>Δ R$ (Orçado Sup)</th></tr></thead><tbody>' + "".join(linhas) + "</tbody></table></div>")
+            f'<th>ORÇADO - SUP</th><th>REALIZADO</th>{CABECALHO_DELTAS}</tr></thead><tbody>'
+            + "".join(linhas) + "</tbody></table></div>")
 
 
 def _avisos_html(ctx):
     if not ctx.avisos_dre:
         return ""
     itens = "".join(f"<li>{html.escape(a)}</li>" for a in ctx.avisos_dre)
-    return f'<ul class="avisos-dre">{itens}</ul>'
+    return f'<div class="card avisos-card"><h2>Avisos</h2><ul class="avisos-dre">{itens}</ul></div>'
 
 
 def _nome_sup(sup):
     return "Todas as superintendências (Interior)" if sup == TODAS else sup
 
 
+def _bloco(sup, ref, conteudo):
+    return f'<div class="sup-bloco" data-sup="{html.escape(sup, quote=True)}" data-mes="{ref}">{conteudo}</div>'
+
+
 def gera_aba_dre_html(ctx):
     prepara(ctx)
-    fontes = []
-    for chave, nome in (("rf", "Orçado RF"), ("sup", "Orçado SUP")):
-        info = ctx.orcado.get(chave)
-        if info:
-            fontes.append(f"{nome}: {html.escape(info['arquivo'])}")
+    fontes = [f"{nome}: {html.escape(ctx.orcado[k]['arquivo'])}" for k, nome in (("rf", "Orçado RF"), ("sup", "Orçado SUP")) if ctx.orcado.get(k)]
     nota = " · ".join(fontes) if fontes else "Sem planilhas de orçado na pasta"
     blocos = []
-    for sup in lista_sups(ctx):
-        blocos.append(
-            f'<div class="sup-bloco" data-sup="{html.escape(sup, quote=True)}">'
-            f'<div class="card"><h2>DRE — {html.escape(_nome_sup(sup))} — {ctx.mes_atual}</h2>'
-            f'<p class="nota-secao">{nota}. Δ (%) e Δ (R$) comparam o realizado com o orçado RF; a última coluna compara com o orçado SUP.</p>'
-            f'{tabela_dre(ctx, sup)}</div></div>')
-    avisos = f'<div class="card avisos-card"><h2>Avisos</h2>{_avisos_html(ctx)}</div>' if ctx.avisos_dre else ""
-    return avisos + "".join(blocos)
+    for ref in lista_meses(ctx):
+        for sup in lista_sups(ctx):
+            blocos.append(_bloco(sup, ref, (
+                f'<div class="card"><h2>DRE — {html.escape(_nome_sup(sup))} — {nome_mes(ref)}</h2>'
+                f'<p class="nota-secao">{nota}. Δ (%) e Δ (R$) comparam o realizado com o orçado RF; as colunas "Sup" comparam com o orçado SUP.</p>'
+                f'{tabela_dre(ctx, sup, ref)}</div>')))
+    return _avisos_html(ctx) + "".join(blocos)
 
 
-def tabela_indiretas(ctx, sup):
-    atual = ctx.avulso[ctx.avulso["Referencia"] == ctx.ref_atual]
-    ant = ctx.avulso[ctx.avulso["Referencia"] == ctx.ref_anterior]
-    if sup != TODAS:
-        atual, ant = atual[atual["__sup"] == sup], ant[ant["__sup"] == sup]
+# ---------- Indiretas ----------
+def _indiretas_mes(ctx, sup, ref):
+    """{classe: (qtd, valor)} do serviço avulso no mês (sem as rubricas excluídas)."""
+    av = _filtra(ctx.avulso, sup)
+    av = av[(av["Referencia"] == ref) & (av["Classe"] != "EXCLUIR")]
+    g = av.groupby("Classe")["Valor Parcela"].agg(["size", "sum"])
+    return {cl: (int(g.loc[cl, "size"]), float(g.loc[cl, "sum"])) if cl in g.index else (0, 0.0) for cl in CLASSES_ORDEM}
 
-    def pct(a, b):
-        return "-" if not b else fmt_num((a / b - 1) * 100, 1) + "%"
 
-    linhas, tot = [], [0, 0.0, 0.0]
+def tabela_orcado_realizado(ctx, sup, ref):
+    real = realizado(ctx, sup, ref)
+    rf, os_ = orcado(ctx, "rf", sup, ref), orcado(ctx, "sup", sup, ref)
+    linhas = []
+    for chave, rotulo, negrito in (("ri_CORTE", "RI Cortes/Recorte", False), ("ri_RELIGAÇÃO", "RI Religações", False),
+                                   ("ri_LNA", "RI Ligações - Água", False), ("ri_SANÇÃO", "RI Fiscalização", False),
+                                   ("ri_OUTROS", "RI Outros - Água", False), ("iA", "Fat. de água - Indireto", True),
+                                   ("iE", "Fat. de esgoto - Indireto", True)):
+        linhas.append(_linha_dre(rotulo, "moeda", negrito, rf.get(chave), os_.get(chave), real.get(chave), False))
+    tot = lambda d: None if d.get("iA") is None and d.get("iE") is None else (d.get("iA") or 0) + (d.get("iE") or 0)
+    linhas.append(_linha_dre("Total indiretas", "moeda", True, tot(rf), tot(os_), tot(real), False))
+    return ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Classe / linha da DRE</th><th>ORÇADO - RF</th>'
+            f'<th>ORÇADO - SUP</th><th>REALIZADO</th>{CABECALHO_DELTAS}</tr></thead><tbody>' + "".join(linhas) + "</tbody></table></div>")
+
+
+def tabela_evolucao(ctx, sup, ref, meses):
+    por_mes = {m: _indiretas_mes(ctx, sup, m) for m in meses}
+    cab = "".join(f'<th class="{"mes-sel" if m == ref else ""}">{nome_mes(m)}</th>' for m in meses)
+    linhas = []
     for cl in CLASSES_ORDEM:
-        a, b = atual[atual["Classe"] == cl], ant[ant["Classe"] == cl]
-        va, vb = float(a["Valor Parcela"].sum()), float(b["Valor Parcela"].sum())
-        tot = [tot[0] + len(a), tot[1] + va, tot[2] + vb]
-        linhas.append(f'<tr><td>{NOME_CLASSE[cl]}</td><td>{LINHAS_INDIRETAS_DRE[cl]}</td><td class="num">{len(a)}</td>'
-                      f'<td class="num">{fmt_num(vb, 0)}</td><td class="num">{fmt_num(va, 0)}</td>'
-                      f'<td class="num {"neg" if va - vb < -0.5 else ""}">{fmt_num(va - vb, 0)}</td>'
-                      f'<td class="num">{pct(va, vb)}</td></tr>')
-    linhas.append(f'<tr class="linha-total"><td>Total</td><td></td><td class="num">{tot[0]}</td>'
-                  f'<td class="num">{fmt_num(tot[2], 0)}</td><td class="num">{fmt_num(tot[1], 0)}</td>'
-                  f'<td class="num">{fmt_num(tot[1] - tot[2], 0)}</td><td class="num">{pct(tot[1], tot[2])}</td></tr>')
-    por_classe = ('<table><thead><tr><th>Classe</th><th>Linha na DRE</th><th>Lançamentos</th>'
-                  f'<th>{ctx.mes_anterior_curto} (R$)</th><th>{ctx.mes_atual_curto} (R$)</th><th>Δ (R$)</th><th>Δ (%)</th></tr></thead>'
-                  f'<tbody>{"".join(linhas)}</tbody></table>')
+        cel = "".join(_cel(fmt_num(por_mes[m][cl][1], 0), "num mes-sel" if m == ref else "num") for m in meses)
+        linhas.append(f'<tr><td class="dre-rotulo">{NOME_CLASSE[cl]}</td>{cel}</tr>')
+    cel = "".join(_cel(fmt_num(sum(v[1] for v in por_mes[m].values()), 0), "num mes-sel" if m == ref else "num") for m in meses)
+    linhas.append(f'<tr class="dre-forte"><td class="dre-rotulo">Total</td>{cel}</tr>')
+    dados = {"meses": [nome_mes(m) for m in meses],
+             "series": [{"classe": NOME_CLASSE[cl], "valores": [round(por_mes[m][cl][1], 2) for m in meses]} for cl in CLASSES_ORDEM]}
+    grafico = (f'<div class="grafico-area grafico-indiretas"><canvas class="canvas-indiretas" '
+               f'data-dados="{html.escape(json.dumps(dados), quote=True)}"></canvas></div>')
+    return grafico + ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Classe</th>' + cab
+                      + "</tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div>")
 
-    rub = (atual[atual["Classe"] != "EXCLUIR"].groupby(["Rubrica", "Classe"]).agg(qtd=("Valor Parcela", "size"), valor=("Valor Parcela", "sum"))
-           .reset_index().sort_values("valor", ascending=False).head(30))
-    linhas_r = "".join(
-        f'<tr><td>{html.escape(str(r.Rubrica))}</td><td>{html.escape(str(r.Classe))}</td><td class="num">{r.qtd}</td>'
-        f'<td class="num">{fmt_num(r.valor, 2)}</td></tr>' for r in rub.itertuples())
-    por_rubrica = ('<table><thead><tr><th>Rubrica</th><th>Classe</th><th>Lançamentos</th><th>Valor (R$)</th></tr></thead>'
-                   f'<tbody>{linhas_r}</tbody></table>')
 
-    cid = atual.assign(Cidade=atual["__cidade"].fillna("(sem cidade)")).pivot_table(
-        index="Cidade", columns="Classe", values="Valor Parcela", aggfunc="sum", fill_value=0)
-    cid = cid.reindex(columns=[c for c in CLASSES_ORDEM if c in cid.columns])
-    cid["Total"] = cid.sum(axis=1)
-    cid = cid.sort_values("Total", ascending=False)
-    cab = "".join(f"<th>{NOME_CLASSE[c]}</th>" for c in cid.columns[:-1]) + "<th>Total</th>"
-    linhas_c = "".join(
-        f'<tr><td>{html.escape(str(idx))}</td><td>{html.escape(SUP_POR_CIDADE.get(chave_texto(idx), SEM_SUP))}</td>'
-        + "".join(f'<td class="num">{fmt_num(v, 0)}</td>' for v in row) + "</tr>" for idx, row in cid.iterrows())
-    por_cidade = f'<table><thead><tr><th>Cidade</th><th>SUP</th>{cab}</tr></thead><tbody>{linhas_c}</tbody></table>'
-    return por_classe, por_cidade, por_rubrica
+def tabela_qtd_ticket(ctx, sup, ref):
+    atual, ant = _indiretas_mes(ctx, sup, ref), _indiretas_mes(ctx, sup, _mes_anterior(ref))
+    linhas = []
+    tq = tv = tqa = tva = 0
+    for cl in CLASSES_ORDEM:
+        (q, v), (qa, va) = atual[cl], ant[cl]
+        tq, tv, tqa, tva = tq + q, tv + v, tqa + qa, tva + va
+        tk, tka = _div(v, q), _div(va, qa)
+        d = None if tk is None or tka is None else tk - tka
+        linhas.append(f'<tr><td class="dre-rotulo">{NOME_CLASSE[cl]}</td>' + _cel(q, "num") + _cel(_fmt(v, "moeda"), "num")
+                      + _cel(_fmt(tk, "dec"), "num") + _cel(qa, "num") + _cel(_fmt(tka, "dec"), "num")
+                      + _cel("-" if d is None else fmt_num(d, 2), "num " + ("neg" if d is not None and d < -0.005 else "")) + "</tr>")
+    tk, tka = _div(tv, tq), _div(tva, tqa)
+    linhas.append('<tr class="dre-forte"><td class="dre-rotulo">Total</td>' + _cel(tq, "num") + _cel(_fmt(tv, "moeda"), "num")
+                  + _cel(_fmt(tk, "dec"), "num") + _cel(tqa, "num") + _cel(_fmt(tka, "dec"), "num")
+                  + _cel("-" if tk is None or tka is None else fmt_num(tk - tka, 2), "num") + "</tr>")
+    return ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Classe</th><th>Lançamentos</th><th>Valor (R$)</th>'
+            f'<th>Ticket médio (R$)</th><th>Lanç. {nome_mes(_mes_anterior(ref))}</th><th>Ticket {nome_mes(_mes_anterior(ref))}</th>'
+            "<th>Δ ticket (R$)</th></tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div>")
 
 
 def gera_aba_indiretas_html(ctx):
     prepara(ctx)
     if not len(ctx.avulso):
         return '<div class="card"><h2>Indiretas</h2><p>Nenhum arquivo de serviço avulso encontrado na pasta (o nome precisa conter "avulso").</p></div>'
+    meses_av = sorted(set(ctx.avulso["Referencia"].dropna()), key=lambda r: (r[3:], r[:2]))
     blocos = []
-    for sup in lista_sups(ctx):
-        por_classe, por_cidade, por_rubrica = tabela_indiretas(ctx, sup)
-        blocos.append(
-            f'<div class="sup-bloco" data-sup="{html.escape(sup, quote=True)}">'
-            f'<div class="card"><h2>Indiretas por classe — {html.escape(_nome_sup(sup))}</h2>'
-            f'<p class="nota-secao">Receita de serviços avulsos de {ctx.mes_atual} comparada com {ctx.mes_anterior}. A classe vem da rubrica (relação em regras.json).</p>'
-            f'<div class="tabela-wrap">{por_classe}</div></div>'
-            f'<div class="card"><h2>Por cidade — {ctx.mes_atual}</h2><div class="tabela-wrap">{por_cidade}</div></div>'
-            f'<div class="card"><h2>Maiores rubricas — {ctx.mes_atual}</h2><div class="tabela-wrap">{por_rubrica}</div></div></div>')
+    for ref in lista_meses(ctx):
+        for sup in lista_sups(ctx):
+            nome = html.escape(_nome_sup(sup))
+            blocos.append(_bloco(sup, ref, (
+                f'<div class="card"><h2>Indiretas: orçado × realizado — {nome} — {nome_mes(ref)}</h2>'
+                '<p class="nota-secao">Realizado = serviço avulso do mês, por classe da rubrica. Orçado das linhas "RI" só aparece se a planilha RF tiver essas linhas.</p>'
+                f'{tabela_orcado_realizado(ctx, sup, ref)}</div>'
+                f'<div class="card"><h2>Evolução mensal por classe — {nome}</h2>{tabela_evolucao(ctx, sup, ref, meses_av)}</div>'
+                f'<div class="card"><h2>Quantidade e ticket médio — {nome} — {nome_mes(ref)}</h2>{tabela_qtd_ticket(ctx, sup, ref)}</div>')))
     return "".join(blocos)
 
 
-def gera_seletor_sup_html(ctx):
-    opcoes = "".join(f'<option value="{html.escape(s, quote=True)}">{html.escape(_nome_sup(s) if s == TODAS else s)}</option>'
-                     for s in lista_sups(ctx))
-    return ('<label class="seletor-sup" id="seletorSup" hidden>Superintendência '
-            f'<select onchange="trocarSup(this.value)">{opcoes}</select></label>')
+def gera_filtros_dre_html(ctx):
+    """Seletores para quando o relatório é aberto sozinho (no site, o cabeçalho cuida disso)."""
+    def opcoes(itens):
+        return "".join(f'<option value="{html.escape(v, quote=True)}">{html.escape(t)}</option>' for v, t in itens)
+    sups = opcoes([(s, _nome_sup(s) if s == TODAS else s) for s in lista_sups(ctx)])
+    meses = opcoes([(m, nome_mes(m)) for m in lista_meses(ctx)])
+    refs = opcoes([("AMBOS", "RF e SUP"), ("RF", "Só RF"), ("SUP", "Só SUP")])
+    return ('<span class="seletor-sup" id="seletorSup" hidden>'
+            f'<label>Superintendência <select id="selSup" onchange="definirFiltros({{sup:this.value}})">{sups}</select></label>'
+            f'<label>Mês <select id="selMes" onchange="definirFiltros({{mes:this.value}})">{meses}</select></label>'
+            f'<label>Referência <select id="selRef" onchange="definirFiltros({{ref:this.value}})">{refs}</select></label></span>')
+
+
+def gera_info_filtros_json(ctx):
+    info = {"sups": lista_sups(ctx), "meses": [{"ref": m, "label": nome_mes(m)} for m in lista_meses(ctx)],
+            "mesAtual": ctx.ref_atual, "temRF": bool(ctx.orcado.get("rf")), "temSUP": bool(ctx.orcado.get("sup"))}
+    return '<script type="application/json" id="info-filtros">' + json.dumps(info).replace("<", "\\u003c") + "</script>"

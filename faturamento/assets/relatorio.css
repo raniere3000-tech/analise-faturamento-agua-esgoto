@@ -2,8 +2,8 @@
    #F2F2F2 fundo | #E8710A laranja (negativo) | #C2560C laranja para texto
    O cabeçalho "Águas do Rio · Relatório Executivo" mantém as cores originais. */
 :root {
-    --preto:#05050D; --marinho:#1A2740; --azul:#394D73; --azul-claro:#49668C; --cinza:#F2F2F2;
-    --linha:#DCE1E9; --tint:#E1E7F0; --zebra:#F7F8FA; --laranja:#E8710A; --laranja-texto:#C2560C;
+    --preto:#1f2d3d; --marinho:#102840; --azul:#176b9c; --azul-claro:#64748b; --cinza:#f3f6f9;
+    --linha:#dbe4ec; --tint:#e7f0f6; --zebra:#f7fafc; --laranja:#E8710A; --laranja-texto:#C2560C;
     --fonte:'IBM Plex Sans','Segoe UI',Arial,sans-serif;
     --fonte-cond:'IBM Plex Sans Condensed','Segoe UI',Arial,sans-serif;
 }
@@ -37,7 +37,7 @@ body { font-family:var(--fonte); background:var(--cinza); margin:0; color:var(--
 .header-exec p { font-size:14px; }
 
 /* ===== Barra de abas + filtro ===== */
-.toolbar { max-width:1272px; margin:18px auto 0; padding:0 16px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.toolbar { max-width:1832px; margin:18px auto 0; padding:0 16px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
 .toggle { display:inline-flex; background:#FFFFFF; border:1px solid var(--linha); border-radius:8px; padding:3px; }
 .toggle button { padding:7px 20px; border:0; border-radius:6px; background:transparent; color:var(--azul); cursor:pointer; font-family:inherit; font-size:13px; font-weight:600; }
 .toggle button:hover { color:var(--marinho); }
@@ -48,7 +48,7 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--azul-claro);
 #view-resumo.ativo, #view-tabelas.ativo, #view-dre.ativo, #view-indiretas.ativo { display:block; }
 
 /* ===== Seções ===== */
-.card { background:#FFFFFF; margin:16px auto; padding:20px 22px; max-width:1240px; border:1px solid var(--linha); border-radius:8px; overflow-x:auto; }
+.card { background:#FFFFFF; margin:16px auto; padding:20px 22px; max-width:1800px; border:1px solid var(--linha); border-radius:12px; box-shadow:0 3px 12px rgba(17,42,66,.045); overflow-x:auto; }
 .card h2 { font-size:15px; font-weight:600; margin:0 0 14px 0; color:var(--marinho); letter-spacing:-.005em; }
 .card p { font-size:13px; }
 .nota-secao { margin:-8px 0 12px; color:var(--azul-claro); font-size:12.5px; }
@@ -60,7 +60,7 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--azul-claro);
 .obs-dias b { color:var(--preto); font-weight:600; }
 
 /* ===== KPIs: faixa única ===== */
-.kpis-grid { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:1px; max-width:1240px; margin:16px auto; background:var(--linha); border:1px solid var(--linha); border-radius:8px; overflow:hidden; }
+.kpis-grid { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:1px; max-width:1800px; margin:16px auto; background:var(--linha); border:1px solid var(--linha); border-radius:8px; overflow:hidden; }
 .kpi-card { background:#FFFFFF; padding:9px 12px 9px; border-top:3px solid var(--marinho); min-width:0; }
 .kpi-card.negativo { border-top-color:var(--laranja); }
 .kpi-card h3 { font-family:var(--fonte); font-size:11px; font-weight:500; color:var(--azul-claro); margin:0 0 4px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -157,3 +157,11 @@ tbody tr.linha-media td, tbody tr.linha-total td { font-weight:700; background-c
 td.num { text-align:right; }
 .avisos-card { border-color:var(--laranja); }
 .avisos-dre { margin:0; padding-left:18px; font-size:13px; color:var(--laranja-texto); }
+
+/* Filtro Referência: esconde as colunas de Δ do orçado que não foi escolhido */
+body[data-ref="RF"] .col-sup, body[data-ref="SUP"] .col-rf { display:none; }
+.seletor-sup { gap:12px; flex-wrap:wrap; }
+.seletor-sup label { display:inline-flex; align-items:center; gap:6px; }
+.grafico-indiretas { height:260px; margin-bottom:14px; }
+.tabela-dre td.mes-sel, .tabela-dre th.mes-sel { background-color:var(--tint); font-weight:700; }
+.tabela-dre th.col-rf, .tabela-dre th.col-sup { white-space:nowrap; }

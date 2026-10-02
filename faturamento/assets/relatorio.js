@@ -11,8 +11,38 @@ function mostrarView(view) {
     if (seletor) seletor.hidden = !(view === 'dre' || view === 'indiretas');
 }
 
-function trocarSup(sup) {
-    document.querySelectorAll('.sup-bloco').forEach(b => { b.style.display = (b.dataset.sup === sup) ? 'block' : 'none'; });
+// Filtros da DRE/Indiretas: superintendência, mês e referência (RF / SUP / ambos)
+const ESTADO = { sup: 'TODAS', mes: null, ref: 'AMBOS' };
+function definirFiltros(parcial) {
+    Object.assign(ESTADO, parcial || {});
+    document.querySelectorAll('.sup-bloco').forEach(b => {
+        b.style.display = (b.dataset.sup === ESTADO.sup && b.dataset.mes === ESTADO.mes) ? 'block' : 'none';
+    });
+    document.body.dataset.ref = ESTADO.ref;
+    [['selSup', ESTADO.sup], ['selMes', ESTADO.mes], ['selRef', ESTADO.ref]].forEach(([id, v]) => {
+        const el = document.getElementById(id); if (el && v) el.value = v;
+    });
+    desenharGraficosIndiretas();
+}
+
+const CORES_CLASSES = ['#176b9c', '#16a5b8', '#1f8a70', '#d79b29', '#c94b4b', '#6b7a99'];
+function desenharGraficosIndiretas() {
+    document.querySelectorAll('.sup-bloco').forEach(bloco => {
+        if (bloco.style.display === 'none') return;
+        bloco.querySelectorAll('canvas.canvas-indiretas').forEach(cv => {
+            if (cv.dataset.pronto) return;
+            if (typeof Chart === 'undefined') { cv.parentElement.style.display = 'none'; return; }
+            const d = JSON.parse(cv.dataset.dados);
+            cv.dataset.pronto = '1';
+            new Chart(cv, {
+                type: 'bar',
+                data: { labels: d.meses, datasets: d.series.map((s, i) => ({ label: s.classe, data: s.valores, backgroundColor: CORES_CLASSES[i % CORES_CLASSES.length] })) },
+                options: { responsive: true, maintainAspectRatio: false,
+                    scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: v => v.toLocaleString('pt-BR') } } },
+                    plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => c.dataset.label + ': R$ ' + c.parsed.y.toLocaleString('pt-BR') } } } }
+            });
+        });
+    });
 }
 
 function toggleFiltro(event) {
@@ -422,7 +452,8 @@ function aplicarBotoesRemover() {
 
 document.addEventListener('DOMContentLoaded', function () {
     mostrarView('resumo');
-    trocarSup('TODAS');
+    try { ESTADO.mes = JSON.parse(document.getElementById('info-filtros').textContent).mesAtual; } catch (e) { /* sem filtros */ }
+    definirFiltros();
     envolverTabelasComScroll();
     habilitarScrollTabelas();
     filtrarPorGrupo();

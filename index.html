@@ -188,6 +188,45 @@ html { height: 100%; }
 #quadroRelatorio { flex: 1; width: 100%; min-height: calc(100vh - 150px); border: 0; background: var(--cinza); }
 body.relatorio-aberto { overflow: auto; }
 body.top20-aberto { overflow: hidden; }
+
+/* ===== Paleta e componentes do DRE_Unificado ===== */
+:root { --navy:#102840; --blue:#176b9c; --cyan:#16a5b8; --ink:#1f2d3d; --muted:#64748b; --line:#dbe4ec; --bg:#f3f6f9; }
+body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; }
+.top { background: linear-gradient(120deg, var(--navy), #174f70); padding: 22px 34px 18px; }
+.top-linha, .fonte-status, .top .progresso { max-width: none; }
+.eyebrow { color: #9fe1e7; font-size: 11px; letter-spacing: 1.6px; font-weight: 700; }
+.versao { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.4); font-size: 10.5px; letter-spacing: .6px; font-weight: 800; padding: 1px 9px; border-radius: 99px; }
+.top h1 { font-size: 26px; margin: 5px 0 3px; }
+.btn-top { border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 400; }
+.fgroup { display: flex; align-items: center; border: 1px solid rgba(255,255,255,.38); border-radius: 9px; background: rgba(255,255,255,.07); position: relative; }
+.fgroup[hidden] { display: none; }
+.fgroup .flabel { padding: 8px 10px; color: #d5e7ef; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .45px; }
+.fbtn { border: 0; border-left: 1px solid rgba(255,255,255,.25); background: transparent; color: #fff; padding: 8px 11px; font-size: 11px; font-weight: 800; cursor: pointer; }
+.fbtn:last-child { border-radius: 0 8px 8px 0; }
+.fbtn.active { background: #fff; color: #0d5f98; }
+.fgroup select { border: 0; border-left: 1px solid rgba(255,255,255,.25); border-radius: 0 8px 8px 0; background: transparent; color: #fff; padding: 8px 11px; font-size: 12px; cursor: pointer; }
+.fgroup select option { color: #111; }
+.dropdown { position: relative; display: inline-block; }
+.dropdown > button { border: 0; border-left: 1px solid rgba(255,255,255,.25); border-radius: 0 8px 8px 0; background: transparent; color: #fff; padding: 8px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.dropdown-content { display: none; position: absolute; right: 0; background: #fff; color: var(--ink); min-width: 220px; border: 1px solid var(--line); box-shadow: 0 8px 22px rgba(17,42,66,.18); border-radius: 10px; z-index: 30; padding: 8px 0; max-height: 300px; overflow-y: auto; margin-top: 6px; }
+.dropdown-content label { display: block; padding: 7px 14px; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.dropdown-content label:hover { background: #f2f8fc; }
+.dropdown-content hr { margin: 6px 0; border: none; border-top: 1px solid var(--line); }
+.dropdown.aberto .dropdown-content { display: block; }
+.fonte-status { margin-top: 10px; font-size: 11.5px; color: #bfe0eb; }
+.prog-linha .barra { height: 12px; border-radius: 8px; width: 380px; flex-basis: 380px; max-width: 60vw; }
+.prog-linha .barra-fill { background: linear-gradient(90deg, #16a5b8, #7ee0bc); }
+.top .progresso.erro .barra-fill { background: #e06a6a; }
+.top .log summary { font-size: 12px; font-weight: 700; color: #bfe0eb; }
+.top .log pre { background: rgba(0,0,0,.28); color: #e6f2f8; font: 11.5px/1.5 Consolas, "Courier New", monospace; }
+.nav { padding: 0 34px; background: #fff; border-bottom: 1px solid var(--line); display: flex; gap: 2px; overflow: auto; }
+.nav[hidden] { display: none; }
+.tab { border: 0; background: none; padding: 14px 18px; color: var(--muted); font-weight: 650; font-size: 14px; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; font-family: inherit; }
+.tab.active { color: var(--blue); border-bottom-color: var(--cyan); }
+.conteudo .orientacoes { border-radius: 12px; }
+#quadroRelatorio { background: var(--bg); min-height: calc(100vh - 230px); }
+.btn-principal { background: var(--navy); } .btn-principal:hover:not(:disabled) { background: var(--blue); }
+@media (max-width: 900px) { .top, .nav { padding-left: 16px; padding-right: 16px; } }
 </style>
 </head>
 <body>
@@ -202,8 +241,16 @@ body.top20-aberto { overflow: hidden; }
       <span id="downloads" style="display:contents"></span>
       <button type="button" class="btn-top" id="btnPasta">📁 Conectar pasta</button>
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
+      <button type="button" class="btn-top" id="btnPdf" hidden>🖨 Exportar PDF</button>
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
     </div>
+  </div>
+  <div class="filtros" id="filtros" hidden style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:12px">
+    <div class="fgroup" id="fgSup" hidden><span class="flabel">Superintendência</span><span id="supBtns"></span></div>
+    <div class="fgroup" id="fgRef" hidden><span class="flabel">Referência</span><span id="refBtns"></span></div>
+    <div class="fgroup" id="fgMes" hidden><span class="flabel">Mês</span><select id="selMesTop" aria-label="Mês"></select></div>
+    <div class="fgroup" id="fgGrupo" hidden><span class="flabel">Grupo</span>
+      <div class="dropdown" id="ddGrupo"><button type="button" id="btnGrupo">Grupos ▾</button><div class="dropdown-content" id="listaGrupos"></div></div></div>
   </div>
   <div class="fonte-status" id="fonteStatus">Nenhuma pasta conectada.</div>
   <div class="progresso" id="progresso" hidden>
@@ -217,6 +264,13 @@ body.top20-aberto { overflow: hidden; }
     </details>
   </div>
 </header>
+
+<nav class="nav" id="nav" hidden aria-label="Páginas do relatório">
+  <button class="tab active" data-view="dre" type="button">DRE</button>
+  <button class="tab" data-view="indiretas" type="button">Indiretas</button>
+  <button class="tab" data-view="resumo" type="button">Resumo</button>
+  <button class="tab" data-view="tabelas" type="button">Diretas</button>
+</nav>
 
 <main class="conteudo" id="inicio">
   <div class="orientacoes">
@@ -377,7 +431,7 @@ body.top20-aberto { overflow: hidden; }
     btnAtualizar.hidden = !pastaHandle;
 
     // o cabeçalho do relatório repete o do site; aqui ele some (no arquivo/PDF continua)
-    $("quadroRelatorio").srcdoc = htmlRelatorio.replace("</head>", "<style>.header-exec{display:none}</style></head>");
+    $("quadroRelatorio").srcdoc = htmlRelatorio;
     $("quadroRelatorio").hidden = false;
     document.querySelector(".conteudo .orientacoes").hidden = true;
     document.body.classList.add("relatorio-aberto");
@@ -386,6 +440,7 @@ body.top20-aberto { overflow: hidden; }
   function fechaRelatorio() {
     $("etapaTop20").hidden = true;
     $("quadroRelatorio").hidden = true;
+    $("nav").hidden = true; $("filtros").hidden = true; $("btnPdf").hidden = true;
     document.querySelector(".conteudo .orientacoes").hidden = false;
     document.body.classList.remove("relatorio-aberto", "top20-aberto");
     document.title = "Análise de Faturamento — Água e Esgoto";
@@ -617,6 +672,77 @@ body.top20-aberto { overflow: hidden; }
     });
     atualizaContador();
   });
+
+
+  // ===== Navegação e filtros no estilo do DRE_Unificado (controlam o relatório dentro da página) =====
+  const filtrosEstado = { view: "dre", sup: "TODAS", mes: null, ref: "AMBOS" };
+  let infoFiltros = null;
+  const quadro = () => $("quadroRelatorio");
+  const janela = () => quadro().contentWindow;
+  const escapa = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function aplicaFiltros() {
+    const w = janela();
+    if (!w || !w.mostrarView) return;
+    w.mostrarView(filtrosEstado.view);
+    w.definirFiltros({ sup: filtrosEstado.sup, mes: filtrosEstado.mes, ref: filtrosEstado.ref });
+    document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
+    const dreOuInd = filtrosEstado.view === "dre" || filtrosEstado.view === "indiretas";
+    $("fgSup").hidden = !dreOuInd || !(infoFiltros && infoFiltros.sups.length > 1);
+    $("fgMes").hidden = !dreOuInd;
+    $("fgRef").hidden = filtrosEstado.view !== "dre";
+    $("fgGrupo").hidden = dreOuInd;
+    $("supBtns").innerHTML = infoFiltros ? infoFiltros.sups.map((s) =>
+      `<button class="fbtn ${s === filtrosEstado.sup ? "active" : ""}" data-sup="${escapa(s)}" type="button">${s === "TODAS" ? "Todas" : escapa(s)}</button>`).join("") : "";
+    $("refBtns").innerHTML = [["AMBOS", "RF + SUP"], ["RF", "RF"], ["SUP", "RF SUP"]].map(([v, t]) =>
+      `<button class="fbtn ${v === filtrosEstado.ref ? "active" : ""}" data-ref="${v}" type="button">${t}</button>`).join("");
+  }
+
+  function montaFiltros() {
+    const doc = quadro().contentDocument;
+    const el = doc && doc.getElementById("info-filtros");
+    try { infoFiltros = el ? JSON.parse(el.textContent) : null; } catch (e) { infoFiltros = null; }
+    // esconde, dentro do relatório, os controles que agora ficam no cabeçalho do site
+    const estilo = doc.createElement("style");
+    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-dre, #view-indiretas { padding-top: 16px; }";
+    doc.head.appendChild(estilo);
+    filtrosEstado.sup = "TODAS"; filtrosEstado.ref = "AMBOS";
+    filtrosEstado.mes = infoFiltros ? infoFiltros.mesAtual : null;
+    $("selMesTop").innerHTML = infoFiltros ? infoFiltros.meses.map((m) =>
+      `<option value="${m.ref}" ${m.ref === filtrosEstado.mes ? "selected" : ""}>${escapa(m.label)}</option>`).join("") : "";
+    const grupos = Array.from(doc.querySelectorAll(".chk-grupo"));
+    $("listaGrupos").innerHTML = `<label><input type="checkbox" id="chkTodosGrupos" checked> <b>Selecionar todos</b></label><hr>` +
+      grupos.map((g) => `<label><input type="checkbox" class="chk-grupo-top" value="${escapa(g.value)}" checked> ${escapa(g.value)}</label>`).join("");
+    $("btnGrupo").textContent = `Grupos (${grupos.length}/${grupos.length}) ▾`;
+    $("filtros").hidden = false; $("nav").hidden = false; $("btnPdf").hidden = false;
+    filtrosEstado.view = "dre";
+    aplicaFiltros();
+  }
+
+  function aplicaGrupos() {
+    const w = janela(), todos = Array.from(document.querySelectorAll(".chk-grupo-top"));
+    const marcados = new Set(todos.filter((c) => c.checked).map((c) => c.value));
+    w.document.querySelectorAll(".chk-grupo").forEach((c) => { c.checked = marcados.has(c.value); });
+    if (w.filtrarPorGrupo) w.filtrarPorGrupo();
+    $("btnGrupo").textContent = `Grupos (${marcados.size}/${todos.length}) ▾`;
+    $("chkTodosGrupos").checked = marcados.size === todos.length;
+  }
+
+  $("nav").addEventListener("click", (e) => {
+    const t = e.target.closest(".tab"); if (!t) return;
+    filtrosEstado.view = t.dataset.view; aplicaFiltros();
+  });
+  $("supBtns").addEventListener("click", (e) => { const b = e.target.closest("[data-sup]"); if (b) { filtrosEstado.sup = b.dataset.sup; aplicaFiltros(); } });
+  $("refBtns").addEventListener("click", (e) => { const b = e.target.closest("[data-ref]"); if (b) { filtrosEstado.ref = b.dataset.ref; aplicaFiltros(); } });
+  $("selMesTop").addEventListener("change", (e) => { filtrosEstado.mes = e.target.value; aplicaFiltros(); });
+  $("btnGrupo").addEventListener("click", (e) => { e.stopPropagation(); $("ddGrupo").classList.toggle("aberto"); });
+  document.addEventListener("click", (e) => { if (!e.target.closest("#ddGrupo")) $("ddGrupo").classList.remove("aberto"); });
+  $("listaGrupos").addEventListener("change", (e) => {
+    if (e.target.id === "chkTodosGrupos") document.querySelectorAll(".chk-grupo-top").forEach((c) => { c.checked = e.target.checked; });
+    aplicaGrupos();
+  });
+  $("btnPdf").addEventListener("click", () => { janela().focus(); janela().print(); });
+  quadro().addEventListener("load", () => { if (quadro().srcdoc) montaFiltros(); });
 
   btnPasta.addEventListener("click", escolhePasta);
   btnAtualizar.addEventListener("click", atualiza);
