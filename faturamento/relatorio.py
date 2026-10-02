@@ -80,6 +80,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+<a class="pular-conteudo" href="#view-resumo">Ir para o conteúdo</a>
 {alerta_minimo_html}
 <div class="header-exec">
   <div class="header-inner">
@@ -95,6 +96,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
     <button id="btn-resumo" class="active" onclick="mostrarView('resumo')">Resumo</button>
     <button id="btn-tabelas" onclick="mostrarView('tabelas')">Tabelas</button>
   </div>
+  <button class="btn-filtro btn-imprimir" type="button" onclick="window.print()" aria-label="Exportar o relatório em PDF">Exportar PDF</button>
   {filtro_html}
 </div>
 

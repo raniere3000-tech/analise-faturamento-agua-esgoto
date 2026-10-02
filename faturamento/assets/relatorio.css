@@ -119,3 +119,19 @@ tbody tr.linha-media td, tbody tr.linha-total td { font-weight:700; background-c
     .header-exec h1 { font-size:21px; }
     .card { padding:16px; }
 }
+
+/* ===== Acessibilidade e impressão ===== */
+.pular-conteudo { position:absolute; left:-999px; top:0; background:#FFFFFF; color:var(--marinho); padding:8px 12px; z-index:200; }
+.pular-conteudo:focus { left:8px; top:8px; }
+.btn-imprimir { margin-left:auto; }
+@media print {
+    @page { size:A4 landscape; margin:10mm; }
+    body { background:#FFFFFF; font-size:11px; }
+    .header-exec { -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:14px 16px; }
+    .toolbar, .btn-just, .pular-conteudo, .btn-remover-item { display:none !important; }
+    #view-resumo, #view-tabelas { display:block !important; padding:0; }
+    .card, .kpis-grid { break-inside:avoid; border-color:#BBB; margin:8px auto; }
+    .tabela-wrap { overflow:visible; }
+    th, .kpi-card { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #view-tabelas .card { break-inside:auto; }
+}

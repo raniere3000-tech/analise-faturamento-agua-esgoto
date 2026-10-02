@@ -11,6 +11,19 @@ Abra https://raniere3000-tech.github.io/analise-faturamento-agua-esgoto/, clique
 
 O processamento roda no navegador: o site executa este mesmo script Python com o [Pyodide](https://pyodide.org) (`analisador.worker.js` + `executor_web.py`). Os arquivos não são enviados para nenhum servidor. Na primeira vez, o navegador baixa o Python (cerca de 30 MB), que depois fica em cache.
 
+## Estrutura do código
+
+O script do Colab foi dividido no pacote `faturamento/` (leitura, base, comparativo, análises, tabelas/painel HTML, relatório, pipeline). As regras de negócio (consumo mínimo, textos padrão, alertas) ficam em `faturamento/regras.json`; CSS e JS do relatório ficam em `faturamento/assets/`. `acompanhamento_faturamento.py` é só a linha de comando: `python acompanhamento_faturamento.py --pasta DADOS --modo local`.
+
+## Testes
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests -q
+```
+
+Os testes usam dados sintéticos e rodam também no GitHub Actions a cada push. Se criar um arquivo novo no pacote, inclua-o em `ARQUIVOS_PY` no `analisador.worker.js` (um teste confere).
+
 ## Como usar o script
 
 Defina `MODO_ORIGEM` no início do script:
