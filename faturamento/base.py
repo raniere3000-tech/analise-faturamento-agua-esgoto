@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """Monta a base final: fatura + consumo + cronograma."""
+import os
+
 import pandas as pd
 
 from .config import COLUNAS_ECONOMIA_TOTAIS
-from .leitura import classifica_arquivos, processa_consumo, processa_cronograma, processa_fatura
+from .leitura import (classifica_arquivos, processa_avulso, processa_consumo, processa_cronograma,
+                      processa_fatura_completa, processa_orcado)
 
 
 def _processa_lista(progresso, lista, func, ini, fin, desc):
@@ -34,8 +37,24 @@ def monta_base(ctx):
     consumo_total = pd.concat(consumos, ignore_index=True) if consumos else pd.DataFrame(columns=["N. Ligação_consumo", "Referência"])
     print(f"✅ Consumo: {len(consumo_total)} linhas")
 
-    faturas = _processa_lista(progresso, ctx.classificacao["fatura"], processa_fatura, 29, 40, "Processando faturas")
+    faturas_cc = _processa_lista(progresso, ctx.classificacao["fatura"], processa_fatura_completa, 29, 40, "Processando faturas")
+    faturas = [f for f, _ in faturas_cc]
     fatura_total = pd.concat(faturas, ignore_index=True) if faturas else pd.DataFrame(columns=["N. da Ligacao"])
+    cancs = [c for _, c in faturas_cc if len(c)]
+    ctx.cancelamento = pd.concat(cancs, ignore_index=True) if cancs else pd.DataFrame()
+    avulsos = [processa_avulso(c) for c in ctx.classificacao["avulso"]]
+    ctx.avulso = pd.concat(avulsos, ignore_index=True) if avulsos else pd.DataFrame()
+    for chave, nome in (("rf", "RF"), ("sup", "SUP")):
+        ctx.orcado[chave] = None
+    escolhidos = {}
+    for caminho, aba in ctx.classificacao["orcado"]:
+        chave = "sup" if "SUP" in os.path.basename(caminho).upper() else "rf"
+        longo = processa_orcado(caminho, aba)
+        # se houver mais de um arquivo do mesmo tipo (ex.: painel vazio), vale o que tem mais valores
+        if chave not in escolhidos or len(longo) > len(escolhidos[chave][1]):
+            escolhidos[chave] = (os.path.basename(caminho), longo)
+    for chave, (nome, longo) in escolhidos.items():
+        ctx.orcado[chave] = {"arquivo": nome, "dados": longo}
     print(f"✅ Fatura: {len(fatura_total)} linhas")
 
     cronogramas = _processa_lista(progresso, ctx.classificacao["cronograma"], processa_cronograma, 40, 45, "Processando cronogramas")

@@ -1,14 +1,18 @@
 const CHAVE_JUSTIFICATIVA = '__CHAVE_JUSTIFICATIVA__';
 
+const VIEWS = ['resumo', 'dre', 'tabelas', 'indiretas'];
 function mostrarView(view) {
-    document.getElementById('view-resumo').classList.remove('ativo');
-    document.getElementById('view-tabelas').classList.remove('ativo');
-    document.getElementById('btn-resumo').classList.remove('active');
-    document.getElementById('btn-tabelas').classList.remove('active');
-    document.getElementById('view-' + view).classList.add('ativo');
-    document.getElementById('btn-' + view).classList.add('active');
-    document.getElementById('view-resumo').style.display = (view === 'resumo') ? 'block' : 'none';
-    document.getElementById('view-tabelas').style.display = (view === 'tabelas') ? 'block' : 'none';
+    VIEWS.forEach(v => {
+        document.getElementById('view-' + v).classList.toggle('ativo', v === view);
+        document.getElementById('view-' + v).style.display = (v === view) ? 'block' : 'none';
+        document.getElementById('btn-' + v).classList.toggle('active', v === view);
+    });
+    const seletor = document.getElementById('seletorSup');
+    if (seletor) seletor.hidden = !(view === 'dre' || view === 'indiretas');
+}
+
+function trocarSup(sup) {
+    document.querySelectorAll('.sup-bloco').forEach(b => { b.style.display = (b.dataset.sup === sup) ? 'block' : 'none'; });
 }
 
 function toggleFiltro(event) {
@@ -418,6 +422,7 @@ function aplicarBotoesRemover() {
 
 document.addEventListener('DOMContentLoaded', function () {
     mostrarView('resumo');
+    trocarSup('TODAS');
     envolverTabelasComScroll();
     habilitarScrollTabelas();
     filtrarPorGrupo();

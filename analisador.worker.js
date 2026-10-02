@@ -7,6 +7,7 @@ const PASTA = "/dados";
 // Arquivos do pacote Python que o site copia para o Pyodide (caminho no site -> pasta virtual /app)
 const ARQUIVOS_PY = [
   "faturamento/__init__.py", "faturamento/analises.py", "faturamento/base.py", "faturamento/comparativo.py",
+  "faturamento/dre.py",
   "faturamento/config.py", "faturamento/contexto.py", "faturamento/formatacao.py", "faturamento/leitura.py",
   "faturamento/origem.py", "faturamento/painel_html.py", "faturamento/pipeline.py", "faturamento/progresso.py",
   "faturamento/relatorio.py", "faturamento/tabelas_html.py", "faturamento/top20.py",

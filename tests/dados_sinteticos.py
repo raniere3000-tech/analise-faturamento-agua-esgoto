@@ -9,6 +9,12 @@ import random
 
 import pandas as pd
 
+CIDADES = ["SAO GONCALO", "MARICA", "ITAOCARA", "CASIMIRO DE ABREU", "CIDADE FORA DA RELACAO"]
+CANCELAMENTOS = ["DESCONTO", "ABATIMENTO - M3", "IR MUNICIPAL"]
+AVULSOS = [("CORTE NO CAVALETE", 150.0), ("RELIGACAO NO REGISTRO", 90.0), ("LIG. AGUA 3/4\" - VAZAO 3M³/H - ASFALTO", 400.0),
+           ("LIG. ESGOTO 150MM VIDRADO - TERRA - ASFALTO", 700.0), ("VIOLACAO DO LACRE RES", 250.0),
+           ("VISTORIA", 60.0), ("COBRANÇA DE PARCELAS", 500.0), ("RUBRICA NOVA SEM CLASSE", 10.0)]
+MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 CATEGORIAS = ["RESIDENCIAL", "COMERCIAL", "SOCIAL", "PUBLICA", "INDUSTRIAL", "PEQ. COMERCIO"]
 
 
@@ -22,7 +28,7 @@ NOME_MALICIOSO = '<img src=x onerror=alert("xss")> & CIA'
 
 
 def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 2026),
-               categoria_sem_minimo=True, formato_fatura="xlsx", injeta_cliente_html=False):
+               categoria_sem_minimo=True, formato_fatura="xlsx", injeta_cliente_html=False, com_dre=False):
     """Cria fatura (2 meses), consumo (1 arquivo por mês) e cronograma em `destino`."""
     rnd = random.Random(semente)
     os.makedirs(destino, exist_ok=True)
@@ -45,6 +51,7 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
             "eco": tipo_eco,
             "n_eco": rnd.choice([1, 1, 1, 2, 3]),
             "base": rnd.uniform(6, 60),
+            "cidade": rnd.choice(CIDADES),
         })
 
     if injeta_cliente_html:
@@ -66,12 +73,14 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
                 consumo = 10.0 if (mm, aa) == (m, a) else 500.0
             valor_agua = round(consumo * rnd.uniform(4.0, 6.0), 2)
             valor_esg = round(valor_agua * 0.8, 2)
-            for rub, val in (("VALOR DE AGUA", valor_agua), ("VALOR DE ESGOTO", valor_esg), ("VALOR DE OUTRO", 3.5)):
+            extras = [(r, -20.0) for r in CANCELAMENTOS] if com_dre and rnd.random() < 0.1 else []
+            for rub, val in (("VALOR DE AGUA", valor_agua), ("VALOR DE ESGOTO", valor_esg), ("VALOR DE OUTRO", 3.5), *extras):
                 fat.append({
                     "N. da Ligacao": l["lig"], "Grupo": l["grupo"], "Nome Cliente": l["cliente"],
                     "Categoria": l["categoria"], "Situacao Ligacao": l["situacao"], "Situacao Conta": l["conta"],
                     "Rubrica": rub, "Valor Parcela": _br(val),
                     "Data de Vencimento": f"28/{mm:02d}/{aa}", "Referencia de Leitura": ref_leitura,
+                    **({"Nome da Localidade": l["cidade"]} if com_dre else {}),
                 })
             eco = {f"Qtd. Economia {t}": 0 for t in ("Residencial", "Comercial", "Industrial", "Publica", "Outros")}
             eco[f"Qtd. Economia {l['eco']}"] = l["n_eco"]
@@ -88,9 +97,41 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
         df_fat.to_excel(os.path.join(destino, "Fatura.xlsx"), index=False)
     for (mm, aa), df in consumos.items():
         df.to_csv(os.path.join(destino, f"Consumo {mm:02d}-{aa}.csv"), sep=";", index=False, encoding="utf-8-sig")
+    if com_dre:
+        _gera_dre(destino, rnd, ligacoes, meses, (m, a))
     pd.DataFrame({
         "Grupo": grupos,
         "Data da Leitura": [f"{5 + i:02d}/{m:02d}/{a}" for i in range(len(grupos))],
         "Qts. Dias": [28 + (i % 4) for i in range(len(grupos))],
     }).to_csv(os.path.join(destino, "Cronograma.csv"), sep=";", index=False, encoding="utf-8-sig")
     return destino
+
+
+def _gera_dre(destino, rnd, ligacoes, meses, mes_atual):
+    """Serviço avulso (2 meses) e planilhas de orçado RF / RF SUP no formato dos arquivos reais."""
+    linhas = []
+    for (mm, aa) in meses:
+        for l in ligacoes[:60]:
+            rub, val = rnd.choice(AVULSOS)
+            linhas.append({"N. da Ligacao": l["lig"], "Nome Cliente": "", "Categoria": l["categoria"],
+                           "Nome da Localidade": l["cidade"], "Rubrica": rub, "Valor Parcela": _br(val),
+                           "Referencia de Leitura": f"{MESES_ABREV[mm - 1]}/{str(aa)[-2:]}",
+                           "Data de Vencimento": f"04/{mm:02d}/{aa}", "Situacao Ligacao": "A-Ativa",
+                           "Endereco Ligacao": "RUA X", "Grupo": l["grupo"]})
+    pd.DataFrame(linhas).to_csv(os.path.join(destino, "Servico avulso 09-2026.csv"), sep=";", index=False, encoding="utf-8-sig")
+
+    rubricas = ["Faturamento Bruto", "Fat. Bruto de água - Direto", "Fat. Bruto de água - Indireto",
+                "Fat. Bruto de esgoto - Direto", "Fat. Bruto de esgoto - Indireto", "(-) Cancelamentos",
+                "Economias de Água Faturadas", "Volume de Água Faturado", "RI Cortes/Recorte"]
+    colunas = [f"{MESES_ABREV[i]}/26" for i in range(12)]
+
+    def planilha(nome, sups, fator):
+        linhas = []
+        for sup in sups:
+            for rub in rubricas:
+                base = 1000.0 if "Cancel" not in rub else -100.0
+                linhas.append({"Sup": sup, "Rubrica": rub, **{c: base * fator * (i + 1) for i, c in enumerate(colunas)}})
+        pd.DataFrame(linhas).to_excel(os.path.join(destino, nome), index=False)
+
+    planilha("RF01T26.xlsx", ["Interior"], 10)
+    planilha("RF SUP.xlsx", ["LAGOS", "LESTE"], 6)

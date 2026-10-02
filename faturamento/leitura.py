@@ -11,7 +11,8 @@ import pandas as pd
 
 from .config import (COLUNAS_CONSUMO, COLUNAS_CRONOGRAMA, COLUNAS_ECONOMIA_TODAS, COLUNAS_FATURA,
                      NOMES_LIGACAO, NOMES_SAIDA_LEGADOS, NOME_RELATORIO_HTML,
-                     NOME_TOP100_XLSX, RUBRICAS_VALIDAS)
+                     NOME_TOP100_XLSX, RUBRICAS_VALIDAS, CHAVES_CANCELAMENTO,
+                     CLASSE_INDIRETA_POR_RUBRICA, chave_texto)
 
 # Erros esperados ao abrir/ler planilhas e CSVs (arquivo corrompido, formato inesperado, falta de leitor)
 ERROS_LEITURA = (OSError, ValueError, ImportError, KeyError, zipfile.BadZipFile)
@@ -73,8 +74,22 @@ def le_dataframe(caminho, nrows=None, sheet_name=0):
     return df
 
 
-def identifica_tipo(colunas):
+MES_ABREV = {"jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
+             "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12}
+_RE_COL_MES = re.compile(r"^[a-zç]{3}/\d{2}$", re.I)
+
+
+def colunas_de_mes(colunas):
+    return [c for c in colunas if _RE_COL_MES.match(str(c).strip())]
+
+
+def identifica_tipo(colunas, nome=""):
     colunas = set(colunas)
+    if {"Sup", "Rubrica"}.issubset(colunas) and len(colunas_de_mes(colunas)) >= 3:
+        return "orcado"
+    if "avulso" in chave_texto(nome).lower() or {"Endereco Ligacao", "Nome da Localidade"}.issubset(colunas):
+        if COLUNAS_FATURA.issubset(colunas):
+            return "avulso"
     if COLUNAS_CONSUMO.issubset(colunas):
         return "consumo"
     if COLUNAS_FATURA.issubset(colunas):
@@ -82,6 +97,19 @@ def identifica_tipo(colunas):
     if COLUNAS_CRONOGRAMA.issubset(colunas):
         return "cronograma"
     return "desconhecido"
+
+
+def referencia_mes(valor):
+    """'ago/26', '08/2026', '15/08/2026' ou data -> 'MM/AAAA' (ou None)."""
+    t = str(valor).strip().lower()
+    m = re.match(r"^([a-zç]{3})[a-z]*[/\-. ](\d{2}|\d{4})$", t)
+    if m and m.group(1) in MES_ABREV:
+        ano = m.group(2) if len(m.group(2)) == 4 else "20" + m.group(2)
+        return f"{MES_ABREV[m.group(1)]:02d}/{ano}"
+    dt = pd.to_datetime(t, format="%d/%m/%Y", errors="coerce")
+    if pd.isna(dt):
+        dt = pd.to_datetime(t, format="%m/%Y", errors="coerce")
+    return None if pd.isna(dt) else dt.strftime("%m/%Y")
 
 
 def padroniza_referencia(serie):
@@ -132,7 +160,16 @@ def processa_consumo(caminho):
     return df.drop_duplicates(subset=["N. Ligação_consumo", "Referência"])
 
 
+def _valor_br(serie):
+    return pd.to_numeric(serie.str.replace(".", "", regex=False).str.replace(",", ".", regex=False), errors="coerce")
+
+
 def processa_fatura(caminho):
+    return processa_fatura_completa(caminho)[0]
+
+
+def processa_fatura_completa(caminho):
+    """Devolve (linhas de água/esgoto, linhas de cancelamento) da fatura."""
     print(f"   ⚙️ Processando FATURA: {os.path.basename(caminho)}")
     df = le_dataframe(caminho)
     col_ligacao = acha_coluna_ligacao(df, "FATURA", caminho)
@@ -148,7 +185,38 @@ def processa_fatura(caminho):
     df_filter = df[df["Rubrica"].isin(RUBRICAS_VALIDAS)].copy()
     df_filter["Grupo"] = df_filter["Grupo"].astype(str).str.strip()
     df_filter["Referencia de Leitura"] = padroniza_referencia(df_filter["Referencia de Leitura"])
-    return df_filter
+
+    chaves = df["Rubrica"].map(chave_texto)
+    canc = df[chaves.map(lambda k: any(k.startswith(c) if c.startswith("COFINS") else k == c for c in CHAVES_CANCELAMENTO))].copy()
+    canc["Referencia de Leitura"] = padroniza_referencia(canc["Referencia de Leitura"])
+    return df_filter, canc
+
+
+def processa_avulso(caminho):
+    """Serviços avulsos (receita indireta): uma linha por lançamento, com a classe da rubrica."""
+    print(f"   ⚙️ Processando SERVIÇO AVULSO: {os.path.basename(caminho)}")
+    df = le_dataframe(caminho)
+    df = df.dropna(how="all")
+    df = df[df["Rubrica"].notna()].copy()
+    df["Valor Parcela"] = _valor_br(df["Valor Parcela"].astype(str).str.strip())
+    df["Referencia"] = df["Referencia de Leitura"].map(referencia_mes)
+    df["Classe"] = df["Rubrica"].map(lambda r: CLASSE_INDIRETA_POR_RUBRICA.get(chave_texto(r)))
+    return df
+
+
+def processa_orcado(caminho, aba=0):
+    """Planilha de orçado (RF / RF SUP): colunas Sup, Rubrica e um mês por coluna.
+    Devolve formato longo: Sup, Rubrica, Referencia (MM/AAAA), Valor."""
+    print(f"   ⚙️ Processando ORÇADO: {os.path.basename(caminho)}")
+    df = le_dataframe(caminho, sheet_name=aba)
+    meses = colunas_de_mes(df.columns)
+    longo = df.melt(id_vars=["Sup", "Rubrica"], value_vars=meses, var_name="Mes", value_name="Valor")
+    longo["Valor"] = pd.to_numeric(longo["Valor"], errors="coerce")
+    longo = longo.dropna(subset=["Valor"])
+    longo["Referencia"] = longo["Mes"].map(referencia_mes)
+    longo["Sup"] = longo["Sup"].astype(str).str.strip()
+    longo["Rubrica"] = longo["Rubrica"].astype(str).str.strip()
+    return longo[["Sup", "Rubrica", "Referencia", "Valor"]]
 
 
 def processa_cronograma(caminho):
@@ -217,7 +285,7 @@ def classifica_arquivos(pasta, progresso=None):
                     df_head = le_dataframe(caminho, nrows=5, sheet_name=aba)
                     if df_head is None:
                         continue
-                    tipo = identifica_tipo(df_head.columns)
+                    tipo = identifica_tipo(df_head.columns, nome)
                     if tipo != "desconhecido":
                         classificados.append({"caminho": caminho, "tipo": tipo, "aba": aba})
                         tipo_achado = tipo
@@ -225,7 +293,7 @@ def classifica_arquivos(pasta, progresso=None):
             else:
                 df_head = le_dataframe(caminho, nrows=5)
                 if df_head is not None:
-                    tipo = identifica_tipo(df_head.columns)
+                    tipo = identifica_tipo(df_head.columns, nome)
                     if tipo != "desconhecido":
                         classificados.append({"caminho": caminho, "tipo": tipo, "aba": 0})
                         tipo_achado = tipo
@@ -238,10 +306,12 @@ def classifica_arquivos(pasta, progresso=None):
             progresso.etapa(idx, len(arquivos), 2, 18, f"Classificando ({idx}/{len(arquivos)})")
 
     resultado = {t: [c["caminho"] for c in classificados if c["tipo"] == t]
-                 for t in ("consumo", "fatura", "cronograma")}
+                 for t in ("consumo", "fatura", "cronograma", "avulso")}
+    resultado["orcado"] = [(c["caminho"], c["aba"]) for c in classificados if c["tipo"] == "orcado"]
     resultado["ignorados"] = ignorados
     print(f"📁 Consumo: {len(resultado['consumo'])} | Fatura: {len(resultado['fatura'])} | "
-          f"Cronograma: {len(resultado['cronograma'])}")
+          f"Cronograma: {len(resultado['cronograma'])} | "
+          f"Serviço avulso: {len(resultado['avulso'])} | Orçado: {len(resultado['orcado'])}")
     for ig in ignorados:
         print(f"   ⚠️ Ignorado: {ig['arquivo']} — {ig['motivo']}")
 

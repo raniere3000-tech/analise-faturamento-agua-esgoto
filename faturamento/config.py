@@ -47,3 +47,29 @@ MESES_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
 NOME_RELATORIO_HTML = "Relatorio_Comparativo.html"
 NOME_TOP100_XLSX = "Top100_Quedas_Consumo.xlsx"
 NOMES_SAIDA_LEGADOS = ("Base_Compilada_HISTORICO.xlsx",)
+
+# ---- DRE (aba com orçado RF / orçado SUP / realizado) ----
+import re as _re
+import unicodedata as _ud
+
+
+def chave_texto(s):
+    """Chave para comparar rubricas/cidades: conserta texto com acento quebrado (ex.: 'CRÃ‰DITO'),
+    tira acentos e deixa só letras e números em maiúsculas."""
+    s = "" if s is None else str(s)
+    for _ in range(3):
+        try:
+            novo = s.encode("cp1252").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            break
+        if novo == s:
+            break
+        s = novo
+    s = _ud.normalize("NFKD", s)
+    return _re.sub(r"[^A-Z0-9]", "", s.upper().encode("ascii", "ignore").decode())
+
+
+CLASSE_INDIRETA_POR_RUBRICA = {chave_texto(r): cl for r, cl in REGRAS["rubricas_indiretas"].items()}
+LINHAS_INDIRETAS_DRE = REGRAS["linhas_indiretas_dre"]
+CHAVES_CANCELAMENTO = [chave_texto(r) for r in REGRAS["rubricas_cancelamento"]]
+SUP_POR_CIDADE = {chave_texto(cidade): sup for sup, cidades in REGRAS["superintendencias"].items() for cidade in cidades}
