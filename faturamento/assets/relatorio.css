@@ -44,8 +44,8 @@ body { font-family:var(--fonte); background:var(--cinza); margin:0; color:var(--
 .toggle button.active { background:var(--marinho); color:#FFFFFF; }
 button:focus-visible, input:focus-visible { outline:2px solid var(--azul-claro); outline-offset:2px; }
 
-#view-resumo, #view-tabelas, #view-dre, #view-indiretas { display:none; padding:0 16px 48px; }
-#view-resumo.ativo, #view-tabelas.ativo, #view-dre.ativo, #view-indiretas.ativo { display:block; }
+#view-resumo, #view-tabelas, #view-dre, #view-indiretas, #view-dados { display:none; padding:0 16px 48px; }
+#view-resumo.ativo, #view-tabelas.ativo, #view-dre.ativo, #view-indiretas.ativo, #view-dados.ativo { display:block; }
 
 /* ===== Seções ===== */
 .card { background:#FFFFFF; margin:16px auto; padding:20px 22px; max-width:1800px; border:1px solid var(--linha); border-radius:12px; box-shadow:0 3px 12px rgba(17,42,66,.045); overflow-x:auto; }
@@ -129,7 +129,7 @@ tbody tr.linha-media td, tbody tr.linha-total td { font-weight:700; background-c
     body { background:#FFFFFF; font-size:11px; }
     .header-exec { -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:14px 16px; }
     .toolbar, .btn-just, .pular-conteudo, .btn-remover-item { display:none !important; }
-    #view-resumo, #view-tabelas, #view-dre, #view-indiretas { display:block !important; padding:0; }
+    #view-resumo, #view-tabelas, #view-dre, #view-indiretas, #view-dados { display:block !important; padding:0; }
     .seletor-sup { display:none !important; }
     .sup-bloco { display:none; }
     .sup-bloco[data-sup="TODAS"] { display:block !important; }
@@ -165,3 +165,7 @@ body[data-ref="RF"] .col-sup, body[data-ref="SUP"] .col-rf { display:none; }
 .grafico-indiretas { height:260px; margin-bottom:14px; }
 .tabela-dre td.mes-sel, .tabela-dre th.mes-sel { background-color:var(--tint); font-weight:700; }
 .tabela-dre th.col-rf, .tabela-dre th.col-sup { white-space:nowrap; }
+
+.tabela-dados { max-width:1100px; }
+.tabela-dados td, .tabela-dados th { text-align:left; padding:5px 10px; }
+.card h3 { font-size:13px; margin:14px 0 8px; color:var(--marinho); }

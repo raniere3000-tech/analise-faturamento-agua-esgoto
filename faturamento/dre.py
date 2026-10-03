@@ -301,7 +301,7 @@ def gera_aba_dre_html(ctx):
                 f'<div class="card"><h2>DRE — {html.escape(_nome_sup(sup))} — {nome_mes(ref)}</h2>'
                 f'<p class="nota-secao">{nota}. Δ (%) e Δ (R$) comparam o realizado com o orçado RF; as colunas "Sup" comparam com o orçado SUP.</p>'
                 f'{tabela_dre(ctx, sup, ref)}</div>')))
-    return _avisos_html(ctx) + "".join(blocos)
+    return "".join(blocos)
 
 
 # ---------- Indiretas ----------

@@ -240,6 +240,17 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 .painel-vazio .rodape { text-align: left; margin: 12px 0 0; }
 .top .log { max-width: none; margin-top: 8px; }
 @media (max-width: 900px) { .vazio-wrap { padding-left: 16px; padding-right: 16px; } }
+
+/* ===== Visual simples: filtros em listas suspensas ===== */
+.filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-top: 14px; }
+.fsel { display: flex; flex-direction: column; gap: 3px; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .45px; color: #c8d6e5; transition: opacity .15s; }
+.fsel.inativo { opacity: .4; }
+.fsel select, .fsel .dropdown > button { min-width: 150px; border: 1px solid rgba(255,255,255,.35); border-radius: 8px; background: rgba(255,255,255,.1); color: #fff; padding: 8px 10px; font: inherit; font-size: 13px; font-weight: 400; text-transform: none; letter-spacing: 0; text-align: left; cursor: pointer; }
+.fsel select:disabled, .fsel .dropdown > button:disabled { cursor: default; opacity: .7; }
+.fsel select option { color: #111; }
+.dropdown-content { left: 0; right: auto; }
+.top h1 { margin-bottom: 0; }
+.top .progresso { margin-top: 12px; }
 </style>
 </head>
 <body>
@@ -258,24 +269,23 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
     </div>
   </div>
-  <div class="filtros" id="filtros" style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:12px">
-    <div class="fgroup" id="fgSup"><span class="flabel">Superintendência</span><span id="supBtns"><span class="flabel">—</span></span></div>
-    <div class="fgroup" id="fgRef"><span class="flabel">Referência</span><span id="refBtns"><span class="flabel">—</span></span></div>
-    <div class="fgroup" id="fgMes"><span class="flabel">Mês</span><select id="selMesTop" aria-label="Mês"></select></div>
-    <div class="fgroup" id="fgGrupo" hidden><span class="flabel">Grupo</span>
-      <div class="dropdown" id="ddGrupo"><button type="button" id="btnGrupo">Grupos ▾</button><div class="dropdown-content" id="listaGrupos"></div></div></div>
+  <div class="filtros" id="filtros">
+    <label class="fsel" id="fgSup"><span>Superintendência</span><select id="selSupTop" disabled><option>—</option></select></label>
+    <label class="fsel" id="fgRef"><span>Referência</span><select id="selRefTop" disabled><option>—</option></select></label>
+    <label class="fsel" id="fgMes"><span>Mês</span><select id="selMesTop" disabled><option>—</option></select></label>
+    <div class="fsel" id="fgGrupo"><span>Grupo</span>
+      <div class="dropdown" id="ddGrupo"><button type="button" id="btnGrupo" disabled>Todos ▾</button><div class="dropdown-content" id="listaGrupos"></div></div></div>
   </div>
-  <div class="fonte-status" id="fonteStatus">Nenhuma pasta conectada.</div>
   <div class="progresso" id="progresso" hidden>
     <div class="prog-linha"><div class="barra"><div class="barra-fill" id="barraFill"></div></div><b id="statusPct">0%</b><span id="statusTexto">Preparando…</span></div>
     <p class="nota" id="statusNota"></p>
-    <div class="arquivos" id="listaArquivos"></div>
+    <div class="arquivos" id="listaArquivos" hidden></div>
+    <details class="log">
+      <summary>Detalhes da leitura</summary>
+      <div class="log-ferramentas"><button type="button" id="btnCopiarLog">Copiar detalhes</button></div>
+      <pre id="logExecucao">Nenhuma leitura realizada ainda.</pre>
+    </details>
   </div>
-  <details class="log">
-    <summary>Detalhes da leitura</summary>
-    <div class="log-ferramentas"><button type="button" id="btnCopiarLog">Copiar detalhes</button></div>
-    <pre id="logExecucao">Nenhuma leitura realizada ainda.</pre>
-  </details>
 </header>
 
 <nav class="nav" id="nav" aria-label="Páginas do relatório">
@@ -283,6 +293,7 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
   <button class="tab" data-view="indiretas" type="button">Indiretas</button>
   <button class="tab" data-view="resumo" type="button">Resumo</button>
   <button class="tab" data-view="tabelas" type="button">Diretas</button>
+  <button class="tab" data-view="dados" type="button">Dados</button>
 </nav>
 
 <main class="conteudo" id="inicio">
@@ -409,7 +420,7 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 
   function abreRelatorio({ saidas, refAtual, refAnterior }) {
     setStatus("Relatório gerado", 100);
-    $("statusNota").textContent = `Concluído às ${new Date().toLocaleTimeString("pt-BR")}.`;
+    progresso.hidden = true;                      // pronto: some a barra e as informações
     bloqueia(false);
 
     urlsCriadas.forEach(URL.revokeObjectURL);
@@ -509,7 +520,6 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
       lista.appendChild(tag);
     });
     $("statusNota").textContent = `${arquivos.length} arquivo(s) lido(s) de "${nomePasta}".`;
-    $("fonteStatus").textContent = `Pasta: ${nomePasta} · ${arquivos.length} arquivo(s)`;
     pegaWorker().postMessage({ fase: "preparar", arquivos }, arquivos.map((a) => a.conteudo));
   }
 
@@ -690,62 +700,57 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
   });
 
 
-  // ===== Navegação e filtros no estilo do DRE_Unificado (controlam o relatório dentro da página) =====
+  // ===== Navegação e filtros (listas suspensas, presentes em todas as abas) =====
   const filtrosEstado = { view: "dre", sup: "TODAS", mes: null, ref: "AMBOS" };
   let infoFiltros = null;
   const quadro = () => $("quadroRelatorio");
   const janela = () => quadro().contentWindow;
   const escapa = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-
   const TITULOS_VAZIO = {
     dre: ["DRE: orçado × realizado", "Realizado do mês contra o orçado RF e o orçado SUP, por superintendência"],
     indiretas: ["Indiretas", "Orçado × realizado por classe, evolução mensal e ticket médio do serviço avulso"],
     resumo: ["Resumo", "KPIs, gráfico de faturamento por grupo e destaques do mês"],
     tabelas: ["Diretas", "Tabelas de água e esgoto por grupo, ciclos, consumo mínimo e Top 100"],
+    dados: ["Dados", "Bases carregadas, orçado reconhecido e avisos"],
   };
+  // quais filtros valem em cada aba (os demais ficam esmaecidos)
+  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Grupo"], tabelas: ["Grupo"], dados: [] };
 
   function aplicaFiltros() {
+    document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
+    ["Sup", "Ref", "Mes", "Grupo"].forEach((f) => {
+      const ok = APLICA[filtrosEstado.view].includes(f);
+      $("fg" + f).classList.toggle("inativo", !ok);
+      $("fg" + f).title = ok ? "" : "Este filtro não se aplica a esta aba";
+    });
     const w = quadro().hidden ? null : janela();
     if (!w || !w.mostrarView) {
       $("vazioTitulo").textContent = TITULOS_VAZIO[filtrosEstado.view][0];
       $("vazioDica").textContent = TITULOS_VAZIO[filtrosEstado.view][1];
-      document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
-      const dOI = filtrosEstado.view === "dre" || filtrosEstado.view === "indiretas";
-      $("fgSup").hidden = $("fgMes").hidden = !dOI;
-      $("fgRef").hidden = filtrosEstado.view !== "dre";
-      $("fgGrupo").hidden = dOI;
       return;
     }
     w.mostrarView(filtrosEstado.view);
     w.definirFiltros({ sup: filtrosEstado.sup, mes: filtrosEstado.mes, ref: filtrosEstado.ref });
-    document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
-    const dreOuInd = filtrosEstado.view === "dre" || filtrosEstado.view === "indiretas";
-    $("fgSup").hidden = !dreOuInd;
-    $("fgMes").hidden = !dreOuInd;
-    $("fgRef").hidden = filtrosEstado.view !== "dre";
-    $("fgGrupo").hidden = dreOuInd;
-    $("supBtns").innerHTML = infoFiltros ? infoFiltros.sups.map((s) =>
-      `<button class="fbtn ${s === filtrosEstado.sup ? "active" : ""}" data-sup="${escapa(s)}" type="button">${s === "TODAS" ? "Todas" : escapa(s)}</button>`).join("") : "";
-    $("refBtns").innerHTML = [["AMBOS", "RF + SUP"], ["RF", "RF"], ["SUP", "RF SUP"]].map(([v, t]) =>
-      `<button class="fbtn ${v === filtrosEstado.ref ? "active" : ""}" data-ref="${v}" type="button">${t}</button>`).join("");
   }
 
   function montaFiltros() {
     const doc = quadro().contentDocument;
     const el = doc && doc.getElementById("info-filtros");
     try { infoFiltros = el ? JSON.parse(el.textContent) : null; } catch (e) { infoFiltros = null; }
-    // esconde, dentro do relatório, os controles que agora ficam no cabeçalho do site
+    // esconde, dentro do relatório, os controles que ficam no cabeçalho do site
     const estilo = doc.createElement("style");
-    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-dre, #view-indiretas { padding-top: 16px; }";
+    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-dre, #view-indiretas, #view-dados { padding-top: 16px; }";
     doc.head.appendChild(estilo);
     filtrosEstado.sup = "TODAS"; filtrosEstado.ref = "AMBOS";
     filtrosEstado.mes = infoFiltros ? infoFiltros.mesAtual : null;
-    $("selMesTop").innerHTML = infoFiltros ? infoFiltros.meses.map((m) =>
-      `<option value="${m.ref}" ${m.ref === filtrosEstado.mes ? "selected" : ""}>${escapa(m.label)}</option>`).join("") : "";
+    const opcoes = (sel, itens, atual) => { sel.innerHTML = itens.map(([v, t]) => `<option value="${escapa(v)}" ${v === atual ? "selected" : ""}>${escapa(t)}</option>`).join(""); sel.disabled = false; };
+    opcoes($("selSupTop"), infoFiltros.sups.map((s) => [s, s === "TODAS" ? "Todas" : s]), "TODAS");
+    opcoes($("selRefTop"), [["AMBOS", "RF e RF SUP"], ["RF", "RF"], ["SUP", "RF SUP"]], "AMBOS");
+    opcoes($("selMesTop"), infoFiltros.meses.map((m) => [m.ref, m.label]), filtrosEstado.mes);
     const grupos = Array.from(doc.querySelectorAll(".chk-grupo"));
     $("listaGrupos").innerHTML = `<label><input type="checkbox" id="chkTodosGrupos" checked> <b>Selecionar todos</b></label><hr>` +
       grupos.map((g) => `<label><input type="checkbox" class="chk-grupo-top" value="${escapa(g.value)}" checked> ${escapa(g.value)}</label>`).join("");
-    $("btnGrupo").textContent = `Grupos (${grupos.length}/${grupos.length}) ▾`;
+    $("btnGrupo").textContent = "Todos ▾"; $("btnGrupo").disabled = false;
     $("btnPdf").hidden = false;
     filtrosEstado.view = "dre";
     aplicaFiltros();
@@ -756,7 +761,7 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
     const marcados = new Set(todos.filter((c) => c.checked).map((c) => c.value));
     w.document.querySelectorAll(".chk-grupo").forEach((c) => { c.checked = marcados.has(c.value); });
     if (w.filtrarPorGrupo) w.filtrarPorGrupo();
-    $("btnGrupo").textContent = `Grupos (${marcados.size}/${todos.length}) ▾`;
+    $("btnGrupo").textContent = (marcados.size === todos.length ? "Todos" : `${marcados.size} de ${todos.length}`) + " ▾";
     $("chkTodosGrupos").checked = marcados.size === todos.length;
   }
 
@@ -764,8 +769,8 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
     const t = e.target.closest(".tab"); if (!t) return;
     filtrosEstado.view = t.dataset.view; aplicaFiltros();
   });
-  $("supBtns").addEventListener("click", (e) => { const b = e.target.closest("[data-sup]"); if (b) { filtrosEstado.sup = b.dataset.sup; aplicaFiltros(); } });
-  $("refBtns").addEventListener("click", (e) => { const b = e.target.closest("[data-ref]"); if (b) { filtrosEstado.ref = b.dataset.ref; aplicaFiltros(); } });
+  $("selSupTop").addEventListener("change", (e) => { filtrosEstado.sup = e.target.value; aplicaFiltros(); });
+  $("selRefTop").addEventListener("change", (e) => { filtrosEstado.ref = e.target.value; aplicaFiltros(); });
   $("selMesTop").addEventListener("change", (e) => { filtrosEstado.mes = e.target.value; aplicaFiltros(); });
   $("btnGrupo").addEventListener("click", (e) => { e.stopPropagation(); $("ddGrupo").classList.toggle("aberto"); });
   document.addEventListener("click", (e) => { if (!e.target.closest("#ddGrupo")) $("ddGrupo").classList.remove("aberto"); });

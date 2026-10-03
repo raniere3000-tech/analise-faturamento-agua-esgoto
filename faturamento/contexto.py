@@ -34,6 +34,8 @@ class Contexto:
     df_minimo_por_grupo: pd.DataFrame = None
 
     # Avisos exibidos no relatório
+    ajustes_feitos: int = 0
+    bases_info: list = field(default_factory=list)
     aviso_ajustes_html: str = ""
     alerta_minimo_html: str = ""
     categorias_sem_minimo: dict = field(default_factory=dict)

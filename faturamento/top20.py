@@ -76,6 +76,7 @@ def aplica_ajustes_top20(ctx, ajustes):
         feitos += 1
     if feitos:
         print(f"✏️ {feitos} ligação(ões) ajustada(s) manualmente.")
+        ctx.ajustes_feitos = feitos
         ctx.aviso_ajustes_html = (
             f'<div class="card" style="border-left:4px solid #C2560C;padding:10px 16px;font-size:.88rem;">'
             f'<strong>Atenção:</strong> este relatório usa {feitos} ligação(ões) da conferência '

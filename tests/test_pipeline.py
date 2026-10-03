@@ -58,7 +58,9 @@ def test_top100_ordenado_por_queda(analise):
 
 def test_alerta_de_categoria_sem_minimo(analise):
     assert "CATEGORIA NOVA" in analise.ctx.categorias_sem_minimo
-    assert "Categorias sem consumo mínimo cadastrado" in lê_html(analise)
+    html = lê_html(analise)
+    assert "Categoria sem consumo mínimo cadastrado: CATEGORIA NOVA" in html     # aviso na aba Dados
+    assert 'id="alerta-minimo"' not in html                                       # sem janela de alerta ao abrir
 
 
 def test_html_tem_as_secoes_principais(analise):
