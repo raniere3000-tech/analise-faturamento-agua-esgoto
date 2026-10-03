@@ -54,7 +54,7 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--azul-claro);
 .nota-secao { margin:-8px 0 12px; color:var(--azul-claro); font-size:12.5px; }
 .card-faixa { display:flex; align-items:baseline; gap:8px 24px; flex-wrap:wrap; padding:14px 22px; }
 .card-faixa h2 { margin:0; }
-.grafico-area { position:relative; height:340px; }
+.grafico-area { position:relative; height:380px; }
 @media (max-width: 640px) { .grafico-area { height:260px; } }
 .obs-dias { margin:0; font-size:13px; color:var(--azul); font-variant-numeric:tabular-nums; }
 .obs-dias b { color:var(--preto); font-weight:600; }
@@ -78,10 +78,10 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--azul-claro);
 .insight-card li::marker { color:var(--azul-claro); }
 
 /* ===== Tabelas ===== */
-table { border-collapse:collapse; width:100%; font-family:var(--fonte-cond); font-size:11px; line-height:1.35; font-variant-numeric:tabular-nums; }
-th, td { border:1px solid var(--linha); padding:3px 5px; text-align:center; }
+table { border-collapse:collapse; width:100%; font-family:var(--fonte-cond); font-size:12px; line-height:1.4; font-variant-numeric:tabular-nums; }
+th, td { border:1px solid var(--linha); padding:5px 7px; text-align:center; }
 td { white-space:nowrap; }
-th { background:var(--marinho); color:#FFFFFF; font-weight:600; font-size:10.5px; }
+th { background:var(--marinho); color:#FFFFFF; font-weight:600; font-size:11.5px; }
 .header-sub th { background:var(--azul); font-weight:500; }
 tbody tr:nth-child(even) td { background-color:var(--zebra); }
 tbody tr:hover td { background-color:var(--tint); }
@@ -143,7 +143,7 @@ tbody tr.linha-media td, tbody tr.linha-total td { font-weight:700; background-c
 .seletor-sup { font-size:13px; font-weight:600; color:var(--marinho); display:inline-flex; align-items:center; gap:8px; }
 .seletor-sup[hidden] { display:none; }
 .seletor-sup select { font:inherit; padding:7px 10px; border:1px solid var(--linha); border-radius:8px; background:#FFFFFF; color:var(--marinho); }
-.tabela-dre { font-family:var(--fonte); font-size:13px; max-width:980px; }
+.tabela-dre { font-family:var(--fonte); font-size:13px; width:100%; max-width:1500px; }
 .tabela-dre th { padding:6px 10px; }
 .tabela-dre td { padding:4px 10px; border:0; border-bottom:1px solid var(--linha); }
 .tabela-dre td.dre-rotulo { text-align:left; }
@@ -161,10 +161,20 @@ td.num { text-align:right; }
 /* Filtro Referência: esconde as colunas de Δ do orçado que não foi escolhido */
 .seletor-sup { gap:12px; flex-wrap:wrap; }
 .seletor-sup label { display:inline-flex; align-items:center; gap:6px; }
-.grafico-indiretas { height:260px; margin-bottom:14px; }
-.tabela-dre td.mes-sel, .tabela-dre th.mes-sel { background-color:var(--tint); font-weight:700; }
+.grafico-indiretas { height:380px; margin-bottom:0; }
+.tabela-dre td.mes-sel { background-color:var(--tint); font-weight:700; }
+.tabela-dre th.mes-sel { background-color:var(--azul); color:#fff; }
 .tabela-dre th.col-rf, .tabela-dre th.col-sup { white-space:nowrap; }
 
 .tabela-dados { max-width:1100px; }
 .tabela-dados td, .tabela-dados th { text-align:left; padding:5px 10px; }
 .card h3 { font-size:13px; margin:14px 0 8px; color:var(--marinho); }
+
+.duas-colunas { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:22px; align-items:start; }
+@media (max-width:1000px) { .duas-colunas { grid-template-columns:1fr; } }
+.tabela-dre th { line-height:1.25; padding:7px 10px; }
+.tabela-dre td.num { font-variant-numeric:tabular-nums; }
+.tabela-dre thead th { position:sticky; top:0; z-index:2; }
+.btn-ver-todos { display:block; margin:12px auto 0; padding:8px 18px; }
+.card h2 { font-size:16px; }
+@media print { .btn-ver-todos { display:none; } }

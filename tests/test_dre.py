@@ -92,13 +92,13 @@ def test_rf_antigo_com_linhas_numeradas_e_meses_soma_de(sessao):
 
 def test_opcoes_de_referencia_comparam_rf_com_rf_sup(sessao):
     valores = [v for v, _ in dre.opcoes_referencia(sessao.ctx)]
-    assert {"RF01T26|RF SUP", "RF3T25|RF SUP", "RF01T26", "RF3T25", "RF SUP"} <= set(valores)
+    assert {"RF01T26|RF SUP", "RF3T25|RF SUP", "cmp:RF01T26|RF SUP", "cmp:RF3T25|RF SUP", "RF01T26", "RF3T25", "RF SUP"} <= set(valores)
 
 
 def test_relatorio_tem_abas_e_nao_tem_download(sessao):
     with open(sessao.caminho_html, encoding="utf-8") as f:
         html = f.read()
-    for trecho in ('id="btn-dre"', ">Diretas</button>", 'id="btn-indiretas"', 'data-sup="LAGOS"', "ORÇADO - RF SUP", "ORÇADO - RF3T25", 'data-combo="RF01T26|RF SUP"'):
+    for trecho in ('id="btn-dre"', ">Diretas</button>", 'id="btn-indiretas"', 'data-sup="LAGOS"', "Orçado<br>RF SUP", "Orçado<br>RF3T25", 'data-combo="RF01T26|RF SUP"'):
         assert trecho in html
     assert "RUBRICA NOVA SEM CLASSE" in html                      # aviso de rubrica fora da relação
 
