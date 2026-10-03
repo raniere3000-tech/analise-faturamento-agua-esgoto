@@ -87,9 +87,10 @@ def identifica_tipo(colunas, nome=""):
     colunas = set(colunas)
     if {"Sup", "Rubrica"}.issubset(colunas) and len(colunas_de_mes(colunas)) >= 3:
         return "orcado"
-    if "avulso" in chave_texto(nome).lower() or {"Endereco Ligacao", "Nome da Localidade"}.issubset(colunas):
-        if COLUNAS_FATURA.issubset(colunas):
-            return "avulso"
+    # O serviço avulso tem as mesmas colunas da fatura (inclusive endereço e localidade),
+    # então só o nome do arquivo o diferencia.
+    if "avulso" in chave_texto(nome).lower() and COLUNAS_FATURA.issubset(colunas):
+        return "avulso"
     if COLUNAS_CONSUMO.issubset(colunas):
         return "consumo"
     if COLUNAS_FATURA.issubset(colunas):
@@ -298,7 +299,10 @@ def classifica_arquivos(pasta, progresso=None):
                         classificados.append({"caminho": caminho, "tipo": tipo, "aba": 0})
                         tipo_achado = tipo
             if tipo_achado is None:
-                ignorados.append({"arquivo": nome, "motivo": "colunas não correspondem a consumo, fatura ou cronograma"})
+                motivo = "colunas não correspondem a consumo, fatura ou cronograma"
+                if df_head is not None and {"Sup", "Rubrica"}.issubset(df_head.columns):
+                    motivo = "planilha de orçado fora do modelo (esperado: colunas Sup, Rubrica e meses como jan/26, igual ao RF01T26)"
+                ignorados.append({"arquivo": nome, "motivo": motivo})
         except Exception as exc:   # um arquivo ilegível é ignorado, mas listado com o motivo
             print(f"   ⚠️ {nome} ignorado: não foi possível ler ({exc})")
             ignorados.append({"arquivo": nome, "motivo": f"não foi possível ler: {exc}"})
