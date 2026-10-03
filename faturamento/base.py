@@ -57,12 +57,31 @@ def monta_base(ctx):
         ctx.orcado[chave] = {"arquivo": nome, "dados": longo}
     print(f"✅ Fatura: {len(fatura_total)} linhas")
 
+    def periodo(serie):
+        meses = sorted({m for m in serie.dropna().astype(str) if len(m) == 7}, key=lambda r: (r[3:], r[:2]))
+        return ", ".join(meses)
+    ctx.bases_info = (
+        [{"tipo": "Consumo", "arquivo": os.path.basename(c), "linhas": len(d), "periodo": periodo(d["Referência"])}
+         for c, d in zip(ctx.classificacao["consumo"], consumos)]
+        + [{"tipo": "Fatura", "arquivo": os.path.basename(c), "linhas": len(f), "periodo": periodo(f["Referencia de Leitura"]),
+            "extra": f"{len(canc)} linhas de cancelamento"} for c, (f, canc) in zip(ctx.classificacao["fatura"], faturas_cc)]
+        + [{"tipo": "Serviço avulso", "arquivo": os.path.basename(c), "linhas": len(a), "periodo": periodo(a["Referencia"])}
+           for c, a in zip(ctx.classificacao["avulso"], avulsos)]
+    )
+
     cronogramas = _processa_lista(progresso, ctx.classificacao["cronograma"], processa_cronograma, 40, 45, "Processando cronogramas")
     cronograma_total = (
         pd.concat(cronogramas, ignore_index=True).drop_duplicates(subset="Grupo", keep="last")
         if cronogramas else pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma"])
     )
     print(f"✅ Cronogramas: {len(cronograma_total)} linhas")
+    ctx.bases_info += [{"tipo": "Cronograma", "arquivo": os.path.basename(c), "linhas": len(d), "periodo": ""}
+                       for c, d in zip(ctx.classificacao["cronograma"], cronogramas)]
+    for chave, nome in (("rf", "Orçado RF"), ("sup", "Orçado SUP")):
+        if ctx.orcado.get(chave):
+            d = ctx.orcado[chave]["dados"]
+            ctx.bases_info.append({"tipo": nome, "arquivo": ctx.orcado[chave]["arquivo"], "linhas": len(d),
+                                   "periodo": periodo(d["Referencia"])})
 
     print("=" * 70)
     print("ETAPA 3/6 — MERGE")

@@ -64,7 +64,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
                grafico_faturamento_html, card_leitura_html, cards_insights_html, tabela_dados_resumo_html,
                justificativa_html, tabela_agua_html, tabela_esgoto_html, quadro_ciclos_html, matriz_html,
                tabela_minimo_html, tabela_top100_agua_html, tabela_top100_esgoto_html,
-               aba_dre_html, aba_indiretas_html, filtros_dre_html, info_filtros_json):
+               aba_dre_html, aba_indiretas_html, aba_dados_html, filtros_dre_html, info_filtros_json):
     chave_justificativa = "justificativas_" + ctx.mes_atual.replace(" ", "_").replace("/", "_")
     html_style = "\n<style>\n" + carrega_asset("relatorio.css") + "</style>\n"
     script_js = "\n<script>\n" + carrega_asset("relatorio.js").replace("__CHAVE_JUSTIFICATIVA__", chave_justificativa) + "</script>\n"
@@ -82,7 +82,6 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
 </head>
 <body>
 <a class="pular-conteudo" href="#view-resumo">Ir para o conteúdo</a>
-{alerta_minimo_html}
 <div class="header-exec">
   <div class="header-inner">
     <div class="header-badge">Águas do Rio · Relatório Executivo</div>
@@ -91,13 +90,13 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
   </div>
 </div>
 
-{aviso_ajustes_html}
 <div class="toolbar">
   <div class="toggle" role="tablist" aria-label="Visualização">
     <button id="btn-resumo" class="active" onclick="mostrarView('resumo')">Resumo</button>
     <button id="btn-dre" onclick="mostrarView('dre')">DRE</button>
     <button id="btn-tabelas" onclick="mostrarView('tabelas')">Diretas</button>
     <button id="btn-indiretas" onclick="mostrarView('indiretas')">Indiretas</button>
+    <button id="btn-dados" onclick="mostrarView('dados')">Dados</button>
   </div>
   {filtros_dre_html}
   <button class="btn-filtro btn-imprimir" type="button" onclick="window.print()" aria-label="Exportar o relatório em PDF">Exportar PDF</button>
@@ -115,6 +114,10 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
 
 <div id="view-dre">
     {aba_dre_html}
+</div>
+
+<div id="view-dados">
+    {aba_dados_html}
 </div>
 
 <div id="view-indiretas">

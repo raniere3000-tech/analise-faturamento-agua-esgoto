@@ -1,6 +1,6 @@
 const CHAVE_JUSTIFICATIVA = '__CHAVE_JUSTIFICATIVA__';
 
-const VIEWS = ['resumo', 'dre', 'tabelas', 'indiretas'];
+const VIEWS = ['resumo', 'dre', 'tabelas', 'indiretas', 'dados'];
 function mostrarView(view) {
     VIEWS.forEach(v => {
         document.getElementById('view-' + v).classList.toggle('ativo', v === view);
@@ -93,9 +93,7 @@ function habilitarScrollTabelas() {
             const walk = (x - startX) * 1.5;
             wrap.scrollLeft = scrollLeft - walk;
         });
-        wrap.addEventListener('wheel', function (e) {
-            if (e.deltaY !== 0) { e.preventDefault(); wrap.scrollLeft += e.deltaY; }
-        });
+        // sem tratamento de roda do mouse: a página continua rolando normalmente sobre a tabela (Shift+roda rola de lado)
     });
 }
 

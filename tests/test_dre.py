@@ -114,3 +114,19 @@ def test_dre_do_mes_anterior(sessao):
     assert r["iE"] == pytest.approx(valores[classes == "LNE"].sum())
     assert r["dA"] != dre.realizado(ctx, dre.TODAS)["dA"]
     assert dre.lista_meses(ctx) == ["08/2026", "09/2026"] and len(av) > 0
+
+
+def test_aba_dados_lista_bases_avisos_e_mapeamento(sessao):
+    with open(sessao.caminho_html, encoding="utf-8") as f:
+        html = f.read()
+    i = html.index('id="view-dados"')
+    dados = html[i:i + 20000]
+    for trecho in ("Bases carregadas", "Servico avulso 09-2026.csv", "RF01T26.xlsx", "Fat. Bruto de água - Direto", "DIRETAS ÁGUA",
+                   "RUBRICA NOVA SEM CLASSE"):
+        assert trecho in dados
+    assert "avisos-card" not in html.split('id="view-dre"')[1].split('id="view-dados"')[0]   # DRE sem caixa de avisos
+
+
+def test_rolagem_da_pagina_sobre_a_tabela():
+    from faturamento.relatorio import carrega_asset
+    assert "'wheel'" not in carrega_asset("relatorio.js")      # a roda do mouse não pode ser capturada pela tabela
