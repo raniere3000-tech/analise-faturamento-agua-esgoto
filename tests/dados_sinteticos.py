@@ -133,5 +133,11 @@ def _gera_dre(destino, rnd, ligacoes, meses, mes_atual):
                 linhas.append({"Sup": sup, "Rubrica": rub, **{c: base * fator * (i + 1) for i, c in enumerate(colunas)}})
         pd.DataFrame(linhas).to_excel(os.path.join(destino, nome), index=False)
 
+    # RF antigo (RF3T25): colunas "Soma de dd/mm/aaaa" e linhas numeradas
+    antigas = [("01.01.01.01. Fat. Bruto de água - Direto", 2000), ("01.01.01.02. Fat. Bruto de esgoto - Direto", 1000),
+               ("01.01.01.06. Cancelamento", -300), ("02.02.01.01. Economias de Água - Faturadas", 50),
+               ("02.03.01.01. Vol. Total Faturado - Água", 700), ("01. DRE", 99)]
+    pd.DataFrame([{"Sup": "Interior", "Rubrica": rub, **{f"Soma de 01/{i:02d}/2026": v * i for i in range(1, 13)}}
+                  for rub, v in antigas]).to_excel(os.path.join(destino, "RF3T25.xlsx"), index=False)
     planilha("RF01T26.xlsx", ["Interior"], 10)
     planilha("RF SUP.xlsx", ["LAGOS", "LESTE"], 6)

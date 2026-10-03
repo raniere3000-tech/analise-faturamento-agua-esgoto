@@ -33,10 +33,7 @@ def _tabela(cabecalho, linhas):
 
 def _mapeamento_orcado(ctx):
     blocos = []
-    for chave, nome in (("rf", "Orçado RF"), ("sup", "Orçado SUP")):
-        info = ctx.orcado.get(chave)
-        if not info:
-            continue
+    for nome, info in ctx.orcado.items():
         d = info["dados"]
         d = d[d["Referencia"] == ctx.ref_atual]
         linhas = []
@@ -48,7 +45,7 @@ def _mapeamento_orcado(ctx):
                 continue
             vistos.add((rub, sup))
             linhas.append([html.escape(str(sup)), html.escape(str(rub)), html.escape(destino), f"{valor:,.0f}".replace(",", ".")])
-        blocos.append(f'<h3>{nome} — {html.escape(info["arquivo"])} — {ctx.mes_atual}</h3>'
+        blocos.append(f'<h3>{html.escape(nome)} — {html.escape(info["arquivo"])} — {ctx.mes_atual}</h3>'
                       + (_tabela(["Sup", "Rubrica na planilha", "Linha da DRE", "Valor"], linhas) if linhas
                          else '<p class="nota-secao">Sem valores neste mês.</p>'))
     return "".join(blocos)

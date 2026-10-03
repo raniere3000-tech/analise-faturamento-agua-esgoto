@@ -159,7 +159,6 @@ td.num { text-align:right; }
 .avisos-dre { margin:0; padding-left:18px; font-size:13px; color:var(--laranja-texto); }
 
 /* Filtro Referência: esconde as colunas de Δ do orçado que não foi escolhido */
-body[data-ref="RF"] .col-sup, body[data-ref="SUP"] .col-rf { display:none; }
 .seletor-sup { gap:12px; flex-wrap:wrap; }
 .seletor-sup label { display:inline-flex; align-items:center; gap:6px; }
 .grafico-indiretas { height:260px; margin-bottom:14px; }

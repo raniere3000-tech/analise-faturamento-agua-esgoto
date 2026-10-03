@@ -701,7 +701,7 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 
 
   // ===== Navegação e filtros (listas suspensas, presentes em todas as abas) =====
-  const filtrosEstado = { view: "dre", sup: "TODAS", mes: null, ref: "AMBOS" };
+  const filtrosEstado = { view: "dre", sup: "TODAS", mes: null, ref: "" };
   let infoFiltros = null;
   const quadro = () => $("quadroRelatorio");
   const janela = () => quadro().contentWindow;
@@ -741,11 +741,11 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
     const estilo = doc.createElement("style");
     estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-dre, #view-indiretas, #view-dados { padding-top: 16px; }";
     doc.head.appendChild(estilo);
-    filtrosEstado.sup = "TODAS"; filtrosEstado.ref = "AMBOS";
+    filtrosEstado.sup = "TODAS"; filtrosEstado.ref = infoFiltros.refPadrao || "";
     filtrosEstado.mes = infoFiltros ? infoFiltros.mesAtual : null;
     const opcoes = (sel, itens, atual) => { sel.innerHTML = itens.map(([v, t]) => `<option value="${escapa(v)}" ${v === atual ? "selected" : ""}>${escapa(t)}</option>`).join(""); sel.disabled = false; };
     opcoes($("selSupTop"), infoFiltros.sups.map((s) => [s, s === "TODAS" ? "Todas" : s]), "TODAS");
-    opcoes($("selRefTop"), [["AMBOS", "RF e RF SUP"], ["RF", "RF"], ["SUP", "RF SUP"]], "AMBOS");
+    opcoes($("selRefTop"), infoFiltros.refs.length ? infoFiltros.refs.map((r) => [r.valor, r.rotulo]) : [["", "Sem orçado"]], filtrosEstado.ref);
     opcoes($("selMesTop"), infoFiltros.meses.map((m) => [m.ref, m.label]), filtrosEstado.mes);
     const grupos = Array.from(doc.querySelectorAll(".chk-grupo"));
     $("listaGrupos").innerHTML = `<label><input type="checkbox" id="chkTodosGrupos" checked> <b>Selecionar todos</b></label><hr>` +

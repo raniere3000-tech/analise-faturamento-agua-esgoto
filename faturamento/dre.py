@@ -48,6 +48,9 @@ ROTULOS_ORCADO = {
     "FatBrutodeaguaIndireto": "iA", "FatBrutodeesgotoIndireto": "iE", "Cancelamentos": "canc",
     "EconomiasdeAguaFaturadas": "ecoA", "EconomiasdeEsgotoFaturadas": "ecoE",
     "VolumedeAguaFaturado": "volA", "VolumedeEsgotoFaturado": "volE",
+    # nomes do RF antigo (RF3T25)
+    "Cancelamento": "canc", "EconomiasdeAguaFaturadas": "ecoA", "EconomiasdeEsgotoFaturadas": "ecoE",
+    "VolTotalFaturadoAgua": "volA", "VolTotalFaturadoEsgoto": "volE",
 }
 for _cl, _rotulo in LINHAS_INDIRETAS_DRE.items():
     if _cl != "LNE":
@@ -103,9 +106,9 @@ def prepara(ctx):
             ctx.avulso["Classe"] = ctx.avulso["Classe"].fillna("OUTROS")
     if ctx.cancelamento is None or not len(ctx.cancelamento):
         avisos.append("Nenhuma rubrica de cancelamento encontrada na fatura: cancelamento zerado.")
-    if ctx.orcado.get("rf") is None:
+    if not fontes_rf(ctx):
         avisos.append("Orçado RF não encontrado (planilha com colunas Sup, Rubrica e meses, ex.: RF01T26.xlsx).")
-    if ctx.orcado.get("sup") is None:
+    if not fontes_sup(ctx):
         avisos.append("Orçado SUP não encontrado (mesmo modelo do RF, com \"SUP\" no nome, ex.: RF SUP.xlsx).")
     sem_sup = ctx.df_atual[ctx.df_atual["__sup"] == SEM_SUP]
     if len(sem_sup):
@@ -176,20 +179,32 @@ def completa(r):
     return r
 
 
+ALIAS_SUP = {"INTERIOR": "LAGOS"}      # no orçado, "Interior" é a superintendência LAGOS
+
+
+def fontes_rf(ctx):
+    return [n for n, i in ctx.orcado.items() if i["tipo"] == "rf"]
+
+
+def fontes_sup(ctx):
+    return [n for n, i in ctx.orcado.items() if i["tipo"] == "sup"]
+
+
+def _sup_orcado(valor):
+    k = chave_texto(valor)
+    return ALIAS_SUP.get(k, k)
+
+
 def orcado(ctx, fonte, sup, ref=None):
-    """Valores do orçado ('rf' ou 'sup') no mês, por linha. Devolve {} se não houver dados."""
+    """Valores da planilha de orçado `fonte` (ex.: "RF01T26") no mês, por linha. {} se não houver dados."""
     ref = ref or ctx.ref_atual
     info = ctx.orcado.get(fonte)
     if not info:
         return {}
     d = info["dados"]
     d = d[d["Referencia"] == ref]
-    chaves_sup = d["Sup"].map(chave_texto)
-    if sup == TODAS:
-        if (chaves_sup == "INTERIOR").any():
-            d = d[chaves_sup == "INTERIOR"]
-    else:
-        d = d[chaves_sup == chave_texto(sup)]
+    if sup != TODAS:                       # TODAS soma todas as superintendências da planilha
+        d = d[d["Sup"].map(_sup_orcado) == _sup_orcado(sup)]
     r = {}
     for rotulo, valor in zip(d["Rubrica"].map(chave_texto), d["Valor"]):
         chave = ROTULOS_ORCADO.get(rotulo)
@@ -236,43 +251,71 @@ def _cel(valor, cls=""):
     return f'<td class="{cls}">{valor}</td>'
 
 
-def _celulas_delta(real, orc, formato, eh_canc, classe):
-    """Δ (%) e Δ (R$) do realizado contra um orçado. `classe`: col-rf ou col-sup (o filtro Referência esconde uma delas)."""
+def _celulas_delta(real, orc, formato, eh_canc, fonte):
+    """Δ (%) e Δ (R$) do realizado contra um orçado. `fonte` liga as células ao filtro Referência."""
     dec = 2 if formato == "dec" else 0
     d = None if real is None or orc is None else real - orc
     pct = _pct(real, orc)
 
     def neg(v):
         return "neg" if (v is not None and v < -(0.005 if dec else 0.5) and not eh_canc) else ""
-    return (_cel("-" if pct is None else fmt_num(pct * 100, 1) + "%", f"num {classe} {neg(pct)}"),
-            _cel("-" if d is None else fmt_num(d, dec), f"num {classe} {neg(d)}"))
+    src = html.escape(fonte, quote=True)
+    return (f'<td class="num {neg(pct)}" data-src="{src}">{"-" if pct is None else fmt_num(pct * 100, 1) + "%"}</td>',
+            f'<td class="num {neg(d)}" data-src="{src}">{"-" if d is None else fmt_num(d, dec)}</td>')
 
 
-def _linha_dre(rotulo, formato, negrito, rf, sup, real, eh_canc):
-    p_rf, d_rf = _celulas_delta(real, rf, formato, eh_canc, "col-rf")
-    p_sup, d_sup = _celulas_delta(real, sup, formato, eh_canc, "col-sup")
-    return (f'<tr class="{"dre-forte" if negrito else ""}"><td class="dre-rotulo">{html.escape(rotulo)}</td>'
-            + _cel(_fmt(rf, formato), "num") + _cel(_fmt(sup, formato), "num") + _cel(_fmt(real, formato), "num")
-            + p_rf + d_rf + p_sup + d_sup + "</tr>")
+def _fontes(ctx):
+    """Planilhas de orçado: RFs primeiro, depois RF SUP. E as combinações RF × RF SUP (comparação entre orçados)."""
+    fontes = fontes_rf(ctx) + fontes_sup(ctx)
+    combos = [(r, s) for r in fontes_rf(ctx) for s in fontes_sup(ctx)]
+    return fontes, combos
 
 
-CABECALHO_DELTAS = ('<th class="col-rf">Δ (%)</th><th class="col-rf">Δ (R$)</th>'
-                    '<th class="col-sup">Δ (%) Sup</th><th class="col-sup">Δ R$ (Orçado Sup)</th>')
+def _linha_dre(rotulo, formato, negrito, orc, real, eh_canc, fontes, combos):
+    """`orc`: {fonte: valor}. Colunas: orçados | realizado | Δ por orçado | Δ entre RF e RF SUP."""
+    dec = 2 if formato == "dec" else 0
+    cels = [f'<td class="dre-rotulo">{html.escape(rotulo)}</td>']
+    for f in fontes:
+        cels.append(f'<td class="num" data-src="{html.escape(f, quote=True)}">{_fmt(orc.get(f), formato)}</td>')
+    cels.append(_cel(_fmt(real, formato), "num"))
+    for f in fontes:
+        cels.extend(_celulas_delta(real, orc.get(f), formato, eh_canc, f))
+    for r, sp in combos:
+        a, b = orc.get(r), orc.get(sp)
+        cels.append(f'<td class="num" data-combo="{html.escape(r + "|" + sp, quote=True)}">'
+                    f'{"-" if a is None or b is None else fmt_num(a - b, dec)}</td>')
+    return f'<tr class="{"dre-forte" if negrito else ""}">' + "".join(cels) + "</tr>"
+
+
+def _cabecalho(ctx, primeira, fontes, combos):
+    e = html.escape
+    ths = [f"<th>{primeira}</th>"]
+    ths += [f'<th data-src="{e(f, quote=True)}">ORÇADO - {e(f)}</th>' for f in fontes]
+    ths.append("<th>REALIZADO</th>")
+    for f in fontes:
+        ths.append(f'<th data-src="{e(f, quote=True)}">Δ (%) {e(f)}</th><th data-src="{e(f, quote=True)}">Δ (R$) {e(f)}</th>')
+    ths += [f'<th data-combo="{e(r + "|" + s, quote=True)}">Δ (R$) {e(r)} − {e(s)}</th>' for r, s in combos]
+    return "<thead><tr>" + "".join(ths) + "</tr></thead>"
+
+
+def _orcados_do_mes(ctx, sup, ref, fontes):
+    return {f: orcado(ctx, f, sup, ref) for f in fontes}
 
 
 def tabela_dre(ctx, sup, ref):
     real = realizado(ctx, sup, ref)
-    rf = orcado(ctx, "rf", sup, ref)
-    os_ = orcado(ctx, "sup", sup, ref)
+    fontes, combos = _fontes(ctx)
+    orc = _orcados_do_mes(ctx, sup, ref, fontes)
+    ncol = 2 + len(fontes) * 3 + len(combos)
     linhas = []
     for chave, rotulo, formato, negrito in LINHAS:
         if chave is None:
-            linhas.append('<tr class="dre-vazia"><td colspan="8"></td></tr>')
+            linhas.append(f'<tr class="dre-vazia"><td colspan="{ncol}"></td></tr>')
         else:
-            linhas.append(_linha_dre(rotulo, formato, negrito, rf.get(chave), os_.get(chave), real.get(chave), chave == "canc"))
-    return ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Projeto/Linha</th><th>ORÇADO - RF</th>'
-            f'<th>ORÇADO - SUP</th><th>REALIZADO</th>{CABECALHO_DELTAS}</tr></thead><tbody>'
-            + "".join(linhas) + "</tbody></table></div>")
+            linhas.append(_linha_dre(rotulo, formato, negrito, {f: orc[f].get(chave) for f in fontes}, real.get(chave),
+                                     chave == "canc", fontes, combos))
+    return ('<div class="tabela-wrap"><table class="tabela-dre">' + _cabecalho(ctx, "Projeto/Linha", fontes, combos)
+            + "<tbody>" + "".join(linhas) + "</tbody></table></div>")
 
 
 def _avisos_html(ctx):
@@ -292,14 +335,14 @@ def _bloco(sup, ref, conteudo):
 
 def gera_aba_dre_html(ctx):
     prepara(ctx)
-    fontes = [f"{nome}: {html.escape(ctx.orcado[k]['arquivo'])}" for k, nome in (("rf", "Orçado RF"), ("sup", "Orçado SUP")) if ctx.orcado.get(k)]
-    nota = " · ".join(fontes) if fontes else "Sem planilhas de orçado na pasta"
+    arquivos = [html.escape(i["arquivo"]) for i in ctx.orcado.values()]
+    nota = ("Orçado: " + " · ".join(arquivos)) if arquivos else "Sem planilhas de orçado na pasta"
     blocos = []
     for ref in lista_meses(ctx):
         for sup in lista_sups(ctx):
             blocos.append(_bloco(sup, ref, (
                 f'<div class="card"><h2>DRE — {html.escape(_nome_sup(sup))} — {nome_mes(ref)}</h2>'
-                f'<p class="nota-secao">{nota}. Δ (%) e Δ (R$) comparam o realizado com o orçado RF; as colunas "Sup" comparam com o orçado SUP.</p>'
+                f'<p class="nota-secao">{nota}. Escolha a Referência no filtro para comparar o realizado com cada RF ou com o RF SUP, ou comparar os RF com o RF SUP.</p>'
                 f'{tabela_dre(ctx, sup, ref)}</div>')))
     return "".join(blocos)
 
@@ -315,17 +358,20 @@ def _indiretas_mes(ctx, sup, ref):
 
 def tabela_orcado_realizado(ctx, sup, ref):
     real = realizado(ctx, sup, ref)
-    rf, os_ = orcado(ctx, "rf", sup, ref), orcado(ctx, "sup", sup, ref)
+    fontes, combos = _fontes(ctx)
+    orc = _orcados_do_mes(ctx, sup, ref, fontes)
     linhas = []
     for chave, rotulo, negrito in (("ri_CORTE", "RI Cortes/Recorte", False), ("ri_RELIGAÇÃO", "RI Religações", False),
                                    ("ri_LNA", "RI Ligações - Água", False), ("ri_SANÇÃO", "RI Fiscalização", False),
                                    ("ri_OUTROS", "RI Outros - Água", False), ("iA", "Fat. de água - Indireto", True),
                                    ("iE", "Fat. de esgoto - Indireto", True)):
-        linhas.append(_linha_dre(rotulo, "moeda", negrito, rf.get(chave), os_.get(chave), real.get(chave), False))
-    tot = lambda d: None if d.get("iA") is None and d.get("iE") is None else (d.get("iA") or 0) + (d.get("iE") or 0)
-    linhas.append(_linha_dre("Total indiretas", "moeda", True, tot(rf), tot(os_), tot(real), False))
-    return ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Classe / linha da DRE</th><th>ORÇADO - RF</th>'
-            f'<th>ORÇADO - SUP</th><th>REALIZADO</th>{CABECALHO_DELTAS}</tr></thead><tbody>' + "".join(linhas) + "</tbody></table></div>")
+        linhas.append(_linha_dre(rotulo, "moeda", negrito, {f: orc[f].get(chave) for f in fontes}, real.get(chave), False, fontes, combos))
+
+    def tot(d):
+        return None if d.get("iA") is None and d.get("iE") is None else (d.get("iA") or 0) + (d.get("iE") or 0)
+    linhas.append(_linha_dre("Total indiretas", "moeda", True, {f: tot(orc[f]) for f in fontes}, tot(real), False, fontes, combos))
+    return ('<div class="tabela-wrap"><table class="tabela-dre">' + _cabecalho(ctx, "Classe / linha da DRE", fontes, combos)
+            + "<tbody>" + "".join(linhas) + "</tbody></table></div>")
 
 
 def tabela_evolucao(ctx, sup, ref, meses):
@@ -384,13 +430,21 @@ def gera_aba_indiretas_html(ctx):
     return "".join(blocos)
 
 
+def opcoes_referencia(ctx):
+    """[(valor, rótulo)]: cada RF, o RF SUP e as comparações RF × RF SUP. O valor lista as planilhas mostradas."""
+    rfs, sups = fontes_rf(ctx), fontes_sup(ctx)
+    itens = [(r + "|" + s, f"{r} × {s}") for r in rfs for s in sups]
+    itens += [(r, r) for r in rfs] + [(s, s) for s in sups]
+    return itens
+
+
 def gera_filtros_dre_html(ctx):
     """Seletores para quando o relatório é aberto sozinho (no site, o cabeçalho cuida disso)."""
     def opcoes(itens):
         return "".join(f'<option value="{html.escape(v, quote=True)}">{html.escape(t)}</option>' for v, t in itens)
     sups = opcoes([(s, _nome_sup(s) if s == TODAS else s) for s in lista_sups(ctx)])
     meses = opcoes([(m, nome_mes(m)) for m in lista_meses(ctx)])
-    refs = opcoes([("AMBOS", "RF e SUP"), ("RF", "Só RF"), ("SUP", "Só SUP")])
+    refs = opcoes(opcoes_referencia(ctx))
     return ('<span class="seletor-sup" id="seletorSup" hidden>'
             f'<label>Superintendência <select id="selSup" onchange="definirFiltros({{sup:this.value}})">{sups}</select></label>'
             f'<label>Mês <select id="selMes" onchange="definirFiltros({{mes:this.value}})">{meses}</select></label>'
@@ -398,6 +452,8 @@ def gera_filtros_dre_html(ctx):
 
 
 def gera_info_filtros_json(ctx):
+    refs = opcoes_referencia(ctx)
     info = {"sups": lista_sups(ctx), "meses": [{"ref": m, "label": nome_mes(m)} for m in lista_meses(ctx)],
-            "mesAtual": ctx.ref_atual, "temRF": bool(ctx.orcado.get("rf")), "temSUP": bool(ctx.orcado.get("sup"))}
+            "mesAtual": ctx.ref_atual, "refs": [{"valor": v, "rotulo": t} for v, t in refs],
+            "refPadrao": refs[0][0] if refs else ""}
     return '<script type="application/json" id="info-filtros">' + json.dumps(info).replace("<", "\\u003c") + "</script>"
