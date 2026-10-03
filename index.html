@@ -227,6 +227,19 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 #quadroRelatorio { background: var(--bg); min-height: calc(100vh - 230px); }
 .btn-principal { background: var(--navy); } .btn-principal:hover:not(:disabled) { background: var(--blue); }
 @media (max-width: 900px) { .top, .nav { padding-left: 16px; padding-right: 16px; } }
+
+.vazio-wrap { max-width: 1800px; width: 100%; margin: 0 auto; padding: 22px 34px 38px; }
+.vazio-wrap[hidden] { display: none; }
+.painel-vazio { background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 3px 12px rgba(17,42,66,.045); padding: 18px; }
+.painel-vazio h2 { font-size: 16px; margin: 0 0 3px; color: var(--navy); }
+.painel-vazio .dica { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+.vazio { padding: 34px; text-align: center; color: var(--muted); border: 1px dashed #b8c5cf; border-radius: 10px; background: #fafcfd; }
+.vazio b { color: var(--navy); }
+.esperados { margin: 16px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--muted); }
+.esperados li { margin-bottom: 5px; }
+.painel-vazio .rodape { text-align: left; margin: 12px 0 0; }
+.top .log { max-width: none; margin-top: 8px; }
+@media (max-width: 900px) { .vazio-wrap { padding-left: 16px; padding-right: 16px; } }
 </style>
 </head>
 <body>
@@ -234,7 +247,7 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v2</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v3</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="ferramentas">
@@ -245,10 +258,10 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
     </div>
   </div>
-  <div class="filtros" id="filtros" hidden style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:12px">
-    <div class="fgroup" id="fgSup" hidden><span class="flabel">Superintendência</span><span id="supBtns"></span></div>
-    <div class="fgroup" id="fgRef" hidden><span class="flabel">Referência</span><span id="refBtns"></span></div>
-    <div class="fgroup" id="fgMes" hidden><span class="flabel">Mês</span><select id="selMesTop" aria-label="Mês"></select></div>
+  <div class="filtros" id="filtros" style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:12px">
+    <div class="fgroup" id="fgSup"><span class="flabel">Superintendência</span><span id="supBtns"><span class="flabel">—</span></span></div>
+    <div class="fgroup" id="fgRef"><span class="flabel">Referência</span><span id="refBtns"><span class="flabel">—</span></span></div>
+    <div class="fgroup" id="fgMes"><span class="flabel">Mês</span><select id="selMesTop" aria-label="Mês"></select></div>
     <div class="fgroup" id="fgGrupo" hidden><span class="flabel">Grupo</span>
       <div class="dropdown" id="ddGrupo"><button type="button" id="btnGrupo">Grupos ▾</button><div class="dropdown-content" id="listaGrupos"></div></div></div>
   </div>
@@ -257,15 +270,15 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
     <div class="prog-linha"><div class="barra"><div class="barra-fill" id="barraFill"></div></div><b id="statusPct">0%</b><span id="statusTexto">Preparando…</span></div>
     <p class="nota" id="statusNota"></p>
     <div class="arquivos" id="listaArquivos"></div>
-    <details class="log">
-      <summary>Detalhes da leitura</summary>
-      <div class="log-ferramentas"><button type="button" id="btnCopiarLog">Copiar detalhes</button></div>
-      <pre id="logExecucao">Nenhuma leitura realizada ainda.</pre>
-    </details>
   </div>
+  <details class="log">
+    <summary>Detalhes da leitura</summary>
+    <div class="log-ferramentas"><button type="button" id="btnCopiarLog">Copiar detalhes</button></div>
+    <pre id="logExecucao">Nenhuma leitura realizada ainda.</pre>
+  </details>
 </header>
 
-<nav class="nav" id="nav" hidden aria-label="Páginas do relatório">
+<nav class="nav" id="nav" aria-label="Páginas do relatório">
   <button class="tab active" data-view="dre" type="button">DRE</button>
   <button class="tab" data-view="indiretas" type="button">Indiretas</button>
   <button class="tab" data-view="resumo" type="button">Resumo</button>
@@ -273,16 +286,18 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 </nav>
 
 <main class="conteudo" id="inicio">
-  <div class="orientacoes">
-    <h2>Como usar</h2>
-    <ul>
-      <li>Clique em <b>Conectar pasta</b> e escolha a pasta com os arquivos do mês: <b>fatura</b>, <b>consumo</b> e <b>cronograma</b> (CSV, XLSX ou XLS), do mês atual e do anterior.</li>
-      <li>Para a aba <b>DRE</b> e <b>Indiretas</b>, coloque também na pasta o <b>serviço avulso</b> (nome com "avulso"), o orçado <b>RF</b> (ex.: <code>RF01T26.xlsx</code>) e o <b>RF SUP</b> (mesmo modelo, com "SUP" no nome). A fatura do ciclo traz as rubricas de cancelamento.</li>
-      <li>O nome de cada arquivo de consumo precisa ter o mês, por exemplo <code>Consumo 09-2026.csv</code>.</li>
-      <li>Os arquivos são processados no seu navegador e não são enviados para nenhum servidor.</li>
-      <li>Na primeira vez, o carregamento pode levar cerca de 1 minuto. Depois fica mais rápido. No Chrome ou Edge, <b>Atualizar</b> relê a mesma pasta.</li>
-    </ul>
-    <p class="rodape"><a href="acompanhamento_faturamento.py" download>Baixar o script Python</a></p>
+  <div class="vazio-wrap" id="vazioWrap">
+    <div class="painel-vazio">
+      <h2 id="vazioTitulo">DRE: orçado × realizado</h2>
+      <div class="dica" id="vazioDica">Realizado do mês contra o orçado RF e o orçado SUP, por superintendência</div>
+      <div class="vazio"><b>Sem dados para o período.</b><br>Conecte a pasta com os arquivos (fatura, consumo, cronograma, serviço avulso e orçados RF) usando o botão <b>📁 Conectar pasta</b>.</div>
+      <ul class="esperados">
+        <li><b>Fatura</b>, <b>consumo</b> (com o mês no nome, ex.: <code>Consumo 09-2026.csv</code>) e <b>cronograma</b> — CSV, XLSX ou XLS, do mês atual e do anterior.</li>
+        <li><b>Serviço avulso</b> (nome com "avulso") para as indiretas; <b>RF</b> (ex.: <code>RF01T26.xlsx</code>) e <b>RF SUP</b> para o orçado.</li>
+        <li>Tudo é processado no seu navegador; nenhum arquivo é enviado para servidor. Na primeira vez, o carregamento leva cerca de 1 minuto.</li>
+      </ul>
+      <p class="rodape"><a href="acompanhamento_faturamento.py" download>Baixar o script Python</a></p>
+    </div>
   </div>
   <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto" hidden></iframe>
 </main>
@@ -314,6 +329,7 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 
 <script>
 (() => {
+  const VERSAO_SITE = "v3-20261003";
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
     "Relatorio_Comparativo.html": { rotulo: "", tipo: "text/html" },
@@ -342,7 +358,7 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 
   function pegaWorker() {
     if (!worker) {
-      worker = new Worker("analisador.worker.js");
+      worker = new Worker("analisador.worker.js?v=" + VERSAO_SITE);
       worker.onmessage = (e) => trataMensagem(e.data);
       worker.onerror = (e) => {
         worker = null;
@@ -433,15 +449,15 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
     // o cabeçalho do relatório repete o do site; aqui ele some (no arquivo/PDF continua)
     $("quadroRelatorio").srcdoc = htmlRelatorio;
     $("quadroRelatorio").hidden = false;
-    document.querySelector(".conteudo .orientacoes").hidden = true;
+    $("vazioWrap").hidden = true;
     document.body.classList.add("relatorio-aberto");
   }
 
   function fechaRelatorio() {
     $("etapaTop20").hidden = true;
     $("quadroRelatorio").hidden = true;
-    $("nav").hidden = true; $("filtros").hidden = true; $("btnPdf").hidden = true;
-    document.querySelector(".conteudo .orientacoes").hidden = false;
+    $("btnPdf").hidden = true;
+    $("vazioWrap").hidden = false;
     document.body.classList.remove("relatorio-aberto", "top20-aberto");
     document.title = "Análise de Faturamento — Água e Esgoto";
   }
@@ -681,14 +697,30 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
   const janela = () => quadro().contentWindow;
   const escapa = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+  const TITULOS_VAZIO = {
+    dre: ["DRE: orçado × realizado", "Realizado do mês contra o orçado RF e o orçado SUP, por superintendência"],
+    indiretas: ["Indiretas", "Orçado × realizado por classe, evolução mensal e ticket médio do serviço avulso"],
+    resumo: ["Resumo", "KPIs, gráfico de faturamento por grupo e destaques do mês"],
+    tabelas: ["Diretas", "Tabelas de água e esgoto por grupo, ciclos, consumo mínimo e Top 100"],
+  };
+
   function aplicaFiltros() {
-    const w = janela();
-    if (!w || !w.mostrarView) return;
+    const w = quadro().hidden ? null : janela();
+    if (!w || !w.mostrarView) {
+      $("vazioTitulo").textContent = TITULOS_VAZIO[filtrosEstado.view][0];
+      $("vazioDica").textContent = TITULOS_VAZIO[filtrosEstado.view][1];
+      document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
+      const dOI = filtrosEstado.view === "dre" || filtrosEstado.view === "indiretas";
+      $("fgSup").hidden = $("fgMes").hidden = !dOI;
+      $("fgRef").hidden = filtrosEstado.view !== "dre";
+      $("fgGrupo").hidden = dOI;
+      return;
+    }
     w.mostrarView(filtrosEstado.view);
     w.definirFiltros({ sup: filtrosEstado.sup, mes: filtrosEstado.mes, ref: filtrosEstado.ref });
     document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
     const dreOuInd = filtrosEstado.view === "dre" || filtrosEstado.view === "indiretas";
-    $("fgSup").hidden = !dreOuInd || !(infoFiltros && infoFiltros.sups.length > 1);
+    $("fgSup").hidden = !dreOuInd;
     $("fgMes").hidden = !dreOuInd;
     $("fgRef").hidden = filtrosEstado.view !== "dre";
     $("fgGrupo").hidden = dreOuInd;
@@ -714,7 +746,7 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
     $("listaGrupos").innerHTML = `<label><input type="checkbox" id="chkTodosGrupos" checked> <b>Selecionar todos</b></label><hr>` +
       grupos.map((g) => `<label><input type="checkbox" class="chk-grupo-top" value="${escapa(g.value)}" checked> ${escapa(g.value)}</label>`).join("");
     $("btnGrupo").textContent = `Grupos (${grupos.length}/${grupos.length}) ▾`;
-    $("filtros").hidden = false; $("nav").hidden = false; $("btnPdf").hidden = false;
+    $("btnPdf").hidden = false;
     filtrosEstado.view = "dre";
     aplicaFiltros();
   }
