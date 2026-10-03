@@ -27,12 +27,47 @@ function definirFiltros(parcial) {
 
 // Referência = planilhas de orçado mostradas (ex.: "RF01T26|RF SUP" mostra as duas e a diferença entre elas)
 function aplicarFontes() {
-    const sel = (ESTADO.ref || '').split('|').filter(Boolean);
-    document.querySelectorAll('[data-src]').forEach(el => { el.style.display = (!sel.length || sel.includes(el.dataset.src)) ? '' : 'none'; });
-    document.querySelectorAll('[data-combo]').forEach(el => { el.style.display = (el.dataset.combo === ESTADO.ref) ? '' : 'none'; });
+    const ref = ESTADO.ref || '';
+    const soOrcados = ref.startsWith('cmp:');                 // compara RF com RF SUP, sem o realizado
+    const chave = soOrcados ? ref.slice(4) : ref;
+    const sel = chave.split('|').filter(Boolean);
+    document.querySelectorAll('[data-src]').forEach(el => {
+        const mostra = (!sel.length || sel.includes(el.dataset.src)) && !(soOrcados && el.dataset.tipo === 'dreal');
+        el.style.display = mostra ? '' : 'none';
+    });
+    document.querySelectorAll('[data-real]').forEach(el => { el.style.display = soOrcados ? 'none' : ''; });
+    document.querySelectorAll('[data-combo]').forEach(el => {
+        el.style.display = (el.dataset.combo === chave && sel.length === 2) ? '' : 'none';
+    });
 }
 
 const CORES_CLASSES = ['#176b9c', '#16a5b8', '#1f8a70', '#d79b29', '#c94b4b', '#6b7a99'];
+const fmtCompacto = v => v >= 1e6 ? (v / 1e6).toFixed(1).replace('.', ',') + ' mi' : v >= 1e3 ? (v / 1e3).toFixed(1).replace('.', ',').replace(',0', '') + ' mil' : Math.round(v).toLocaleString('pt-BR');
+
+// Rótulos do gráfico de indiretas: valor dentro de cada faixa (se couber) e o total em cima da barra
+const plugRotulosIndiretas = {
+    id: 'rotulosIndiretas',
+    afterDatasetsDraw(chart) {
+        const { ctx } = chart; ctx.save(); ctx.textAlign = 'center';
+        const n = chart.data.labels.length;
+        for (let i = 0; i < n; i++) {
+            let total = 0, topo = null, x = null;
+            chart.data.datasets.forEach((ds, k) => {
+                const barra = chart.getDatasetMeta(k).data[i], v = ds.data[i];
+                total += v; x = barra.x;
+                if (topo === null || barra.y < topo) topo = barra.y;
+                if (v > 0 && Math.abs(barra.base - barra.y) >= 18) {
+                    ctx.fillStyle = '#fff'; ctx.font = "600 11px 'Segoe UI', Arial, sans-serif"; ctx.textBaseline = 'middle';
+                    ctx.fillText(fmtCompacto(v), barra.x, (barra.y + barra.base) / 2);
+                }
+            });
+            ctx.fillStyle = '#102840'; ctx.font = "700 12px 'Segoe UI', Arial, sans-serif"; ctx.textBaseline = 'bottom';
+            ctx.fillText('R$ ' + total.toLocaleString('pt-BR', { maximumFractionDigits: 0 }), x, topo - 6);
+        }
+        ctx.restore();
+    }
+};
+
 function desenharGraficosIndiretas() {
     document.querySelectorAll('.sup-bloco').forEach(bloco => {
         if (bloco.style.display === 'none') return;
@@ -43,12 +78,31 @@ function desenharGraficosIndiretas() {
             cv.dataset.pronto = '1';
             new Chart(cv, {
                 type: 'bar',
-                data: { labels: d.meses, datasets: d.series.map((s, i) => ({ label: s.classe, data: s.valores, backgroundColor: CORES_CLASSES[i % CORES_CLASSES.length] })) },
-                options: { responsive: true, maintainAspectRatio: false,
-                    scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: v => v.toLocaleString('pt-BR') } } },
-                    plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => c.dataset.label + ': R$ ' + c.parsed.y.toLocaleString('pt-BR') } } } }
+                plugins: [plugRotulosIndiretas],
+                data: { labels: d.meses, datasets: d.series.map((s, i) => ({ label: s.classe, data: s.valores, backgroundColor: CORES_CLASSES[i % CORES_CLASSES.length], maxBarThickness: 110, borderWidth: 1, borderColor: '#fff' })) },
+                options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 26 } },
+                    scales: { x: { stacked: true, grid: { display: false } },
+                              y: { stacked: true, beginAtZero: true, grid: { color: '#e8eef3' }, ticks: { callback: v => fmtCompacto(v) } } },
+                    plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'rect', boxWidth: 10 } },
+                               tooltip: { callbacks: { label: c => c.dataset.label + ': R$ ' + c.parsed.y.toLocaleString('pt-BR') } } } }
             });
         });
+    });
+}
+
+// Tabelas longas (Top 100): mostra as primeiras linhas e um botão para ver todas
+function recolherTabelasLongas() {
+    document.querySelectorAll('table[class^="tabela-top100-"]').forEach(tabela => {
+        const linhas = Array.from(tabela.querySelectorAll('tbody tr')), limite = 15;
+        if (linhas.length <= limite || tabela.dataset.recolhido) return;
+        tabela.dataset.recolhido = '1';
+        const esconder = (sim) => linhas.forEach((tr, i) => { if (i >= limite) tr.style.display = sim ? 'none' : ''; });
+        esconder(true);
+        const botao = document.createElement('button');
+        botao.type = 'button'; botao.className = 'btn-just btn-ver-todos'; botao.textContent = `Mostrar todos (${linhas.length})`;
+        let aberto = false;
+        botao.onclick = () => { aberto = !aberto; esconder(!aberto); botao.textContent = aberto ? `Mostrar só os ${limite} primeiros` : `Mostrar todos (${linhas.length})`; };
+        (tabela.closest('.tabela-wrap') || tabela).insertAdjacentElement('afterend', botao);
     });
 }
 
@@ -461,6 +515,7 @@ document.addEventListener('DOMContentLoaded', function () {
     definirFiltros();
     envolverTabelasComScroll();
     habilitarScrollTabelas();
+    recolherTabelasLongas();
     filtrarPorGrupo();
     configurarTooltipGrafico();
     carregarJustificativas();

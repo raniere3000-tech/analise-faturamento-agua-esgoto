@@ -260,8 +260,8 @@ def _celulas_delta(real, orc, formato, eh_canc, fonte):
     def neg(v):
         return "neg" if (v is not None and v < -(0.005 if dec else 0.5) and not eh_canc) else ""
     src = html.escape(fonte, quote=True)
-    return (f'<td class="num {neg(pct)}" data-src="{src}">{"-" if pct is None else fmt_num(pct * 100, 1) + "%"}</td>',
-            f'<td class="num {neg(d)}" data-src="{src}">{"-" if d is None else fmt_num(d, dec)}</td>')
+    return (f'<td class="num {neg(pct)}" data-src="{src}" data-tipo="dreal">{"-" if pct is None else fmt_num(pct * 100, 1) + "%"}</td>',
+            f'<td class="num {neg(d)}" data-src="{src}" data-tipo="dreal">{"-" if d is None else fmt_num(d, dec)}</td>')
 
 
 def _fontes(ctx):
@@ -272,29 +272,34 @@ def _fontes(ctx):
 
 
 def _linha_dre(rotulo, formato, negrito, orc, real, eh_canc, fontes, combos):
-    """`orc`: {fonte: valor}. Colunas: orçados | realizado | Δ por orçado | Δ entre RF e RF SUP."""
+    """`orc`: {fonte: valor}. Colunas: orçados | realizado | Δ por orçado | Δ entre RF e RF SUP (R$ e %)."""
     dec = 2 if formato == "dec" else 0
+    e = lambda v: html.escape(v, quote=True)
     cels = [f'<td class="dre-rotulo">{html.escape(rotulo)}</td>']
     for f in fontes:
-        cels.append(f'<td class="num" data-src="{html.escape(f, quote=True)}">{_fmt(orc.get(f), formato)}</td>')
-    cels.append(_cel(_fmt(real, formato), "num"))
+        cels.append(f'<td class="num" data-src="{e(f)}" data-tipo="orc">{_fmt(orc.get(f), formato)}</td>')
+    cels.append(f'<td class="num col-real" data-real="1">{_fmt(real, formato)}</td>')
     for f in fontes:
         cels.extend(_celulas_delta(real, orc.get(f), formato, eh_canc, f))
     for r, sp in combos:
         a, b = orc.get(r), orc.get(sp)
-        cels.append(f'<td class="num" data-combo="{html.escape(r + "|" + sp, quote=True)}">'
-                    f'{"-" if a is None or b is None else fmt_num(a - b, dec)}</td>')
+        pct = _pct(a, b)
+        cels.append(f'<td class="num" data-combo="{e(r + "|" + sp)}">{"-" if a is None or b is None else fmt_num(a - b, dec)}</td>')
+        cels.append(f'<td class="num" data-combo="{e(r + "|" + sp)}">{"-" if pct is None else fmt_num(pct * 100, 1) + "%"}</td>')
     return f'<tr class="{"dre-forte" if negrito else ""}">' + "".join(cels) + "</tr>"
 
 
 def _cabecalho(ctx, primeira, fontes, combos):
-    e = html.escape
+    e = lambda v: html.escape(v, quote=True)
     ths = [f"<th>{primeira}</th>"]
-    ths += [f'<th data-src="{e(f, quote=True)}">ORÇADO - {e(f)}</th>' for f in fontes]
-    ths.append("<th>REALIZADO</th>")
+    ths += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{html.escape(f)}</th>' for f in fontes]
+    ths.append('<th class="col-real" data-real="1">Realizado</th>')
     for f in fontes:
-        ths.append(f'<th data-src="{e(f, quote=True)}">Δ (%) {e(f)}</th><th data-src="{e(f, quote=True)}">Δ (R$) {e(f)}</th>')
-    ths += [f'<th data-combo="{e(r + "|" + s, quote=True)}">Δ (R$) {e(r)} − {e(s)}</th>' for r, s in combos]
+        ths.append(f'<th data-src="{e(f)}" data-tipo="dreal">Δ %<br>vs {html.escape(f)}</th>'
+                   f'<th data-src="{e(f)}" data-tipo="dreal">Δ R$<br>vs {html.escape(f)}</th>')
+    for r, sp in combos:
+        ths.append(f'<th data-combo="{e(r + "|" + sp)}">Δ R$<br>{html.escape(r)} − {html.escape(sp)}</th>'
+                   f'<th data-combo="{e(r + "|" + sp)}">Δ %<br>{html.escape(r)} vs {html.escape(sp)}</th>')
     return "<thead><tr>" + "".join(ths) + "</tr></thead>"
 
 
@@ -306,7 +311,7 @@ def tabela_dre(ctx, sup, ref):
     real = realizado(ctx, sup, ref)
     fontes, combos = _fontes(ctx)
     orc = _orcados_do_mes(ctx, sup, ref, fontes)
-    ncol = 2 + len(fontes) * 3 + len(combos)
+    ncol = 2 + len(fontes) * 3 + len(combos) * 2
     linhas = []
     for chave, rotulo, formato, negrito in LINHAS:
         if chave is None:
@@ -342,7 +347,7 @@ def gera_aba_dre_html(ctx):
         for sup in lista_sups(ctx):
             blocos.append(_bloco(sup, ref, (
                 f'<div class="card"><h2>DRE — {html.escape(_nome_sup(sup))} — {nome_mes(ref)}</h2>'
-                f'<p class="nota-secao">{nota}. Escolha a Referência no filtro para comparar o realizado com cada RF ou com o RF SUP, ou comparar os RF com o RF SUP.</p>'
+                f'<p class="nota-secao">{nota}. Em Referência: compare o realizado com cada RF ou com o RF SUP, ou compare só os orçados (RF × RF SUP).</p>'
                 f'{tabela_dre(ctx, sup, ref)}</div>')))
     return "".join(blocos)
 
@@ -386,9 +391,10 @@ def tabela_evolucao(ctx, sup, ref, meses):
     dados = {"meses": [nome_mes(m) for m in meses],
              "series": [{"classe": NOME_CLASSE[cl], "valores": [round(por_mes[m][cl][1], 2) for m in meses]} for cl in CLASSES_ORDEM]}
     grafico = (f'<div class="grafico-area grafico-indiretas"><canvas class="canvas-indiretas" '
-               f'data-dados="{html.escape(json.dumps(dados), quote=True)}"></canvas></div>')
-    return grafico + ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Classe</th>' + cab
-                      + "</tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div>")
+               f'data-dados="{html.escape(json.dumps(dados), quote=True)}" data-mes="{html.escape(nome_mes(ref))}"></canvas></div>')
+    tabela = ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Classe</th>' + cab
+              + "</tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div>")
+    return f'<div class="duas-colunas"><div>{grafico}</div><div>{tabela}</div></div>'
 
 
 def tabela_qtd_ticket(ctx, sup, ref):
@@ -433,7 +439,8 @@ def gera_aba_indiretas_html(ctx):
 def opcoes_referencia(ctx):
     """[(valor, rótulo)]: cada RF, o RF SUP e as comparações RF × RF SUP. O valor lista as planilhas mostradas."""
     rfs, sups = fontes_rf(ctx), fontes_sup(ctx)
-    itens = [(r + "|" + s, f"{r} × {s}") for r in rfs for s in sups]
+    itens = [(r + "|" + s, f"{r} × {s} (com realizado)") for r in rfs for s in sups]
+    itens += [("cmp:" + r + "|" + s, f"{r} × {s} (só orçados)") for r in rfs for s in sups]
     itens += [(r, r) for r in rfs] + [(s, s) for s in sups]
     return itens
 
