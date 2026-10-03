@@ -12,17 +12,24 @@ function mostrarView(view) {
 }
 
 // Filtros da DRE/Indiretas: superintendência, mês e referência (RF / SUP / ambos)
-const ESTADO = { sup: 'TODAS', mes: null, ref: 'AMBOS' };
+const ESTADO = { sup: 'TODAS', mes: null, ref: null };
 function definirFiltros(parcial) {
     Object.assign(ESTADO, parcial || {});
     document.querySelectorAll('.sup-bloco').forEach(b => {
         b.style.display = (b.dataset.sup === ESTADO.sup && b.dataset.mes === ESTADO.mes) ? 'block' : 'none';
     });
-    document.body.dataset.ref = ESTADO.ref;
+    aplicarFontes();
     [['selSup', ESTADO.sup], ['selMes', ESTADO.mes], ['selRef', ESTADO.ref]].forEach(([id, v]) => {
         const el = document.getElementById(id); if (el && v) el.value = v;
     });
     desenharGraficosIndiretas();
+}
+
+// Referência = planilhas de orçado mostradas (ex.: "RF01T26|RF SUP" mostra as duas e a diferença entre elas)
+function aplicarFontes() {
+    const sel = (ESTADO.ref || '').split('|').filter(Boolean);
+    document.querySelectorAll('[data-src]').forEach(el => { el.style.display = (!sel.length || sel.includes(el.dataset.src)) ? '' : 'none'; });
+    document.querySelectorAll('[data-combo]').forEach(el => { el.style.display = (el.dataset.combo === ESTADO.ref) ? '' : 'none'; });
 }
 
 const CORES_CLASSES = ['#176b9c', '#16a5b8', '#1f8a70', '#d79b29', '#c94b4b', '#6b7a99'];
@@ -450,7 +457,7 @@ function aplicarBotoesRemover() {
 
 document.addEventListener('DOMContentLoaded', function () {
     mostrarView('resumo');
-    try { ESTADO.mes = JSON.parse(document.getElementById('info-filtros').textContent).mesAtual; } catch (e) { /* sem filtros */ }
+    try { const inf = JSON.parse(document.getElementById('info-filtros').textContent); ESTADO.mes = inf.mesAtual; ESTADO.ref = inf.refPadrao; } catch (e) { /* sem filtros */ }
     definirFiltros();
     envolverTabelasComScroll();
     habilitarScrollTabelas();

@@ -30,7 +30,7 @@ def le_avulso(pasta):
 def test_arquivos_novos_sao_classificados(sessao):
     c = sessao.ctx.classificacao
     assert len(c["avulso"]) == 1 and len(c["fatura"]) == 1      # o avulso não pode ser lido como fatura
-    assert len(c["orcado"]) == 2
+    assert len(c["orcado"]) == 3
 
 
 def test_indiretas_conferem_com_a_planilha(sessao):
@@ -71,18 +71,34 @@ def test_cancelamento_vem_da_fatura(sessao):
 
 
 def test_orcado_rf_e_sup(sessao):
-    rf = dre.orcado(sessao.ctx, "rf", dre.TODAS)
-    sup_total = dre.orcado(sessao.ctx, "sup", dre.TODAS)
-    lagos, leste = (dre.orcado(sessao.ctx, "sup", s) for s in ("LAGOS", "LESTE"))
+    ctx = sessao.ctx
+    assert set(ctx.orcado) == {"RF01T26", "RF3T25", "RF SUP"}
+    rf = dre.orcado(ctx, "RF01T26", dre.TODAS)
+    sup_total = dre.orcado(ctx, "RF SUP", dre.TODAS)
+    lagos, leste = (dre.orcado(ctx, "RF SUP", s) for s in ("LAGOS", "LESTE"))
     assert rf["bruto"] == pytest.approx(1000 * 10 * 9)           # coluna set/26 = 9º mês
     assert sup_total["bruto"] == pytest.approx(lagos["bruto"] + leste["bruto"])
-    assert not any(v is not None for v in dre.orcado(sessao.ctx, "rf", "LAGOS").values())   # o RF só tem a linha Interior
+    # no orçado, "Interior" é a superintendência LAGOS
+    assert dre.orcado(ctx, "RF01T26", "LAGOS")["bruto"] == pytest.approx(rf["bruto"])
+    assert not any(v is not None for v in dre.orcado(ctx, "RF01T26", "LESTE").values())
+
+
+def test_rf_antigo_com_linhas_numeradas_e_meses_soma_de(sessao):
+    antigo = dre.orcado(sessao.ctx, "RF3T25", dre.TODAS)          # set/26 = 9 × valor-base
+    assert antigo["dA"] == pytest.approx(18000) and antigo["dE"] == pytest.approx(9000)
+    assert antigo["canc"] == pytest.approx(-2700) and antigo["ecoA"] == pytest.approx(450) and antigo["volA"] == pytest.approx(6300)
+    assert antigo["bruto"] == pytest.approx(27000)                # sem linha "Faturamento Bruto": soma das partes
+
+
+def test_opcoes_de_referencia_comparam_rf_com_rf_sup(sessao):
+    valores = [v for v, _ in dre.opcoes_referencia(sessao.ctx)]
+    assert {"RF01T26|RF SUP", "RF3T25|RF SUP", "RF01T26", "RF3T25", "RF SUP"} <= set(valores)
 
 
 def test_relatorio_tem_abas_e_nao_tem_download(sessao):
     with open(sessao.caminho_html, encoding="utf-8") as f:
         html = f.read()
-    for trecho in ('id="btn-dre"', ">Diretas</button>", 'id="btn-indiretas"', 'data-sup="LAGOS"', "ORÇADO - SUP", "Δ R$ (Orçado Sup)"):
+    for trecho in ('id="btn-dre"', ">Diretas</button>", 'id="btn-indiretas"', 'data-sup="LAGOS"', "ORÇADO - RF SUP", "ORÇADO - RF3T25", 'data-combo="RF01T26|RF SUP"'):
         assert trecho in html
     assert "RUBRICA NOVA SEM CLASSE" in html                      # aviso de rubrica fora da relação
 

@@ -76,7 +76,8 @@ def le_dataframe(caminho, nrows=None, sheet_name=0):
 
 MES_ABREV = {"jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
              "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12}
-_RE_COL_MES = re.compile(r"^[a-zç]{3}/\d{2}$", re.I)
+_RE_COL_MES = re.compile(r"^([a-zç]{3}/\d{2}|soma de \d{2}/\d{2}/\d{4})$", re.I)
+_RE_PREFIXO_NUM = re.compile(r"^\d+(?:\.\d+)*\.?\s+")
 
 
 def colunas_de_mes(colunas):
@@ -102,7 +103,7 @@ def identifica_tipo(colunas, nome=""):
 
 def referencia_mes(valor):
     """'ago/26', '08/2026', '15/08/2026' ou data -> 'MM/AAAA' (ou None)."""
-    t = str(valor).strip().lower()
+    t = re.sub(r"^soma de\s+", "", str(valor).strip().lower())
     m = re.match(r"^([a-zç]{3})[a-z]*[/\-. ](\d{2}|\d{4})$", t)
     if m and m.group(1) in MES_ABREV:
         ano = m.group(2) if len(m.group(2)) == 4 else "20" + m.group(2)
@@ -216,7 +217,8 @@ def processa_orcado(caminho, aba=0):
     longo = longo.dropna(subset=["Valor"])
     longo["Referencia"] = longo["Mes"].map(referencia_mes)
     longo["Sup"] = longo["Sup"].astype(str).str.strip()
-    longo["Rubrica"] = longo["Rubrica"].astype(str).str.strip()
+    # o RF antigo numera as linhas ("01.01.01.01. Fat. Bruto de água - Direto"): tira o número
+    longo["Rubrica"] = longo["Rubrica"].astype(str).str.strip().str.replace(_RE_PREFIXO_NUM, "", regex=True)
     return longo[["Sup", "Rubrica", "Referencia", "Valor"]]
 
 

@@ -44,17 +44,17 @@ def monta_base(ctx):
     ctx.cancelamento = pd.concat(cancs, ignore_index=True) if cancs else pd.DataFrame()
     avulsos = [processa_avulso(c) for c in ctx.classificacao["avulso"]]
     ctx.avulso = pd.concat(avulsos, ignore_index=True) if avulsos else pd.DataFrame()
-    for chave, nome in (("rf", "RF"), ("sup", "SUP")):
-        ctx.orcado[chave] = None
-    escolhidos = {}
+    ctx.orcado = {}
     for caminho, aba in ctx.classificacao["orcado"]:
-        chave = "sup" if "SUP" in os.path.basename(caminho).upper() else "rf"
+        arquivo = os.path.basename(caminho)
+        nome = os.path.splitext(arquivo)[0].replace("_", " ").strip()
         longo = processa_orcado(caminho, aba)
-        # se houver mais de um arquivo do mesmo tipo (ex.: painel vazio), vale o que tem mais valores
-        if chave not in escolhidos or len(longo) > len(escolhidos[chave][1]):
-            escolhidos[chave] = (os.path.basename(caminho), longo)
-    for chave, (nome, longo) in escolhidos.items():
-        ctx.orcado[chave] = {"arquivo": nome, "dados": longo}
+        if not len(longo):
+            print(f"   ⚠️ {arquivo}: orçado sem valores (planilha vazia); ignorado.")
+            continue
+        tipo = "sup" if "SUP" in nome.upper() else "rf"
+        if nome not in ctx.orcado or len(longo) > len(ctx.orcado[nome]["dados"]):
+            ctx.orcado[nome] = {"arquivo": arquivo, "tipo": tipo, "dados": longo}
     print(f"✅ Fatura: {len(fatura_total)} linhas")
 
     def periodo(serie):
@@ -77,11 +77,9 @@ def monta_base(ctx):
     print(f"✅ Cronogramas: {len(cronograma_total)} linhas")
     ctx.bases_info += [{"tipo": "Cronograma", "arquivo": os.path.basename(c), "linhas": len(d), "periodo": ""}
                        for c, d in zip(ctx.classificacao["cronograma"], cronogramas)]
-    for chave, nome in (("rf", "Orçado RF"), ("sup", "Orçado SUP")):
-        if ctx.orcado.get(chave):
-            d = ctx.orcado[chave]["dados"]
-            ctx.bases_info.append({"tipo": nome, "arquivo": ctx.orcado[chave]["arquivo"], "linhas": len(d),
-                                   "periodo": periodo(d["Referencia"])})
+    for nome, info in ctx.orcado.items():
+        ctx.bases_info.append({"tipo": "Orçado SUP" if info["tipo"] == "sup" else "Orçado RF", "arquivo": info["arquivo"],
+                               "linhas": len(info["dados"]), "periodo": periodo(info["dados"]["Referencia"])})
 
     print("=" * 70)
     print("ETAPA 3/6 — MERGE")
