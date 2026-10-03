@@ -11,6 +11,32 @@ Abra https://raniere3000-tech.github.io/analise-faturamento-agua-esgoto/, clique
 
 O processamento roda no navegador: o site executa este mesmo script Python com o [Pyodide](https://pyodide.org) (`analisador.worker.js` + `executor_web.py`). Os arquivos não são enviados para nenhum servidor. Na primeira vez, o navegador baixa o Python (cerca de 30 MB), que depois fica em cache.
 
+## Abas DRE e Indiretas
+
+Além do comparativo (aba **Diretas**), o relatório tem a aba **DRE** (Projeto/Linha × Orçado RF × Orçado SUP × Realizado, com Δ% e Δ R$) e a aba **Indiretas**, com filtros no cabeçalho do site, como no DRE_Unificado: **Superintendência** (Todas, LAGOS, LESTE, SEM SUP), **Referência** (RF + SUP, só RF, só RF SUP), **Mês** e **Grupo** (vale para Resumo e Diretas). A aba Indiretas traz orçado × realizado por classe, evolução mensal por classe (com gráfico) e quantidade/ticket médio. Coloque na mesma pasta:
+
+| Arquivo | Como é reconhecido | Usado para |
+|---|---|---|
+| Serviço avulso | nome com "avulso" (ou colunas Endereco Ligacao/Nome da Localidade) | Indiretas (rubrica → classe: CORTE, RELIGAÇÃO, LNA, LNE, SANÇÃO, OUTROS) |
+| Fatura do ciclo | colunas Rubrica/Valor Parcela | Diretas e Cancelamento (rubricas de cancelamento) |
+| RF (ex.: `RF01T26.xlsx`) | colunas Sup, Rubrica e um mês por coluna | Orçado RF |
+| RF SUP | mesmo modelo, com "SUP" no nome | Orçado SUP |
+
+A relação rubrica → classe, as rubricas de cancelamento e cidade → SUP ficam em `faturamento/regras.json`. A SUP vem da cidade (`Nome da Localidade`) da fatura ou do serviço avulso.
+
+## Estrutura do código
+
+O script do Colab foi dividido no pacote `faturamento/` (leitura, base, comparativo, análises, tabelas/painel HTML, relatório, pipeline). As regras de negócio (consumo mínimo, textos padrão, alertas) ficam em `faturamento/regras.json`; CSS e JS do relatório ficam em `faturamento/assets/`. `acompanhamento_faturamento.py` é só a linha de comando: `python acompanhamento_faturamento.py --pasta DADOS --modo local`.
+
+## Testes
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests -q
+```
+
+Os testes usam dados sintéticos e rodam também no GitHub Actions a cada push. Se criar um arquivo novo no pacote, inclua-o em `ARQUIVOS_PY` no `analisador.worker.js` (um teste confere).
+
 ## Como usar o script
 
 Defina `MODO_ORIGEM` no início do script:

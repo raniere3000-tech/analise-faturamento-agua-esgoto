@@ -4,9 +4,17 @@
 const PYODIDE_VERSAO = "0.29.5";
 const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSAO}/full/`;
 const PASTA = "/dados";
+// Arquivos do pacote Python que o site copia para o Pyodide (caminho no site -> pasta virtual /app)
+const ARQUIVOS_PY = [
+  "faturamento/__init__.py", "faturamento/analises.py", "faturamento/base.py", "faturamento/comparativo.py",
+  "faturamento/dre.py",
+  "faturamento/config.py", "faturamento/contexto.py", "faturamento/formatacao.py", "faturamento/leitura.py",
+  "faturamento/origem.py", "faturamento/painel_html.py", "faturamento/pipeline.py", "faturamento/progresso.py",
+  "faturamento/relatorio.py", "faturamento/tabelas_html.py", "faturamento/top20.py",
+  "faturamento/regras.json", "faturamento/assets/relatorio.css", "faturamento/assets/relatorio.js",
+];
 const SAIDAS = [
   "Relatorio_Comparativo.html",
-  "Base_Compilada_HISTORICO.xlsx",
   "Top100_Quedas_Consumo.xlsx",
 ];
 
@@ -29,6 +37,15 @@ async function preparaPython() {
   const micropip = pyodide.pyimport("micropip");
   await micropip.install(["openpyxl", "xlrd", "xlsxwriter"]);
 
+  avisa("etapa", { texto: "Carregando o programa de análise…" });
+  const FS = pyodide.FS;
+  for (const caminho of ARQUIVOS_PY) {
+    const resp = await fetch(caminho, { cache: "no-cache" });
+    if (!resp.ok) throw new Error(`Não foi possível baixar ${caminho} (HTTP ${resp.status}).`);
+    const destino = `/app/${caminho}`;
+    FS.mkdirTree(destino.substring(0, destino.lastIndexOf("/")));
+    FS.writeFile(destino, new Uint8Array(await resp.arrayBuffer()));
+  }
   const executor = await (await fetch("executor_web.py", { cache: "no-cache" })).text();
   pyodide.runPython(executor);
   return pyodide;
@@ -67,11 +84,10 @@ async function fasePreparar(arquivos) {
   for (const arq of arquivos) {
     pyodide.FS.writeFile(`${PASTA}/${arq.nome}`, new Uint8Array(arq.conteudo));
   }
-  const script = await (await fetch("acompanhamento_faturamento.py", { cache: "no-cache" })).text();
   avisa("etapa", { texto: "Lendo e cruzando os arquivos…" });
   const preparar = pyodide.globals.get("preparar");
   const progresso = (n, desc) => avisa("progresso", { pct: n, texto: desc });
-  const json = preparar(PASTA, script, progresso);
+  const json = preparar(PASTA, progresso);
   preparar.destroy();
   avisa("top20", { dados: JSON.parse(json) });
 }
