@@ -97,3 +97,17 @@ def test_arquivos_gerados_pelo_pipeline_nao_sao_lidos_como_entrada(pasta_pequena
     pd.DataFrame({"a": [1]}).to_excel(os.path.join(pasta_pequena, "Top100_Quedas_Consumo.xlsx"), index=False)
     r = classifica_arquivos(pasta_pequena)
     assert r["ignorados"] == []
+
+
+def test_padroniza_referencia_formatos_variados():
+    import pandas as pd
+    from faturamento.leitura import padroniza_referencia
+    s = pd.Series(["05/10/2026", "10/2026", "2026-10-05 00:00:00", "2026-10-05", "out/26", "Outubro/2026", "09/09/2026 00:00:00"])
+    assert list(padroniza_referencia(s)) == ["10/2026"] * 6 + ["09/2026"]
+
+
+def test_referencia_do_nome_formatos():
+    from faturamento.leitura import referencia_do_nome
+    assert referencia_do_nome("Consumo 10-2026.csv") == "10/2026"
+    assert referencia_do_nome("Consumo 10.2026.csv") == "10/2026"
+    assert referencia_do_nome("Consumo out-26.xlsx") == "10/2026"

@@ -115,13 +115,20 @@ def referencia_mes(valor):
 
 
 def padroniza_referencia(serie):
+    """Qualquer formato comum de data/mês -> 'MM/AAAA' (dd/mm/aaaa, mm/aaaa, aaaa-mm-dd hh:mm:ss, 'out/26'...)."""
     serie = serie.astype(str).str.strip()
-    dt_completa = pd.to_datetime(serie, format="%d/%m/%Y", errors="coerce")
-    faltantes = dt_completa.isna()
-    if faltantes.any():
-        dt_mes = pd.to_datetime(serie[faltantes], format="%m/%Y", errors="coerce")
-        dt_completa.loc[faltantes] = dt_mes
-    return dt_completa.dt.strftime("%m/%Y")
+    dt = pd.to_datetime(serie, format="%d/%m/%Y", errors="coerce")
+    for formato in ("%m/%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%Y-%m", "%m-%Y"):
+        faltam = dt.isna()
+        if not faltam.any():
+            break
+        dt.loc[faltam] = pd.to_datetime(serie[faltam], format=formato, errors="coerce")
+    faltam = dt.isna()
+    if faltam.any():                       # nomes de mês ('out/26', 'Outubro/2026') e o que sobrar
+        texto = serie[faltam].str.replace(r"(?i)^([a-zç]{3})[a-zç]*", lambda m: m.group(1), regex=True)
+        refs = texto.map(referencia_mes)
+        dt.loc[faltam] = pd.to_datetime(refs, format="%m/%Y", errors="coerce")
+    return dt.dt.strftime("%m/%Y")
 
 
 def acha_coluna_ligacao(df, tipo, caminho):
@@ -135,9 +142,15 @@ def acha_coluna_ligacao(df, tipo, caminho):
 
 
 def referencia_do_nome(nome_arquivo):
-    """Mês de referência (MM/AAAA) a partir do nome do arquivo de consumo, ex.: 'Consumo 09-2026.csv'."""
-    match = re.search(r"(\d{2})[-/](\d{4})", nome_arquivo)
-    return f"{match.group(1)}/{match.group(2)}" if match else np.nan
+    """Mês de referência (MM/AAAA) a partir do nome do arquivo de consumo ('Consumo 09-2026.csv', 'Consumo out-26.csv'...)."""
+    match = re.search(r"(?<!\d)(\d{2})[-/._ ](\d{4})(?!\d)", nome_arquivo)
+    if match and 1 <= int(match.group(1)) <= 12:
+        return f"{match.group(1)}/{match.group(2)}"
+    match = re.search(r"(?i)([a-zç]{3})[a-zç]*[-/._ ](\d{4}|\d{2})(?!\d)", nome_arquivo)
+    if match and match.group(1).lower() in MES_ABREV:
+        ano = match.group(2) if len(match.group(2)) == 4 else "20" + match.group(2)
+        return f"{MES_ABREV[match.group(1).lower()]:02d}/{ano}"
+    return np.nan
 
 
 def processa_consumo(caminho):

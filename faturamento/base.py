@@ -56,6 +56,11 @@ def monta_base(ctx):
         if nome not in ctx.orcado or len(longo) > len(ctx.orcado[nome]["dados"]):
             ctx.orcado[nome] = {"arquivo": arquivo, "tipo": tipo, "dados": longo}
     print(f"✅ Fatura: {len(fatura_total)} linhas")
+    if len(fatura_total) and "Referencia de Leitura" in fatura_total.columns:
+        sem_ref = int(fatura_total["Referencia de Leitura"].isna().sum())
+        if sem_ref:
+            ctx.avisos_dre.append(f"{sem_ref} linha(s) da fatura com 'Referencia de Leitura' vazia ou em formato não reconhecido "
+                                  "ficaram fora da análise.")
 
     def periodo(serie):
         meses = sorted({m for m in serie.dropna().astype(str) if len(m) == 7}, key=lambda r: (r[3:], r[:2]))
