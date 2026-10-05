@@ -3,6 +3,7 @@
 import html
 
 from .config import chave_texto
+from .formatacao import nome_mes
 from .dre import ROTULOS_ORCADO, prepara
 
 NOME_LINHA_DRE = {
@@ -12,8 +13,21 @@ NOME_LINHA_DRE = {
 }
 
 
+def _aviso_referencia_sem_fatura(ctx):
+    """Avisa quando algum arquivo tem referência mais nova que a da fatura (o relatório só fatura o que está na fatura)."""
+    mais_novas = {}
+    for info in ctx.bases_info:
+        if info["tipo"] not in ("Consumo", "Fatura", "Serviço avulso"):
+            continue
+        for m in str(info.get("periodo") or "").split(", "):
+            if len(m) == 7 and (m[3:], m[:2]) > (ctx.ref_atual[3:], ctx.ref_atual[:2]):
+                mais_novas.setdefault(m, []).append(f"{info['tipo']} {info['arquivo']}")
+    return [f"Há dados de {nome_mes(m)} em {', '.join(sorted(set(arqs)))}, mas a fatura não tem linhas dessa referência: "
+            f"o relatório usa {ctx.mes_atual} (última referência com fatura)." for m, arqs in sorted(mais_novas.items())]
+
+
 def _avisos(ctx):
-    avisos = list(ctx.avisos_dre)
+    avisos = list(ctx.avisos_dre) + _aviso_referencia_sem_fatura(ctx)
     if ctx.ajustes_feitos:
         avisos.append(f"Este relatório usa {ctx.ajustes_feitos} ligação(ões) da conferência com valores ajustados manualmente "
                       f"(referência {ctx.ref_atual}).")
