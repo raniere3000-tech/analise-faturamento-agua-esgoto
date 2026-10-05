@@ -845,23 +845,47 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   });
 
   // ===== Ao abrir o site: aguarda a pasta conectada e tenta carregar os arquivos sozinho =====
+  // O navegador só deixa pedir de novo a permissão da pasta depois de um clique/tecla do usuário.
+  // Então: se a permissão já vale, carrega na hora; se não, a PRIMEIRA interação com a página
+  // (clique em qualquer lugar ou tecla) reconecta e carrega sozinha.
   (async function inicia() {
     if (!("showDirectoryPicker" in window)) return;
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     const h = await idb.get("pasta");
     if (!h) return;
     pastaHandle = h;
     btnAtualizar.hidden = false;
     btnAtualizar.title = `Reler a pasta "${h.name}"`;
-    try {
-      if ((await h.queryPermission({ mode: "read" })) === "granted") {
-        setFonte(`Pasta anterior: <b>${h.name}</b> — lendo os arquivos…`);
-        analisaHandle(h);
-      } else {
-        setFonte(`Pasta anterior encontrada (<b>${h.name}</b>) — clique em <b>↻ Atualizar</b> para reconectar.`);
-      }
-    } catch (e) {
-      setFonte(`Pasta anterior encontrada (<b>${h.name}</b>) — clique em <b>↻ Atualizar</b> para reconectar.`);
+    const nome = h.name ? ` <b>${h.name}</b>` : "";
+
+    let permissao = "prompt";
+    try { permissao = await h.queryPermission({ mode: "read" }); } catch (e) {}
+    if (permissao === "granted") {
+      setFonte(`Pasta anterior:${nome} — lendo os arquivos…`);
+      analisaHandle(h);
+      return;
     }
+
+    // Tenta pedir a permissão já ao abrir (alguns navegadores deixam); senão, espera o 1º clique
+    try {
+      if ((await h.requestPermission({ mode: "read" })) === "granted") {
+        setFonte(`Pasta anterior:${nome} — lendo os arquivos…`);
+        analisaHandle(h);
+        return;
+      }
+    } catch (e) { /* precisa de um gesto do usuário */ }
+
+    setFonte(`Pasta anterior encontrada (${nome.trim() || "conectada"}) — <b>clique em qualquer lugar da página</b> para reconectar e carregar. No aviso do Chrome, escolha <b>Permitir em todas as visitas</b> para a conexão ser automática.`);
+    const reconecta = (ev) => {
+      document.removeEventListener("pointerdown", reconecta, true);
+      document.removeEventListener("keydown", reconecta, true);
+      if (rodando) return;
+      if (ev.target && ev.target.closest && ev.target.closest("#btnPasta")) return;   // quer escolher outra pasta
+      setFonte(`Reconectando${nome ? " com" + nome : ""}…`);
+      analisaHandle(h);
+    };
+    document.addEventListener("pointerdown", reconecta, true);
+    document.addEventListener("keydown", reconecta, true);
   })();
 })();
 </script>
