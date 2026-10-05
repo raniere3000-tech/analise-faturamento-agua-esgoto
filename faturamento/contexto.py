@@ -36,6 +36,7 @@ class Contexto:
 
     # Avisos exibidos no relatório
     ajustes_feitos: int = 0
+    avisos_base: list = field(default_factory=list)   # avisos da leitura dos arquivos (aba Dados)
     bases_info: list = field(default_factory=list)
     aviso_ajustes_html: str = ""
     alerta_minimo_html: str = ""

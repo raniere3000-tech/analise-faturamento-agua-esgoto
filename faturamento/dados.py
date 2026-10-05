@@ -27,7 +27,7 @@ def _aviso_referencia_sem_fatura(ctx):
 
 
 def _avisos(ctx):
-    avisos = list(ctx.avisos_dre) + _aviso_referencia_sem_fatura(ctx)
+    avisos = list(ctx.avisos_dre) + list(ctx.avisos_base) + _aviso_referencia_sem_fatura(ctx)
     if ctx.ajustes_feitos:
         avisos.append(f"Este relatório usa {ctx.ajustes_feitos} ligação(ões) da conferência com valores ajustados manualmente "
                       f"(referência {ctx.ref_atual}).")
