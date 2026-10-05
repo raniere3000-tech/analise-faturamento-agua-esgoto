@@ -13,6 +13,7 @@ class Contexto:
     progresso: Progresso
     classificacao: dict = field(default_factory=dict)
     base_final: pd.DataFrame = None
+    base_completa: pd.DataFrame = None     # base_final antes de limitar ao último grupo faturado
     fatura_total: pd.DataFrame = None
     cancelamento: pd.DataFrame = None      # linhas da fatura com rubricas de cancelamento
     avulso: pd.DataFrame = None            # serviços avulsos (receita indireta)

@@ -58,6 +58,7 @@ def limita_ao_ultimo_grupo(ctx):
     Ex.: se a última referência só tem faturamento dos grupos 01 a 05, os demais grupos (que ainda não
     faturaram) ficam de fora também nos outros meses, para a comparação ser entre os mesmos grupos."""
     base = ctx.base_final
+    ctx.base_completa = base          # base inteira (todos os grupos): a previsão de fechamento projeta os grupos que faltam
     atual = base[base["Referencia de Leitura"] == ctx.ref_atual]
     com_fat = atual[pd.to_numeric(atual["Valor (R$)"], errors="coerce").fillna(0) != 0]
     nums = [n for n in (_num_grupo(g) for g in com_fat["Grupo"].unique()) if n is not None]

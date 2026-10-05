@@ -214,3 +214,14 @@ td.num { text-align:right; }
 #view-tabelas .card h2 { font-size:15px; }
 .btn-baixar { margin-left:0; padding:4px 10px; font-size:12px; }
 @media print { .btn-baixar { display:none !important; } }
+
+/* Previsão de fechamento */
+.prev-titulo { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.prev-acoes { display:inline-flex; gap:6px; }
+.prev-acoes .btn-just { margin-left:0; padding:4px 10px; font-size:12px; }
+.tabela-previsao tbody tr td.prev-edit { background:#FFF8E1; cursor:text; outline:1px dashed #E0C070; outline-offset:-2px; }
+.tabela-previsao tbody tr td.prev-edit:focus { background:#FFFFFF; outline:2px solid var(--azul-claro); }
+.tabela-previsao tbody tr td.prev-edit.editado { background:#FFE9A8; font-weight:700; }
+.tabela-previsao td.p-prev { font-weight:700; }
+.tabela-previsao th.prev-col-prev { background:#8a6a12; }
+@media print { .prev-acoes { display:none !important; } }

@@ -150,3 +150,21 @@ def test_limita_ao_ultimo_grupo_faturado(tmp_path):
     assert set(ctx.comp_agua["Grupo"].astype(int)) <= {1, 2, 3, 4, 5}
     html = open(s.caminho_html, encoding="utf-8").read()
     assert "grupos até o 05" in html
+
+
+def test_previsao_de_fechamento_projeta_grupos_que_faltam(tmp_path):
+    from faturamento import Sessao
+    from faturamento.previsao import calcula_previsao
+    from dados_sinteticos import gera_pasta
+    gera_pasta(str(tmp_path))
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    s.preparar()
+    b = s.ctx.base_final
+    mais_recente = b["Referencia de Leitura"].max()
+    s.ctx.base_final = b[~((b["Referencia de Leitura"] == mais_recente) & (b["Grupo"].astype(int) > 5))]
+    s.continuar()
+    r = calcula_previsao(s.ctx, "TODAS")
+    assert r["faltam"] == ["06", "07", "08"]
+    assert r["falta"]["dA"] > 0 and r["atual"]["dA"] > 0
+    html = open(s.caminho_html, encoding="utf-8").read()
+    assert "tabela-previsao" in html and "Previsão de fechamento" in html

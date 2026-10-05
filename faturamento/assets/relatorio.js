@@ -532,3 +532,104 @@ document.addEventListener('click', function (e) {
     a.href = url; a.download = b.dataset.arquivo; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
 });
+
+// ===== Previsão de fechamento (aba DRE): células editáveis, totais refeitos aqui no navegador =====
+const PREV_BASICAS = ['dA', 'dE', 'iE', 'ri_CORTE', 'ri_RELIGAÇÃO', 'ri_LNA', 'ri_SANÇÃO', 'ri_OUTROS', 'ecoA', 'ecoE', 'volA', 'volE', 'canc'];
+const PREV_CLASSES_RI = ['ri_CORTE', 'ri_RELIGAÇÃO', 'ri_LNA', 'ri_SANÇÃO', 'ri_OUTROS'];
+const PREV_CHAVE_LS = 'faturamento_previsao_v1';
+let prevEdicoes = {}, prevOculta = false;
+try { const salvo = JSON.parse(localStorage.getItem(PREV_CHAVE_LS) || '{}'); prevEdicoes = salvo.edicoes || {}; prevOculta = !!salvo.oculta; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
+function prevSalvar() { try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta })); } catch (e) { /* ignora */ } }
+
+const prevN = (v, d) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+function prevFmt(v, formato) {
+    if (v === null || v === undefined || !isFinite(v)) return '-';
+    if (formato === 'dec') return prevN(v, 2);
+    if (formato === 'num') return prevN(v, 0);
+    const t = prevN(Math.abs(v), 0);
+    return v < 0 ? `R$ (${t})` : `R$ ${t}`;
+}
+function prevLer(txt) {                       // "1.234,56", "R$ (1.234)", "1234.5" -> número
+    let t = String(txt).replace(/R\$|\s/g, ''), neg = false;
+    if (/^\(.*\)$/.test(t)) { neg = true; t = t.slice(1, -1); }
+    if (t.startsWith('-')) { neg = !neg; t = t.slice(1); }
+    if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+    const v = parseFloat(t);
+    return isNaN(v) ? null : (neg ? -v : v);
+}
+const prevAttr = (el, a) => { const v = el.getAttribute(a); return v === null || v === '' ? null : parseFloat(v); };
+const prevChave = (tab, k) => `${tab.dataset.mes}|${tab.dataset.prev}|${k}`;
+
+function prevRecalcular(tab) {
+    const linha = k => tab.querySelector(`tr[data-k="${k}"]`);
+    const F = {};
+    PREV_BASICAS.forEach(k => {
+        const tr = linha(k); if (!tr) return;
+        const ed = prevEdicoes[prevChave(tab, k)];
+        F[k] = ed !== undefined ? ed : prevAttr(tr, 'data-auto');
+    });
+    const soma = ks => ks.some(k => F[k] != null) ? ks.reduce((a, k) => a + (F[k] || 0), 0) : null;
+    const div = (a, b) => (a != null && b) ? a / b : null;
+    F.dTot = soma(['dA', 'dE']); F.iA = soma(PREV_CLASSES_RI);
+    F.bruto = soma(['dTot', 'iA', 'iE']);
+    F.vmA = div(F.volA, F.ecoA); F.vmE = div(F.volE, F.ecoE);
+    F.tarA = div(F.dA, F.volA); F.tarE = div(F.dE, F.volE);
+    F.tickA = div(F.dA, F.ecoA); F.tickE = div(F.dE, F.ecoE);
+    const proporcao = ['vmA', 'vmE', 'tarA', 'tarE', 'tickA', 'tickE'];
+    tab.querySelectorAll('tbody tr[data-k]').forEach(tr => {
+        const k = tr.dataset.k, formato = tr.dataset.fmt, real = prevAttr(tr, 'data-real'), v = F[k] === undefined ? null : F[k];
+        const cel = tr.querySelector('.p-prev');
+        if (cel && document.activeElement !== cel) cel.textContent = prevFmt(v, formato);
+        if (cel) cel.classList.toggle('editado', prevEdicoes[prevChave(tab, k)] !== undefined);
+        const falta = tr.querySelector('.p-falta');
+        if (falta) falta.textContent = (proporcao.includes(k) || v == null || real == null) ? '-' : prevFmt(v - real, formato);
+        const marca = (el, base) => {
+            const pct = (v != null && base) ? v / base - 1 : null;
+            el.textContent = pct === null ? '-' : prevN(pct * 100, 1) + '%';
+            el.classList.toggle('neg', pct !== null && pct < -0.0005 && tr.dataset.canc !== '1');
+        };
+        const ant = tr.querySelector('.p-dant'); if (ant) marca(ant, prevAttr(ant, 'data-ant'));
+        tr.querySelectorAll('.p-dorc').forEach(el => marca(el, prevAttr(el, 'data-orc')));
+    });
+}
+
+function prevRecalcularTodas() { document.querySelectorAll('table.tabela-previsao').forEach(prevRecalcular); }
+
+document.addEventListener('focusin', e => {
+    const cel = e.target.closest && e.target.closest('.prev-edit'); if (!cel) return;
+    const tab = cel.closest('table'), k = cel.dataset.k, tr = cel.closest('tr');
+    const ed = prevEdicoes[prevChave(tab, k)], atual = ed !== undefined ? ed : prevAttr(tr, 'data-auto');
+    cel.textContent = atual == null ? '' : String(Math.round(atual * 100) / 100).replace('.', ',');
+    const r = document.createRange(); r.selectNodeContents(cel); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+});
+document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.closest && e.target.closest('.prev-edit')) { e.preventDefault(); e.target.blur(); }
+    if (e.key === 'Escape' && e.target.closest && e.target.closest('.prev-edit')) { e.target.dataset.cancelar = '1'; e.target.blur(); }
+});
+document.addEventListener('focusout', e => {
+    const cel = e.target.closest && e.target.closest('.prev-edit'); if (!cel) return;
+    const tab = cel.closest('table'), k = cel.dataset.k, tr = cel.closest('tr'), chave = prevChave(tab, k);
+    if (cel.dataset.cancelar) { delete cel.dataset.cancelar; }
+    else {
+        const txt = cel.textContent.trim(), v = txt === '' ? null : prevLer(txt), auto = prevAttr(tr, 'data-auto');
+        if (v === null) delete prevEdicoes[chave];
+        else if (auto !== null && Math.abs(v - auto) < 0.005) delete prevEdicoes[chave];
+        else prevEdicoes[chave] = v;
+        prevSalvar();
+    }
+    prevRecalcular(tab);
+});
+
+function previsaoRestaurar(botao) {
+    const tab = botao.closest('.prev-card').querySelector('table.tabela-previsao');
+    Object.keys(prevEdicoes).filter(c => c.startsWith(`${tab.dataset.mes}|${tab.dataset.prev}|`)).forEach(c => delete prevEdicoes[c]);
+    prevSalvar(); prevRecalcular(tab);
+}
+function previsaoAplicarVisibilidade() {
+    document.querySelectorAll('.prev-corpo').forEach(c => { c.style.display = prevOculta ? 'none' : ''; });
+    document.querySelectorAll('.btn-prev-toggle').forEach(b => { b.textContent = prevOculta ? 'Mostrar previsão' : 'Ocultar previsão'; });
+    document.querySelectorAll('.btn-prev-restaurar').forEach(b => { b.style.display = prevOculta ? 'none' : ''; });
+}
+function previsaoAlternar() { prevOculta = !prevOculta; prevSalvar(); previsaoAplicarVisibilidade(); }
+prevRecalcularTodas(); previsaoAplicarVisibilidade();

@@ -89,6 +89,8 @@ def prepara(ctx):
         return df
 
     ctx.base_final = marca(ctx.base_final, "N. Ligação")
+    if getattr(ctx, "base_completa", None) is not None:
+        ctx.base_completa = marca(ctx.base_completa, "N. Ligação")
     ctx.df_atual = marca(ctx.df_atual, "N. Ligação")
     ctx.df_anterior = marca(ctx.df_anterior, "N. Ligação")
     ctx.cancelamento = marca(ctx.cancelamento, "N. da Ligacao")
@@ -339,6 +341,7 @@ def _bloco(sup, ref, conteudo):
 
 
 def gera_aba_dre_html(ctx):
+    from .previsao import previsao_html      # importado aqui: previsao.py usa funções deste módulo
     prepara(ctx)
     arquivos = [html.escape(i["arquivo"]) for i in ctx.orcado.values()]
     nota = ("Orçado: " + " · ".join(arquivos)) if arquivos else "Sem planilhas de orçado na pasta"
@@ -348,7 +351,8 @@ def gera_aba_dre_html(ctx):
             blocos.append(_bloco(sup, ref, (
                 f'<div class="card"><h2>DRE — {html.escape(_nome_sup(sup))} — {nome_mes(ref)}</h2>'
                 f'<p class="nota-secao">{nota}. Em Referência: compare o realizado com cada RF ou com o RF SUP, ou compare só os orçados (RF × RF SUP).</p>'
-                f'{tabela_dre(ctx, sup, ref)}</div>')))
+                f'{tabela_dre(ctx, sup, ref)}</div>'
+                + (previsao_html(ctx, sup) if ref == ctx.ref_atual else ""))))
     return "".join(blocos)
 
 
