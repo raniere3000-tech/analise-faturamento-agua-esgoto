@@ -159,7 +159,7 @@ def test_forecast_em_aba_propria_e_comparacao_entre_duas_planilhas(tmp_path):
     assert 'id="view-forecast"' in html and 'id="btn-forecast"' in html
     i, j = html.index('id="view-forecast"'), html.index('id="view-dados"')
     assert "tabela-previsao" in html[i:j]
-    assert "tabela-previsao" not in html[html.index('id="view-dre"'):html.index('id="view-indiretas"')]
+    assert "tabela-previsao" not in html[html.index('id="view-dre"'):html.index('id="view-forecast"')]
     # qualquer par de planilhas de orçado tem colunas de diferença (ex.: RF01T26 × RF3T25)
     assert 'data-combo="RF3T25|RF01T26"' in html or 'data-combo="RF01T26|RF3T25"' in html
     assert '"fontes"' in html
