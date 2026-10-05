@@ -146,3 +146,20 @@ def test_aba_dados_lista_bases_avisos_e_mapeamento(sessao):
 def test_rolagem_da_pagina_sobre_a_tabela():
     from faturamento.relatorio import carrega_asset
     assert "'wheel'" not in carrega_asset("relatorio.js")      # a roda do mouse não pode ser capturada pela tabela
+
+
+def test_forecast_em_aba_propria_e_comparacao_entre_duas_planilhas(tmp_path):
+    from faturamento import Sessao
+    from dados_sinteticos import gera_pasta
+    gera_pasta(str(tmp_path), com_dre=True)
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    s.preparar()
+    s.continuar()
+    html = open(s.caminho_html, encoding="utf-8").read()
+    assert 'id="view-forecast"' in html and 'id="btn-forecast"' in html
+    i, j = html.index('id="view-forecast"'), html.index('id="view-dados"')
+    assert "tabela-previsao" in html[i:j]
+    assert "tabela-previsao" not in html[html.index('id="view-dre"'):html.index('id="view-indiretas"')]
+    # qualquer par de planilhas de orçado tem colunas de diferença (ex.: RF01T26 × RF3T25)
+    assert 'data-combo="RF3T25|RF01T26"' in html or 'data-combo="RF01T26|RF3T25"' in html
+    assert '"fontes"' in html

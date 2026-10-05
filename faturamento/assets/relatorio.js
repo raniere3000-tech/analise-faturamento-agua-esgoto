@@ -1,6 +1,6 @@
 const CHAVE_JUSTIFICATIVA = '__CHAVE_JUSTIFICATIVA__';
 
-const VIEWS = ['dre', 'resumo', 'tabelas', 'indiretas', 'dados'];
+const VIEWS = ['dre', 'resumo', 'tabelas', 'indiretas', 'dados', 'forecast'];
 function mostrarView(view) {
     VIEWS.forEach(v => {
         document.getElementById('view-' + v).classList.toggle('ativo', v === view);
@@ -8,7 +8,7 @@ function mostrarView(view) {
         document.getElementById('btn-' + v).classList.toggle('active', v === view);
     });
     const seletor = document.getElementById('seletorSup');
-    if (seletor) seletor.hidden = !(view === 'dre' || view === 'indiretas');
+    if (seletor) seletor.hidden = !(view === 'dre' || view === 'indiretas' || view === 'forecast');
 }
 
 // Filtros da DRE/Indiretas: superintendência, mês e referência (RF / SUP / ambos)
@@ -18,6 +18,7 @@ function definirFiltros(parcial) {
     document.querySelectorAll('.sup-bloco').forEach(b => {
         b.style.display = (b.dataset.sup === ESTADO.sup && b.dataset.mes === ESTADO.mes) ? 'block' : 'none';
     });
+    document.querySelectorAll('.prev-bloco').forEach(b => { b.style.display = (b.dataset.sup === ESTADO.sup) ? 'block' : 'none'; });
     aplicarFontes();
     [['selSup', ESTADO.sup], ['selMes', ESTADO.mes], ['selRef', ESTADO.ref]].forEach(([id, v]) => {
         const el = document.getElementById(id); if (el && v) el.value = v;
@@ -37,7 +38,7 @@ function aplicarFontes() {
     });
     document.querySelectorAll('[data-real]').forEach(el => { el.style.display = soOrcados ? 'none' : ''; });
     document.querySelectorAll('[data-combo]').forEach(el => {
-        el.style.display = (el.dataset.combo === chave && sel.length === 2) ? '' : 'none';
+        el.style.display = (sel.length === 2 && el.dataset.combo.split('|').every(x => sel.includes(x))) ? '' : 'none';
     });
 }
 

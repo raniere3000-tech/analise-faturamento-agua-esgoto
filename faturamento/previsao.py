@@ -148,3 +148,11 @@ def previsao_html(ctx, sup):
             f'<div class="prev-corpo"><p class="nota-secao">{nota}</p>'
             f'<div class="tabela-wrap"><table class="tabela-dre tabela-previsao" data-prev="{e(sup)}" data-mes="{ctx.ref_atual}"><thead><tr>' + "".join(cab)
             + "</tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div></div></div>")
+
+
+def gera_aba_forecast_html(ctx):
+    """Aba "Forecast": um bloco por superintendência (o filtro Superintendência escolhe qual aparece)."""
+    from .dre import lista_sups, prepara
+    prepara(ctx)
+    return "".join(f'<div class="prev-bloco" data-sup="{html.escape(sup, quote=True)}">{previsao_html(ctx, sup)}</div>'
+                   for sup in lista_sups(ctx))

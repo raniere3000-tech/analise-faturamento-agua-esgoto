@@ -269,7 +269,7 @@ def _celulas_delta(real, orc, formato, eh_canc, fonte):
 def _fontes(ctx):
     """Planilhas de orçado: RFs primeiro, depois RF SUP. E as combinações RF × RF SUP (comparação entre orçados)."""
     fontes = fontes_rf(ctx) + fontes_sup(ctx)
-    combos = [(r, s) for r in fontes_rf(ctx) for s in fontes_sup(ctx)]
+    combos = [(a, b) for i, a in enumerate(fontes) for b in fontes[i + 1:]]      # qualquer par de planilhas
     return fontes, combos
 
 
@@ -341,7 +341,6 @@ def _bloco(sup, ref, conteudo):
 
 
 def gera_aba_dre_html(ctx):
-    from .previsao import previsao_html      # importado aqui: previsao.py usa funções deste módulo
     prepara(ctx)
     arquivos = [html.escape(i["arquivo"]) for i in ctx.orcado.values()]
     nota = ("Orçado: " + " · ".join(arquivos)) if arquivos else "Sem planilhas de orçado na pasta"
@@ -351,8 +350,7 @@ def gera_aba_dre_html(ctx):
             blocos.append(_bloco(sup, ref, (
                 f'<div class="card"><h2>DRE — {html.escape(_nome_sup(sup))} — {nome_mes(ref)}</h2>'
                 f'<p class="nota-secao">{nota}. Em Referência: compare o realizado com cada RF ou com o RF SUP, ou compare só os orçados (RF × RF SUP).</p>'
-                f'{tabela_dre(ctx, sup, ref)}</div>'
-                + (previsao_html(ctx, sup) if ref == ctx.ref_atual else ""))))
+                f'{tabela_dre(ctx, sup, ref)}</div>')))
     return "".join(blocos)
 
 
@@ -465,6 +463,6 @@ def gera_filtros_dre_html(ctx):
 def gera_info_filtros_json(ctx):
     refs = opcoes_referencia(ctx)
     info = {"sups": lista_sups(ctx), "meses": [{"ref": m, "label": nome_mes(m)} for m in lista_meses(ctx)],
-            "mesAtual": ctx.ref_atual, "refs": [{"valor": v, "rotulo": t} for v, t in refs],
+            "mesAtual": ctx.ref_atual, "fontes": fontes_rf(ctx) + fontes_sup(ctx), "refs": [{"valor": v, "rotulo": t} for v, t in refs],
             "refPadrao": refs[0][0] if refs else ""}
     return '<script type="application/json" id="info-filtros">' + json.dumps(info).replace("<", "\\u003c") + "</script>"

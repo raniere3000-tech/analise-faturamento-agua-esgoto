@@ -317,7 +317,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     </div>
     <div class="filtros" id="filtros">
       <label class="fsel" id="fgSup"><span>Superintendência</span><select id="selSupTop" disabled><option>—</option></select></label>
-      <label class="fsel" id="fgRef"><span>Referência</span><select id="selRefTop" disabled><option>—</option></select></label>
+      <label class="fsel" id="fgRef" title="Escolha até duas planilhas de orçado para comparar (Δ % e Δ R$)"><span>Comparar</span><select id="selRef1Top" disabled><option>—</option></select><select id="selRef2Top" disabled><option>—</option></select></label>
       <label class="fsel" id="fgMes"><span>Mês</span><select id="selMesTop" disabled><option>—</option></select></label>
       <div class="fsel" id="fgGrupo"><span>Grupo</span>
         <div class="dropdown" id="ddGrupo"><button type="button" id="btnGrupo" disabled>Todos ▾</button><div class="dropdown-content" id="listaGrupos"></div></div></div>
@@ -350,6 +350,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   <button class="tab" data-view="tabelas" type="button">Diretas</button>
   <button class="tab" data-view="indiretas" type="button">Indiretas</button>
   <button class="tab" data-view="dados" type="button">Dados</button>
+  <button class="tab" data-view="forecast" type="button">Forecast</button>
 </nav>
 
 <main class="conteudo" id="inicio">
@@ -780,9 +781,10 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     resumo: ["Resumo", "KPIs, gráfico de faturamento por grupo e destaques do mês"],
     tabelas: ["Diretas", "Tabelas de água e esgoto por grupo, ciclos, consumo mínimo e Top 100"],
     dados: ["Dados", "Bases carregadas, orçado reconhecido e avisos"],
+    forecast: ["Forecast", "Previsão de fechamento do mês, editável: ao mudar um valor, os totais e comparações se refazem"],
   };
   // quais filtros valem em cada aba (os demais ficam esmaecidos)
-  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Grupo"], tabelas: ["Grupo"], dados: [] };
+  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Grupo"], tabelas: ["Grupo"], dados: [], forecast: ["Sup", "Ref"] };
 
   function aplicaFiltros() {
     document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
@@ -813,7 +815,11 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     filtrosEstado.mes = infoFiltros ? infoFiltros.mesAtual : null;
     const opcoes = (sel, itens, atual) => { sel.innerHTML = itens.map(([v, t]) => `<option value="${escapa(v)}" ${v === atual ? "selected" : ""}>${escapa(t)}</option>`).join(""); sel.disabled = false; };
     opcoes($("selSupTop"), infoFiltros.sups.map((s) => [s, s === "TODAS" ? "Todas" : s]), "TODAS");
-    opcoes($("selRefTop"), infoFiltros.refs.length ? infoFiltros.refs.map((r) => [r.valor, r.rotulo]) : [["", "Sem orçado"]], filtrosEstado.ref);
+    const fontes = infoFiltros.fontes || [];
+    const [r1, r2] = (infoFiltros.refPadrao || "").split("|");
+    const itensRef = [["", "—"]].concat(fontes.map((f) => [f, f]));
+    opcoes($("selRef1Top"), fontes.length ? itensRef : [["", "Sem orçado"]], r1 || "");
+    opcoes($("selRef2Top"), fontes.length ? itensRef : [["", "—"]], r2 || "");
     opcoes($("selMesTop"), infoFiltros.meses.map((m) => [m.ref, m.label]), filtrosEstado.mes);
     const grupos = Array.from(doc.querySelectorAll(".chk-grupo"));
     $("listaGrupos").innerHTML = `<label><input type="checkbox" id="chkTodosGrupos" checked> <b>Selecionar todos</b></label><hr>` +
@@ -838,7 +844,12 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     filtrosEstado.view = t.dataset.view; aplicaFiltros();
   });
   $("selSupTop").addEventListener("change", (e) => { filtrosEstado.sup = e.target.value; aplicaFiltros(); });
-  $("selRefTop").addEventListener("change", (e) => { filtrosEstado.ref = e.target.value; aplicaFiltros(); });
+  const mudouRef = () => {
+    const escolhidas = [$("selRef1Top").value, $("selRef2Top").value].filter((v, i, a) => v && a.indexOf(v) === i);
+    filtrosEstado.ref = escolhidas.join("|"); aplicaFiltros();
+  };
+  $("selRef1Top").addEventListener("change", mudouRef);
+  $("selRef2Top").addEventListener("change", mudouRef);
   $("selMesTop").addEventListener("change", (e) => { filtrosEstado.mes = e.target.value; aplicaFiltros(); });
   $("btnGrupo").addEventListener("click", (e) => { e.stopPropagation(); $("ddGrupo").classList.toggle("aberto"); });
   document.addEventListener("click", (e) => { if (!e.target.closest("#ddGrupo")) $("ddGrupo").classList.remove("aberto"); });
