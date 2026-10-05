@@ -1,6 +1,6 @@
 const CHAVE_JUSTIFICATIVA = '__CHAVE_JUSTIFICATIVA__';
 
-const VIEWS = ['resumo', 'dre', 'tabelas', 'indiretas', 'dados'];
+const VIEWS = ['dre', 'resumo', 'tabelas', 'indiretas', 'dados'];
 function mostrarView(view) {
     VIEWS.forEach(v => {
         document.getElementById('view-' + v).classList.toggle('ativo', v === view);

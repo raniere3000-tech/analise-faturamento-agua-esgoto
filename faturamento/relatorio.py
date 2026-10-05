@@ -92,8 +92,8 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
 
 <div class="toolbar">
   <div class="toggle" role="tablist" aria-label="Visualização">
-    <button id="btn-resumo" class="active" onclick="mostrarView('resumo')">Resumo</button>
     <button id="btn-dre" onclick="mostrarView('dre')">DRE</button>
+    <button id="btn-resumo" class="active" onclick="mostrarView('resumo')">Resumo</button>
     <button id="btn-tabelas" onclick="mostrarView('tabelas')">Diretas</button>
     <button id="btn-indiretas" onclick="mostrarView('indiretas')">Indiretas</button>
     <button id="btn-dados" onclick="mostrarView('dados')">Dados</button>
