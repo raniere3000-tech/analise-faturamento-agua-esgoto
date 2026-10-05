@@ -276,6 +276,31 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 .esperados { margin-top: 10px; font-size: 12px; }
 .esperados li { margin-bottom: 3px; }
 .painel-vazio .rodape { margin-top: 8px; }
+
+/* ===== Cabeçalho no mesmo layout do DRE Unificado: título à esquerda, filtros e botões à direita, na mesma linha ===== */
+.top-linha { flex-wrap: nowrap; align-items: center; gap: 8px 14px; }
+.fonte-status[hidden] { display: none; }
+.ferramentas { flex: none; flex-wrap: nowrap; }
+.filtros { flex-wrap: nowrap; }
+.top-linha h1 { white-space: nowrap; }
+.fsel select, .fsel .dropdown > button { padding: 5px 6px; max-width: 102px; text-overflow: ellipsis; }
+.fsel > span { padding: 4px 5px; letter-spacing: .2px; font-size: 9px; }
+.top { padding-right: 14px; }
+.fsel .dropdown > button { white-space: nowrap; }
+.filtros { gap: 6px; }
+.ferramentas { gap: 6px; }
+.ferramentas button, .ferramentas .btn { padding: 5px 6px; font-size: 12px; white-space: nowrap; }
+.top-linha h1 { font-size: 14px; }
+
+.top-linha > div:first-child { flex: 0 1 auto; }
+.filtros { margin: 0; flex: 1 1 auto; justify-content: flex-end; gap: 6px 10px; align-items: center; }
+.fsel { flex-direction: row; align-items: center; gap: 0; border: 1px solid rgba(255,255,255,.38); border-radius: 9px; background: rgba(255,255,255,.07); position: relative; color: #d5e7ef; font-size: 9.5px; font-weight: 750; letter-spacing: .45px; text-transform: uppercase; }
+.fsel > span { padding: 4px 8px; }
+.fsel select, .fsel .dropdown > button { min-width: 0; border: 0; border-left: 1px solid rgba(255,255,255,.25); border-radius: 0 8px 8px 0; background: transparent; padding: 5px 9px; font-size: 12px; font-weight: 700; color: #fff; text-transform: none; letter-spacing: 0; }
+.fsel select { font-weight: 400; }
+.ferramentas { gap: 6px 10px; }
+.fonte-status { margin: 4px 0 0; font-size: 11px; }
+.top .progresso { margin-top: 4px; }
 /* o relatório ocupa o resto da tela e rola por dentro */
 body.relatorio-aberto { height: 100vh; overflow: hidden; }
 body.relatorio-aberto .conteudo { min-height: 0; }
@@ -290,6 +315,13 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v3</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
+    <div class="filtros" id="filtros">
+      <label class="fsel" id="fgSup"><span>Superintendência</span><select id="selSupTop" disabled><option>—</option></select></label>
+      <label class="fsel" id="fgRef"><span>Referência</span><select id="selRefTop" disabled><option>—</option></select></label>
+      <label class="fsel" id="fgMes"><span>Mês</span><select id="selMesTop" disabled><option>—</option></select></label>
+      <div class="fsel" id="fgGrupo"><span>Grupo</span>
+        <div class="dropdown" id="ddGrupo"><button type="button" id="btnGrupo" disabled>Todos ▾</button><div class="dropdown-content" id="listaGrupos"></div></div></div>
+    </div>
     <div class="ferramentas">
       <span id="downloads" style="display:contents"></span>
       <button type="button" class="btn-top" id="btnPasta">📁 Conectar pasta</button>
@@ -298,13 +330,6 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       <button type="button" class="btn-top" id="btnPdf" hidden>🖨 Exportar PDF</button>
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
     </div>
-  </div>
-  <div class="filtros" id="filtros">
-    <label class="fsel" id="fgSup"><span>Superintendência</span><select id="selSupTop" disabled><option>—</option></select></label>
-    <label class="fsel" id="fgRef"><span>Referência</span><select id="selRefTop" disabled><option>—</option></select></label>
-    <label class="fsel" id="fgMes"><span>Mês</span><select id="selMesTop" disabled><option>—</option></select></label>
-    <div class="fsel" id="fgGrupo"><span>Grupo</span>
-      <div class="dropdown" id="ddGrupo"><button type="button" id="btnGrupo" disabled>Todos ▾</button><div class="dropdown-content" id="listaGrupos"></div></div></div>
   </div>
   <div class="fonte-status" id="fonteStatus">Nenhuma pasta conectada.</div>
   <div class="progresso" id="progresso" hidden>
@@ -451,6 +476,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   function abreRelatorio({ saidas, refAtual, refAnterior }) {
     setStatus("Relatório gerado", 100);
     progresso.hidden = true;                      // pronto: some a barra e as informações
+    $("fonteStatus").hidden = true;
     bloqueia(false);
 
     urlsCriadas.forEach(URL.revokeObjectURL);
@@ -527,6 +553,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
   function iniciaExecucao() {
     fechaRelatorio();
+    $("fonteStatus").hidden = false;
     progresso.hidden = false;
     progresso.classList.remove("erro");
     $("logExecucao").textContent = "";
