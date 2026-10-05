@@ -125,30 +125,31 @@ body.relatorio-aberto { overflow: hidden; }
 
 
 /* ===== Conferência do Top 20 ===== */
-.etapa-top20 { position: fixed; inset: 0; z-index: 9; background: linear-gradient(135deg, var(--preto) 0%, var(--marinho) 55%, var(--azul) 100%); overflow: auto; padding: 24px 16px; display: flex; justify-content: center; align-items: flex-start; }
-.painel-top20 { width: 100%; max-width: 1040px; background: #fff; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,.25); padding: 24px 26px 22px; }
-.painel-top20 h2 { margin: 0 0 4px; font-size: 1.25rem; font-weight: 600; color: var(--marinho); }
-.painel-top20 .lead { margin: 0 0 14px; font-size: .9rem; }
-.tabela-rolagem { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.etapa-top20 { position: fixed; inset: 0; z-index: 9; background: linear-gradient(135deg, var(--preto) 0%, var(--marinho) 55%, var(--azul) 100%); overflow: hidden; padding: 12px 16px; display: flex; justify-content: center; align-items: stretch; }
+.painel-top20 { width: 100%; max-width: 1040px; min-height: 0; display: flex; flex-direction: column; background: #fff; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.25); padding: 12px 18px 10px; }
+.painel-top20 h2 { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--marinho); }
+.painel-top20 .badge { margin: 0 8px 0 0; font-size: 11px; padding: 2px 9px; vertical-align: middle; }
+.painel-top20 .lead { margin: 2px 0 8px; font-size: .8rem; line-height: 1.35; }
+.tabela-rolagem { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
 .tabela-top20 { width: 100%; border-collapse: collapse; font-size: .84rem; }
-.tabela-top20 th { position: sticky; top: 0; z-index: 1; background: var(--marinho); color: #fff; font-weight: 600; text-align: left; padding: 8px 10px; white-space: nowrap; }
+.tabela-top20 th { position: sticky; top: 0; z-index: 1; background: var(--marinho); color: #fff; font-weight: 600; text-align: left; padding: 6px 10px; white-space: nowrap; }
 .tabela-top20 th.num, .tabela-top20 td.num { text-align: right; }
 .tabela-top20 th.ordenavel { cursor: pointer; user-select: none; }
 .tabela-top20 th.ordenavel:hover { background: var(--azul); }
 .tabela-top20 .seta { font-size: .7rem; opacity: .9; }
-.tabela-top20 td { padding: 5px 10px; border-top: 1px solid var(--line); vertical-align: middle; }
+.tabela-top20 td { padding: 3px 10px; border-top: 1px solid var(--line); vertical-align: middle; }
 .tabela-top20 tr:nth-child(even) td { background: #F7F8FA; }
 .tabela-top20 td.cli { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tabela-top20 input {
-  width: 118px; padding: 5px 8px; font: inherit; text-align: right; font-variant-numeric: tabular-nums;
+  width: 110px; padding: 3px 8px; font: inherit; font-size: .82rem; text-align: right; font-variant-numeric: tabular-nums;
   border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--preto);
 }
 .tabela-top20 input:focus { outline: 2px solid var(--azul-claro); outline-offset: 0; border-color: var(--azul-claro); }
 .tabela-top20 input.alterado { border-color: var(--laranja); background: #FFF4EA; }
 .tabela-top20 input.invalido { border-color: #B42318; background: #FDECEA; }
-.tabela-top20 .orig { display: block; font-size: .7rem; color: var(--muted); text-align: right; }
-.acoes-top20 { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; position: sticky; bottom: -22px; background: #fff; padding: 12px 0 4px; border-top: 1px solid var(--line); }
-.acoes-top20 .btn { padding: 11px 18px; font-size: .92rem; font-weight: 600; }
+.tabela-top20 .orig { display: none; font-size: .7rem; color: var(--muted); text-align: right; }
+.acoes-top20 { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); flex: none; }
+.acoes-top20 .btn { padding: 8px 14px; font-size: .86rem; font-weight: 600; }
 .acoes-top20 .btn-principal { width: auto; }
 .acoes-top20 .btn-secundario { width: auto; margin-top: 0; }
 .acoes-top20 .contador { margin-left: auto; font-size: .86rem; color: var(--muted); }
@@ -251,6 +252,34 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 .dropdown-content { left: 0; right: auto; }
 .top h1 { margin-bottom: 0; }
 .top .progresso { margin-top: 12px; }
+
+/* ===== Compacto: título, filtros e abas ocupam menos espaço; a 1ª informação cabe na tela (1366×768) ===== */
+.top { padding: 8px 20px 8px; }
+.top-linha { gap: 6px 16px; }
+.top h1 { font-size: 15px; margin: 0; line-height: 1.25; }
+.eyebrow { font-size: 10px; letter-spacing: 1.2px; }
+.versao { font-size: 9.5px; padding: 0 7px; margin-left: 6px; }
+.btn-top { padding: 5px 10px; font-size: 12px; }
+.filtros { margin-top: 6px; gap: 6px 14px; align-items: center; }
+.fsel { flex-direction: row; align-items: center; gap: 6px; font-size: 9.5px; }
+.fsel select, .fsel .dropdown > button { min-width: 120px; padding: 4px 8px; font-size: 12px; }
+.top .progresso { margin-top: 6px; }
+.prog-linha .barra { height: 8px; }
+.fonte-status { margin-top: 4px; }
+.nav { padding: 0 20px; }
+.tab { padding: 7px 14px; font-size: 13px; }
+.vazio-wrap { padding: 12px 20px 16px; }
+.painel-vazio { padding: 12px 16px; }
+.painel-vazio h2 { font-size: 14px; }
+.painel-vazio .dica { margin-bottom: 8px; }
+.vazio { padding: 16px; }
+.esperados { margin-top: 10px; font-size: 12px; }
+.esperados li { margin-bottom: 3px; }
+.painel-vazio .rodape { margin-top: 8px; }
+/* o relatório ocupa o resto da tela e rola por dentro */
+body.relatorio-aberto { height: 100vh; overflow: hidden; }
+body.relatorio-aberto .conteudo { min-height: 0; }
+#quadroRelatorio { min-height: 0; }
 </style>
 </head>
 <body>
@@ -316,12 +345,11 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 
 <div class="etapa-top20" id="etapaTop20" hidden>
   <div class="painel-top20">
-    <div class="badge">Etapa 2 · Conferência</div>
-    <h2 id="top20Titulo">Top 20 clientes com maior consumo</h2>
+    <h2 id="top20Titulo"><span class="badge">Etapa 2 · Conferência</span><span id="top20TituloTexto"></span></h2>
     <p class="lead"><span id="textoFiltro"></span>Maiores <b>Consumo Faturado</b> do mês atual. Se quiser, altere o consumo ou o valor total (água + esgoto) de algum cliente. Ao aplicar, toda a análise e a comparação usam os valores alterados. Os arquivos da pasta não são modificados.</p>
-    <p class="nota" id="avisoTop20" hidden style="color:var(--laranja-texto);font-weight:600;margin:0 0 10px;">A coluna "Situacao Conta" não foi encontrada nos arquivos, então abaixo aparece o Top 20 de maior consumo de todas as contas.</p>
-    <input type="search" id="buscaTop20" placeholder="Filtrar por ligação, cliente ou grupo…" aria-label="Filtrar clientes" style="width:100%;max-width:360px;margin:0 0 10px;padding:8px 12px;font:inherit;font-size:.88rem;border:1px solid var(--line);border-radius:8px;">
-    <div class="tabela-rolagem" style="max-height:62vh;overflow-y:auto;">
+    <p class="nota" id="avisoTop20" hidden style="flex:none;color:var(--laranja-texto);font-weight:600;font-size:.8rem;margin:0 0 6px;">A coluna "Situacao Conta" não foi encontrada nos arquivos, então abaixo aparece o Top 20 de maior consumo de todas as contas.</p>
+    <input type="search" id="buscaTop20" placeholder="Filtrar por ligação, cliente ou grupo…" aria-label="Filtrar clientes" style="flex:none;width:100%;max-width:340px;margin:0 0 8px;padding:5px 10px;font:inherit;font-size:.82rem;border:1px solid var(--line);border-radius:8px;">
+    <div class="tabela-rolagem">
       <table class="tabela-top20">
         <thead><tr>
           <th>#</th><th>Ligação</th><th>Grupo</th><th>Cliente</th><th>Categoria</th><th>Situação conta</th>
@@ -576,7 +604,7 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
   function mostraTop20({ refAtual, linhas, colunaSituacao }) {
     linhasTop20 = linhas;
     progresso.hidden = true;
-    $("top20Titulo").textContent = colunaSituacao
+    $("top20TituloTexto").textContent = colunaSituacao
       ? `Clientes em análise — ${nomeMes(refAtual)} (${linhas.length})`
       : `Top 20 clientes com maior consumo — ${nomeMes(refAtual)}`;
     $("avisoTop20").hidden = !!colunaSituacao;
@@ -605,6 +633,7 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
         });
         const orig = document.createElement("span");
         orig.className = "orig"; orig.textContent = "original: " + fmtNum(l[campo], dec);
+        inp.title = orig.textContent;
         td.append(inp, orig);
         tr.appendChild(td);
       });

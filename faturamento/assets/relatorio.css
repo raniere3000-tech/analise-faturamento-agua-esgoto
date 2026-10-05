@@ -178,3 +178,31 @@ td.num { text-align:right; }
 .btn-ver-todos { display:block; margin:12px auto 0; padding:8px 18px; }
 .card h2 { font-size:16px; }
 @media print { .btn-ver-todos { display:none; } }
+
+/* ===== Compacto: cabeçalho, filtros, KPIs e 1º gráfico cabem na primeira tela (notebook 1366×768) ===== */
+.header-exec { padding:9px 16px; }
+.header-exec .header-inner { display:flex; align-items:center; gap:6px 14px; flex-wrap:wrap; }
+.header-exec .header-badge { margin:0; padding:3px 11px; font-size:10px; }
+.header-exec h1 { font-size:17px; margin:0; line-height:1.2; }
+.header-exec p { font-size:12px; margin:0 0 0 auto; }
+.toolbar { margin-top:8px; }
+.toggle { padding:2px; }
+.toggle button { padding:4px 16px; }
+.btn-filtro { padding:5px 12px; }
+.seletor-sup select { padding:4px 8px; }
+#view-resumo, #view-tabelas, #view-dre, #view-indiretas, #view-dados { padding-bottom:32px; }
+.card { margin:10px auto; padding:14px 18px; }
+.card h2, .card h2 { font-size:14px; margin:0 0 8px 0; }
+.nota-secao { margin:-4px 0 6px; font-size:11.5px; line-height:1.35; }
+.card-faixa { padding:8px 18px; }
+.kpis-grid { margin:8px auto; }
+.kpi-card { padding:6px 10px; }
+.kpi-card h3 { font-size:10.5px; margin:0 0 1px 0; }
+.grafico-area, .grafico-indiretas { height:clamp(190px, calc(100vh - 290px), 380px); }
+@media print { .grafico-area, .grafico-indiretas { height:340px; } }
+.toolbar { gap:8px; }
+.toolbar .toggle button { padding:4px 12px; font-size:12.5px; }
+.seletor-sup { gap:8px; font-size:12px; flex-wrap:nowrap; }
+.seletor-sup label { gap:5px; white-space:nowrap; }
+.seletor-sup select { font-size:12px; max-width:230px; }
+.btn-filtro { font-size:12px; white-space:nowrap; }
