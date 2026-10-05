@@ -131,3 +131,22 @@ def test_mudar_regra_de_consumo_minimo_altera_a_classificacao(pasta_pequena, mon
     sessao2.continuar()
     depois = sessao2.ctx.df_minimo_por_grupo[["Acima_Atual", "Abaixo_Atual"]].sum()
     assert depois["Abaixo_Atual"] > antes["Abaixo_Atual"]
+
+
+def test_limita_ao_ultimo_grupo_faturado(tmp_path):
+    from faturamento import Sessao
+    from dados_sinteticos import gera_pasta
+    gera_pasta(str(tmp_path))
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    s.preparar()
+    b = s.ctx.base_final
+    mais_recente = b["Referencia de Leitura"].max()
+    b = b[~((b["Referencia de Leitura"] == mais_recente) & (b["Grupo"].astype(int) > 5))]
+    s.ctx.base_final = b
+    s.continuar()
+    ctx = s.ctx
+    assert ctx.ultimo_grupo == "05"
+    assert ctx.base_final["Grupo"].astype(int).max() == 5
+    assert set(ctx.comp_agua["Grupo"].astype(int)) <= {1, 2, 3, 4, 5}
+    html = open(s.caminho_html, encoding="utf-8").read()
+    assert "grupos até o 05" in html

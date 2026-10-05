@@ -86,7 +86,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
   <div class="header-inner">
     <div class="header-badge">Águas do Rio · Relatório Executivo</div>
     <h1>Comparativo de Água e Esgoto — {ctx.mes_atual} vs {ctx.mes_anterior}</h1>
-    <p>Faturamento, economias, volumes e migração de ciclo</p>
+    <p>Faturamento, economias, volumes e migração de ciclo{f" · grupos até o {ctx.ultimo_grupo}" if ctx.ultimo_grupo else ""}</p>
   </div>
 </div>
 

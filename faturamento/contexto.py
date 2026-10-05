@@ -21,6 +21,7 @@ class Contexto:
     # Meses comparados (preenchidos em `define_referencias`)
     ref_atual: str = ""
     ref_anterior: str = ""
+    ultimo_grupo: str = ""      # último grupo com faturamento na última referência
     mes_atual: str = ""
     mes_anterior: str = ""
     mes_atual_curto: str = ""

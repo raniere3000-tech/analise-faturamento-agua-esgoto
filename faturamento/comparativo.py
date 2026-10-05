@@ -47,11 +47,39 @@ def monta_comparativo(df_at, df_ant, rubrica):
     return comp.sort_values("Grupo").reset_index(drop=True)
 
 
+def _num_grupo(g):
+    g = str(g).strip()
+    return int(g) if g.isdigit() else None
+
+
+def limita_ao_ultimo_grupo(ctx):
+    """Só entram na análise os grupos até o último que faturou na última referência.
+
+    Ex.: se a última referência só tem faturamento dos grupos 01 a 05, os demais grupos (que ainda não
+    faturaram) ficam de fora também nos outros meses, para a comparação ser entre os mesmos grupos."""
+    base = ctx.base_final
+    atual = base[base["Referencia de Leitura"] == ctx.ref_atual]
+    com_fat = atual[pd.to_numeric(atual["Valor (R$)"], errors="coerce").fillna(0) != 0]
+    nums = [n for n in (_num_grupo(g) for g in com_fat["Grupo"].unique()) if n is not None]
+    ctx.ultimo_grupo = ""
+    if not nums:
+        return
+    ultimo = max(nums)
+    largura = max(len(str(g)) for g in com_fat["Grupo"].unique() if _num_grupo(g) is not None)
+    ctx.ultimo_grupo = str(ultimo).zfill(largura)
+    manter = base["Grupo"].map(lambda g: _num_grupo(g) is None or _num_grupo(g) <= ultimo)
+    removidas = int((~manter).sum())
+    ctx.base_final = base[manter].copy()
+    print(f"🔎 Último grupo faturado em {ctx.ref_atual}: {ctx.ultimo_grupo} — análise limitada aos grupos até esse "
+          f"({removidas} linhas de grupos posteriores desconsideradas)")
+
+
 def define_referencias(ctx):
     """Define o mês atual (maior referência da base) e o anterior, e separa a base nos dois meses."""
     ctx.ref_atual = ref_mais_recente(ctx.base_final["Referencia de Leitura"].dropna().unique())
     data_atual = pd.to_datetime(ctx.ref_atual, format="%m/%Y")
     ctx.ref_anterior = (data_atual - pd.DateOffset(months=1)).strftime("%m/%Y")
+    limita_ao_ultimo_grupo(ctx)
     ctx.mes_atual = nome_mes(ctx.ref_atual)
     ctx.mes_anterior = nome_mes(ctx.ref_anterior)
     ctx.mes_atual_curto = nome_mes_curto(ctx.ref_atual)
