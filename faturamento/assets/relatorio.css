@@ -206,3 +206,11 @@ td.num { text-align:right; }
 .seletor-sup label { gap:5px; white-space:nowrap; }
 .seletor-sup select { font-size:12px; max-width:230px; }
 .btn-filtro { font-size:12px; white-space:nowrap; }
+
+/* Diretas: tabelas menores */
+#view-tabelas table { font-size:10.5px; line-height:1.25; }
+#view-tabelas th, #view-tabelas td { padding:2px 5px; }
+#view-tabelas th { font-size:10px; }
+#view-tabelas .card h2 { font-size:15px; }
+.btn-baixar { margin-left:0; padding:4px 10px; font-size:12px; }
+@media print { .btn-baixar { display:none !important; } }

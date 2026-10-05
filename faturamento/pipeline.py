@@ -21,7 +21,7 @@ from .painel_html import (gera_card_leitura_html, gera_cards_insights_html, gera
 from .progresso import Progresso
 from .relatorio import gera_filtro_html, gera_justificativa_html, monta_html
 from .tabelas_html import (gera_matriz_migracao_grupos, gera_tabela, gera_tabela_acima_abaixo_minimo,
-                           gera_tabela_dados_resumo_html, gera_tabela_top100_html, monta_quadro_ciclos_situacao)
+                           gera_tabela_dados_resumo_html, botao_download_xlsx, gera_tabela_top100_html, monta_quadro_ciclos_situacao)
 from .top20 import aplica_ajustes_top20, calcula_top20_maior_consumo
 
 
@@ -81,7 +81,9 @@ class Sessao:
                                                  ctx.ref_anterior, self.caminho_top100)
         progresso.atualiza(86, "Top100 exportado")
 
-        tabela_top100_agua_html = gera_tabela_top100_html(top_agua_df, "Água", "agua")
+        with open(self.caminho_top100, "rb") as f:
+            botao_top100 = botao_download_xlsx("Baixar Top 100 (Excel)", NOME_TOP100_XLSX, f.read())
+        tabela_top100_agua_html = gera_tabela_top100_html(top_agua_df, "Água", "agua", botao_top100)
         tabela_top100_esgoto_html = gera_tabela_top100_html(top_esg_df, "Esgoto", "esgoto")
         progresso.atualiza(88, "Tabelas Top100 geradas")
 

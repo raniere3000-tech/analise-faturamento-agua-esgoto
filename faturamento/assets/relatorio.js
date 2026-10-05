@@ -520,3 +520,15 @@ document.addEventListener('DOMContentLoaded', function () {
     configurarTooltipGrafico();
     carregarJustificativas();
 });
+
+// Botões "Baixar (Excel)": o arquivo vem embutido no relatório em base64
+document.addEventListener('click', function (e) {
+    const b = e.target.closest && e.target.closest('.btn-baixar');
+    if (!b) return;
+    const bin = atob(b.dataset.b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = b.dataset.arquivo; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+});

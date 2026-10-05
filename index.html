@@ -492,7 +492,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       if (nome === "Relatorio_Comparativo.html") {
         htmlRelatorio = new TextDecoder("utf-8").decode(saida.conteudo);
       }
-      if (!info.rotulo) continue;                  // só o Top 100 tem botão de download
+      continue;                                    // o download do Top 100 agora fica dentro do relatório
       const url = URL.createObjectURL(new Blob([saida.conteudo], { type: info.tipo }));
       urlsCriadas.push(url);
       const a = document.createElement("a");

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Tabelas HTML do relatório (comparativo, ciclos, migração de grupos, consumo mínimo, Top 100)."""
+import base64
 import html
+import io
 
 import pandas as pd
 
@@ -243,6 +245,36 @@ def monta_quadro_ciclos_situacao(ctx):
     return html_tabela, df_ciclo_raw
 
 
+def botao_download_xlsx(rotulo, nome_arquivo, conteudo):
+    """Botão que baixa um .xlsx embutido no próprio relatório (funciona dentro do iframe e offline)."""
+    b64 = base64.b64encode(conteudo).decode("ascii")
+    return (f'<button type="button" class="btn-just btn-baixar" data-arquivo="{html.escape(nome_arquivo)}" '
+            f'data-b64="{b64}">&#11015; {html.escape(rotulo)}</button>')
+
+
+def xlsx_bytes(abas):
+    """abas: {nome_da_aba: DataFrame} -> bytes de um .xlsx."""
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as w:
+        for nome, df in abas.items():
+            df.to_excel(w, sheet_name=nome[:31], index=False)
+    return buf.getvalue()
+
+
+def lista_sem_faturamento(ctx, merge):
+    """Ligações que faturaram no mês anterior e não faturaram no atual (coluna 'Sem Faturamento Atual')."""
+    sem = merge[merge["Grupo_Atual"] == "Sem Faturamento Atual"][["N. Ligação", "Grupo_Anterior", "Eco_Anterior"]].copy()
+    base = ctx.base_final
+    ant = base[(base["Referencia de Leitura"] == ctx.ref_anterior)]
+    cols = {c: c for c in ("Nome Cliente", "Categoria") if c in ant.columns}
+    if cols:
+        info = ant[["N. Ligação"] + list(cols)].drop_duplicates("N. Ligação")
+        sem = sem.merge(info, on="N. Ligação", how="left")
+    sem = sem.rename(columns={"Grupo_Anterior": f"Grupo {ctx.mes_anterior}", "Eco_Anterior": f"Economias {ctx.mes_anterior}"})
+    ordem = ["N. Ligação"] + list(cols) + [f"Grupo {ctx.mes_anterior}", f"Economias {ctx.mes_anterior}"]
+    return sem[ordem].sort_values([f"Grupo {ctx.mes_anterior}", "N. Ligação"]).reset_index(drop=True)
+
+
 def gera_matriz_migracao_grupos(ctx):
     print("📊 Montando matriz de migração de grupos...")
 
@@ -366,9 +398,15 @@ def gera_matriz_migracao_grupos(ctx):
     </tr>
     """
 
+    sem_fat = lista_sem_faturamento(ctx, merge)
+    botao_sem_fat = botao_download_xlsx(
+        f"Baixar matrículas sem faturamento ({len(sem_fat)})",
+        f"Matriculas_Sem_Faturamento_{ctx.mes_atual.replace('/', '-')}.xlsx",
+        xlsx_bytes({"Sem faturamento": sem_fat})) if len(sem_fat) else ""
+
     return f"""
     <div class="card">
-    <h2>Matriz de migração de grupos — {ctx.mes_anterior} → {ctx.mes_atual}</h2>
+    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Matriz de migração de grupos — {ctx.mes_anterior} → {ctx.mes_atual} {botao_sem_fat}</h2>
     <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Cada linha mostra em quais grupos as economias que faturaram em <b>{ctx.mes_anterior}</b> estão faturando em <b>{ctx.mes_atual}</b>.<br>
         <span style="background:#F2F2F2; border:1px solid #DCE1E9; padding:2px 6px; border-radius:4px;">Cinza</span> = permaneceu no mesmo grupo &nbsp;|&nbsp;
@@ -580,7 +618,7 @@ def gera_tabela_dados_resumo_html(df_resumo):
     """
 
 
-def gera_tabela_top100_html(df, titulo, slug):
+def gera_tabela_top100_html(df, titulo, slug, botao_extra=""):
     if df.empty:
         return f"<div class='card'><h2>Top 100 clientes com maior queda de consumo — {titulo}</h2><p>Sem dados</p></div>"
 
@@ -617,7 +655,7 @@ def gera_tabela_top100_html(df, titulo, slug):
 
     return f"""
     <div class="card">
-    <h2>Top 100 clientes com maior queda de consumo — {titulo}</h2>
+    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Top 100 clientes com maior queda de consumo — {titulo} {botao_extra}</h2>
     <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Ranking dos clientes com maior redução de consumo faturado entre os dois meses comparados.
         <span style="color:#C2560C; font-weight:700;">Laranja</span> = queda igual ou superior a {DESTAQUE_QUEDA_PCT_TOP100}%.
