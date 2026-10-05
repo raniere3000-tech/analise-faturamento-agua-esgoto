@@ -306,6 +306,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     <div class="fsel" id="fgGrupo"><span>Grupo</span>
       <div class="dropdown" id="ddGrupo"><button type="button" id="btnGrupo" disabled>Todos ▾</button><div class="dropdown-content" id="listaGrupos"></div></div></div>
   </div>
+  <div class="fonte-status" id="fonteStatus">Nenhuma pasta conectada.</div>
   <div class="progresso" id="progresso" hidden>
     <div class="prog-linha"><div class="barra"><div class="barra-fill" id="barraFill"></div></div><b id="statusPct">0%</b><span id="statusTexto">Preparando…</span></div>
     <p class="nota" id="statusNota"></p>
@@ -552,6 +553,14 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     pegaWorker().postMessage({ fase: "preparar", arquivos }, arquivos.map((a) => a.conteudo));
   }
 
+  // Guarda a pasta conectada no navegador (IndexedDB) para reabri-la sozinho nas próximas visitas
+  const idb = {
+    open() { return new Promise((res, rej) => { const r = indexedDB.open("faturamento", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+    async get(k) { try { const db = await this.open(); return await new Promise((res) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); } catch (e) { return null; } },
+    async set(k, v) { try { const db = await this.open(); await new Promise((res) => { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = res; t.onerror = res; }); } catch (e) {} },
+  };
+  const setFonte = (html) => { $("fonteStatus").innerHTML = html; };
+
   async function analisaHandle(handle) {
     iniciaExecucao();
     try {
@@ -572,6 +581,8 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       try {
         const handle = await window.showDirectoryPicker({ id: "faturamento", mode: "read" });
         pastaHandle = handle;
+        idb.set("pasta", handle);
+        setFonte(`Pasta conectada: <b>${handle.name}</b>`);
         btnAtualizar.hidden = false;
         btnAtualizar.title = `Reler a pasta "${handle.name}"`;
         analisaHandle(handle);
@@ -832,6 +843,26 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       mostraErro("Não foi possível ler os arquivos.", String(e));
     }
   });
+
+  // ===== Ao abrir o site: aguarda a pasta conectada e tenta carregar os arquivos sozinho =====
+  (async function inicia() {
+    if (!("showDirectoryPicker" in window)) return;
+    const h = await idb.get("pasta");
+    if (!h) return;
+    pastaHandle = h;
+    btnAtualizar.hidden = false;
+    btnAtualizar.title = `Reler a pasta "${h.name}"`;
+    try {
+      if ((await h.queryPermission({ mode: "read" })) === "granted") {
+        setFonte(`Pasta anterior: <b>${h.name}</b> — lendo os arquivos…`);
+        analisaHandle(h);
+      } else {
+        setFonte(`Pasta anterior encontrada (<b>${h.name}</b>) — clique em <b>↻ Atualizar</b> para reconectar.`);
+      }
+    } catch (e) {
+      setFonte(`Pasta anterior encontrada (<b>${h.name}</b>) — clique em <b>↻ Atualizar</b> para reconectar.`);
+    }
+  })();
 })();
 </script>
 </body>
