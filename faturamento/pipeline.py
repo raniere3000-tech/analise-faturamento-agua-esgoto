@@ -53,7 +53,7 @@ class Sessao:
         print("=" * 70)
         b = ctx.base_final
         print(f"Linhas: {len(b)}")
-        print(f"Referências disponíveis: {sorted(b['Referencia de Leitura'].dropna().unique())}")
+        print(f"Referências disponíveis: {sorted(b['Referencia de Leitura'].dropna().unique(), key=lambda r: (r[3:], r[:2]))}")
         print(f"Match no consumo: {(b['Encontrado no Consumo'] == 'Sim').sum()}")
         print(f"Sem match: {(b['Encontrado no Consumo'] == 'Não').sum()}")
         print(f"Economia Mista: {(b['Economia Mista'] == 'Sim').sum()}")

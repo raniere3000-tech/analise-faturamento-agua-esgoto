@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from .formatacao import nome_mes, nome_mes_curto
+from .formatacao import nome_mes, nome_mes_curto, ref_mais_recente
 
 
 def agrega_por_grupo(df, rubrica):
@@ -49,7 +49,7 @@ def monta_comparativo(df_at, df_ant, rubrica):
 
 def define_referencias(ctx):
     """Define o mês atual (maior referência da base) e o anterior, e separa a base nos dois meses."""
-    ctx.ref_atual = ctx.base_final["Referencia de Leitura"].dropna().max()
+    ctx.ref_atual = ref_mais_recente(ctx.base_final["Referencia de Leitura"].dropna().unique())
     data_atual = pd.to_datetime(ctx.ref_atual, format="%m/%Y")
     ctx.ref_anterior = (data_atual - pd.DateOffset(months=1)).strftime("%m/%Y")
     ctx.mes_atual = nome_mes(ctx.ref_atual)

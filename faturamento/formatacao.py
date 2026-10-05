@@ -11,6 +11,12 @@ def normaliza_texto(texto):
     return " ".join(txt.upper().split())
 
 
+def ref_mais_recente(refs):
+    """Maior referência 'MM/AAAA' em ordem cronológica (comparar o texto erraria: '12/2025' > '01/2026')."""
+    validas = [r for r in refs if isinstance(r, str) and len(r) == 7 and r[2] == "/"]
+    return max(validas, key=lambda r: (r[3:], r[:2])) if validas else None
+
+
 def nome_mes(ref):
     m, a = ref.split("/")
     return f"{MESES_PT[int(m) - 1]}/{a}"

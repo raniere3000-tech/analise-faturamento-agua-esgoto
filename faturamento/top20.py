@@ -3,11 +3,11 @@
 import pandas as pd
 
 from .config import SITUACAO_CONTA_EM_ANALISE
-from .formatacao import normaliza_texto
+from .formatacao import normaliza_texto, ref_mais_recente
 
 
 def _ref_atual_base(ctx):
-    return ctx.base_final["Referencia de Leitura"].dropna().max()
+    return ref_mais_recente(ctx.base_final["Referencia de Leitura"].dropna().unique())
 
 
 def _coluna_situacao_conta(ctx):

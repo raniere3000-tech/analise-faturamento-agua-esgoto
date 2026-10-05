@@ -42,3 +42,10 @@ def test_executor_web_expoe_as_duas_fases():
     with open(os.path.join(RAIZ, "executor_web.py"), encoding="utf-8") as f:
         codigo = f.read()
     assert "def preparar(" in codigo and "def continuar(" in codigo
+
+
+def test_ref_mais_recente_e_cronologica():
+    from faturamento.formatacao import ref_mais_recente
+    assert ref_mais_recente(["12/2025", "01/2026", "11/2025"]) == "01/2026"
+    assert ref_mais_recente(["09/2026", "10/2026"]) == "10/2026"
+    assert ref_mais_recente([]) is None
