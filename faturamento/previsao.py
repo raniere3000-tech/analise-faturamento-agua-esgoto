@@ -2,8 +2,9 @@
 """Previsão de fechamento do mês (aba DRE).
 
 Fechamento = realizado até agora (grupos já faturados) + projeção do que falta.
-  - Diretas (água/esgoto), economias e volume: cada grupo que ainda não faturou entra com a média dos
-    últimos 3 meses desse mesmo grupo.
+  - Diretas (água/esgoto), economias e volume: cada grupo que ainda não faturou entra com
+    economias × volume por economia × tarifa do próprio grupo (até 6 meses de histórico, média ponderada),
+    corrigidos pela tendência dos grupos que já faturaram no mês (ver projecao_grupos.py).
   - Indiretas (RI e esgoto indireto): ticket por dia útil (realizado ÷ dias úteis decorridos) × dias úteis que faltam;
     Cortes só contam dias úteis que não são sexta nem véspera de feriado.
   - Cancelamento: falta = média dos últimos 3 meses − realizado, nunca negativo.
@@ -19,8 +20,10 @@ import pandas as pd
 from .config import REGRAS
 from .dre import (LINHAS, TODAS, _filtra, _fmt, _fontes, _nome_sup, _orcados_do_mes, _pct, realizado)
 from .formatacao import fmt_num, nome_mes
+from .projecao_grupos import backtest, projeta
 
 MESES_BASE = 3
+MESES_HIST = 6          # histórico usado no forecast das diretas por grupo
 # linhas que o usuário edita (as demais são calculadas a partir delas)
 LINHAS_BASICAS = ["dA", "dE", "iE", "ri_CORTE", "ri_RELIGAÇÃO", "ri_LNA", "ri_SANÇÃO", "ri_OUTROS", "ecoA", "ecoE", "volA", "volE", "canc"]
 LINHAS_POR_GRUPO = ["dA", "dE", "ecoA", "ecoE", "volA", "volE"]
@@ -81,10 +84,10 @@ def _mes_deslocado(ref, n):
     return f"{t % 12 + 1:02d}/{t // 12}"
 
 
-def _refs_base(ctx):
-    """Até 3 meses imediatamente anteriores ao atual que existem na base (do mais antigo ao mais novo)."""
+def _refs_base(ctx, n_meses=MESES_BASE):
+    """Até `n_meses` meses imediatamente anteriores ao atual que existem na base (do mais antigo ao mais novo)."""
     existentes = set(ctx.base_completa["Referencia de Leitura"].dropna())
-    return [r for r in (_mes_deslocado(ctx.ref_atual, n) for n in range(MESES_BASE, 0, -1)) if r in existentes]
+    return [r for r in (_mes_deslocado(ctx.ref_atual, n) for n in range(n_meses, 0, -1)) if r in existentes]
 
 
 def _completo(ctx):
@@ -124,18 +127,22 @@ def calcula_previsao(ctx, sup):
     atual = realizado(ctx, sup, ctx.ref_atual)
 
     base = ctx.base_completa
-    faturados = set(_filtra(base[base["Referencia de Leitura"] == ctx.ref_atual], sup)["Grupo"].astype(str).str.strip())
-    por_mes = {r: _valores_grupo(_filtra(base[base["Referencia de Leitura"] == r], sup)) for r in refs}
-    faltam = sorted({g for r in refs for g in por_mes[r]} - faturados)
+    refs_hist = _refs_base(ctx, MESES_HIST)
+    mes_atual = _valores_grupo(_filtra(base[base["Referencia de Leitura"] == ctx.ref_atual], sup))
+    faturados = sorted(mes_atual)
+    por_mes = {r: _valores_grupo(_filtra(base[base["Referencia de Leitura"] == r], sup)) for r in refs_hist}
+    # grupos que faltam: faturaram nos últimos 3 meses e ainda não no mês atual
+    faltam = sorted({g for r in refs for g in por_mes[r]} - set(faturados))
 
     falta = {k: 0.0 for k in LINHAS_BASICAS}
-    grupos = {}                                    # memória de cálculo: média de cada grupo que falta
-    for g in faltam:
-        meses_g = [r for r in refs if g in por_mes[r]]
-        media = {k: sum(por_mes[r][g][k] for r in meses_g) / len(meses_g) for k in LINHAS_POR_GRUPO}
-        grupos[g] = {"meses": meses_g, "media": media, "por_mes": {r: por_mes[r][g] for r in meses_g}}
-        for k in LINHAS_POR_GRUPO:
-            falta[k] += media[k]
+    proj = projeta(por_mes, refs_hist, mes_atual, faltam, faturados)
+    for k in LINHAS_POR_GRUPO:
+        falta[k] = proj["total"][k]
+    # backtest: os meses do histórico simulados como se os últimos grupos ainda não tivessem faturado
+    todos = _refs_base(ctx, MESES_HIST + 3)
+    por_mes_bt = {r: por_mes.get(r) or _valores_grupo(_filtra(base[base["Referencia de Leitura"] == r], sup)) for r in todos}
+    n_grupos = len(set(faturados) | set(faltam))
+    teste = backtest(por_mes_bt, todos, len(faltam) or max(1, round(n_grupos / 3)), n_hist=MESES_HIST)
     corte = getattr(ctx, "data_corte", None) or (dt.date.today() - dt.timedelta(days=1))   # a atualização é D-1
     du = dias_uteis_do_mes(ctx.ref_atual, corte)
     for k in CLASSES_POR_DIA_UTIL:                 # indiretas: ticket por dia útil × dias úteis que faltam
@@ -150,8 +157,9 @@ def calcula_previsao(ctx, sup):
         media = medias[k] = sum(meses[r].get(k) or 0.0 for r in refs) / len(refs)
         real = atual.get(k) or 0.0
         falta[k] = 0.0 if abs(real) >= abs(media) else media - real
-    return {"refs": refs, "meses": meses, "atual": atual, "falta": falta, "faltam": faltam, "dias": du, "corte": corte,
-            "grupos": grupos, "medias": medias}
+    return {"refs": refs, "refs_hist": refs_hist, "meses": meses, "atual": atual, "falta": falta, "faltam": faltam,
+            "faturados": faturados, "dias": du, "corte": corte, "projecao": proj, "por_mes": por_mes, "mes_atual": mes_atual,
+            "backtest": teste, "medias": medias}
 
 
 def _attr(v):
@@ -204,9 +212,13 @@ def previsao_html(ctx, sup):
                       f'data-real="{_attr(real)}" data-auto="{_attr(auto)}" data-canc="{1 if chave == "canc" else 0}">'
                       + "".join(tds) + "</tr>")
 
+    fx = dados["projecao"]["faixa"]
+    faixa = "; ".join(f"{nome}: {_fmt((atual.get(k) or 0) + fx[k][0], 'moeda')} a {_fmt((atual.get(k) or 0) + fx[k][1], 'moeda')}"
+                      for k, nome in (("dA", "Diretas Água"), ("dE", "Diretas Esgoto"))) if dados["faltam"] else ""
     nota = ("<b>Fechamento = Realizado + Forecast.</b> Clique em um valor da coluna Forecast ✎ para editar; fechamento, totais e "
-            "comparações com os orçados são refeitos na hora. Como cada linha é calculada (com os números do mês): "
-            "aba <b>Dados</b> › <b>5. Forecast</b>.")
+            "comparações com os orçados são refeitos na hora. "
+            + (f"Fechamento provável (~80%) — {faixa}. " if faixa else "")
+            + "Como cada linha é calculada (com os números do mês): aba <b>Dados</b> › <b>5. Forecast</b>.")
     return (f'<div class="card prev-card"><h2 class="prev-titulo">Forecast de fechamento — {nome} — {nome_mes(ctx.ref_atual)}'
             '<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" onclick="previsaoRestaurar(this)">↺ Restaurar automático</button>'
             '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar()">Ocultar forecast</button></span></h2>'
