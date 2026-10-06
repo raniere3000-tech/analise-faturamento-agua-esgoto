@@ -129,10 +129,13 @@ def calcula_previsao(ctx, sup):
     faltam = sorted({g for r in refs for g in por_mes[r]} - faturados)
 
     falta = {k: 0.0 for k in LINHAS_BASICAS}
+    grupos = {}                                    # memória de cálculo: média de cada grupo que falta
     for g in faltam:
-        historico = [por_mes[r][g] for r in refs if g in por_mes[r]]
+        meses_g = [r for r in refs if g in por_mes[r]]
+        media = {k: sum(por_mes[r][g][k] for r in meses_g) / len(meses_g) for k in LINHAS_POR_GRUPO}
+        grupos[g] = {"meses": meses_g, "media": media, "por_mes": {r: por_mes[r][g] for r in meses_g}}
         for k in LINHAS_POR_GRUPO:
-            falta[k] += sum(h[k] for h in historico) / len(historico)
+            falta[k] += media[k]
     corte = getattr(ctx, "data_corte", None) or (dt.date.today() - dt.timedelta(days=1))   # a atualização é D-1
     du = dias_uteis_do_mes(ctx.ref_atual, corte)
     for k in CLASSES_POR_DIA_UTIL:                 # indiretas: ticket por dia útil × dias úteis que faltam
@@ -140,13 +143,15 @@ def calcula_previsao(ctx, sup):
         sufixo = "corte" if k == "ri_CORTE" else "uteis"
         decorridos, faltam_dias = du[sufixo + "_decorridos"], du[sufixo + "_faltam"]
         falta[k] = (real / decorridos) * faltam_dias if decorridos else 0.0
+    medias = {}
     for k in LINHAS_BASICAS:
         if k in LINHAS_POR_GRUPO or k in CLASSES_POR_DIA_UTIL:
             continue
-        media = sum(meses[r].get(k) or 0.0 for r in refs) / len(refs)
+        media = medias[k] = sum(meses[r].get(k) or 0.0 for r in refs) / len(refs)
         real = atual.get(k) or 0.0
         falta[k] = 0.0 if abs(real) >= abs(media) else media - real
-    return {"refs": refs, "meses": meses, "atual": atual, "falta": falta, "faltam": faltam, "dias": du, "corte": corte}
+    return {"refs": refs, "meses": meses, "atual": atual, "falta": falta, "faltam": faltam, "dias": du, "corte": corte,
+            "grupos": grupos, "medias": medias}
 
 
 def _attr(v):
@@ -200,9 +205,14 @@ def previsao_html(ctx, sup):
                       + "".join(tds) + "</tr>")
 
     grupos_falta = ", ".join(dados["faltam"]) if dados["faltam"] else "nenhum"
-    nota = (f"Forecast = o que ainda deve ser faturado: grupos que faltam (<b>{grupos_falta}</b>) pela média do mesmo grupo em "
-            f"{', '.join(nome_mes(r) for r in refs)}; indiretas e cancelamento pela média desses meses menos o já realizado. "
-            "<b>Clique em um valor da coluna Forecast para editar</b>; Realizado + Forecast, totais, médias e comparações com os orçados são recalculados.")
+    du = dados["dias"]
+    nota = (f"Forecast = o que ainda deve ser faturado no mês. Diretas, economias e volume: grupos que faltam (<b>{grupos_falta}</b>) "
+            f"pela média do mesmo grupo em {', '.join(nome_mes(r) for r in refs)}. Indiretas: realizado ÷ dias úteis decorridos "
+            f"até {dados['corte'].strftime('%d/%m/%Y')} (D-1) × dias úteis que faltam ({du['uteis_decorridos']} de {du['uteis']} decorridos, "
+            f"faltam {du['uteis_faltam']}; Cortes: {du['corte_decorridos']} de {du['corte']}, faltam {du['corte_faltam']}, sem sextas e vésperas de feriado). "
+            "Cancelamento: média desses meses menos o já realizado (nunca negativo). "
+            "<b>Clique em um valor da coluna Forecast para editar</b>; Realizado + Forecast, totais, médias e comparações com os orçados são recalculados. "
+            "A memória de cálculo completa está na aba Dados.")
     return (f'<div class="card prev-card"><h2 class="prev-titulo">Forecast de fechamento — {nome} — {nome_mes(ctx.ref_atual)}'
             '<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" onclick="previsaoRestaurar(this)">↺ Restaurar automático</button>'
             '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar()">Ocultar forecast</button></span></h2>'

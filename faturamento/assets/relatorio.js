@@ -1,6 +1,6 @@
 const CHAVE_JUSTIFICATIVA = '__CHAVE_JUSTIFICATIVA__';
 
-const VIEWS = ['dre', 'resumo', 'tabelas', 'indiretas', 'dados', 'forecast'];
+const VIEWS = ['dre', 'resumo', 'tabelas', 'indiretas', 'forecast', 'dados'];
 function mostrarView(view) {
     VIEWS.forEach(v => {
         document.getElementById('view-' + v).classList.toggle('ativo', v === view);
@@ -40,6 +40,12 @@ function aplicarFontes() {
     document.querySelectorAll('[data-combo]').forEach(el => {
         el.style.display = (sel.length === 2 && el.dataset.combo.split('|').every(x => sel.includes(x))) ? '' : 'none';
     });
+}
+
+// Diretas: as tabelas de orçado por ciclo mostram só a planilha escolhida no seletor (Água e Esgoto)
+function selecionarOrcadoCiclo(fonte) {
+    document.querySelectorAll('.orc-ciclo-bloco').forEach(b => { b.hidden = b.dataset.orcCiclo !== fonte; });
+    const sel = document.getElementById('selOrcCiclo'); if (sel && sel.value !== fonte) sel.value = fonte;
 }
 
 const CORES_CLASSES = ['#176b9c', '#16a5b8', '#1f8a70', '#d79b29', '#c94b4b', '#6b7a99'];

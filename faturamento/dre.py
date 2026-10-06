@@ -287,7 +287,7 @@ def _fontes(ctx):
     return fontes, combos
 
 
-def _linha_dre(rotulo, formato, negrito, orc, real, eh_canc, fontes, combos):
+def _linha_dre(rotulo, formato, negrito, orc, real, eh_canc, fontes, combos, classe=""):
     """`orc`: {fonte: valor}. Colunas: orçados | realizado | Δ por orçado | Δ entre RF e RF SUP (R$ e %)."""
     dec = 2 if formato == "dec" else 0
     e = lambda v: html.escape(v, quote=True)
@@ -302,7 +302,7 @@ def _linha_dre(rotulo, formato, negrito, orc, real, eh_canc, fontes, combos):
         pct = _pct(a, b)
         cels.append(f'<td class="num" data-combo="{e(r + "|" + sp)}">{"-" if a is None or b is None else fmt_num(a - b, dec)}</td>')
         cels.append(f'<td class="num" data-combo="{e(r + "|" + sp)}">{"-" if pct is None else fmt_num(pct * 100, 1) + "%"}</td>')
-    return f'<tr class="{"dre-forte" if negrito else ""}">' + "".join(cels) + "</tr>"
+    return f'<tr class="{"dre-forte" if negrito else classe}">' + "".join(cels) + "</tr>"
 
 
 def _cabecalho(ctx, primeira, fontes, combos):
@@ -383,11 +383,14 @@ def tabela_orcado_realizado(ctx, sup, ref):
     combos = []                 # na aba Indiretas não há Δ entre orçados (só orçado × realizado)
     orc = _orcados_do_mes(ctx, sup, ref, fontes)
     linhas = []
-    for chave, rotulo, negrito in (("ri_CORTE", "RI Cortes/Recorte", False), ("ri_RELIGAÇÃO", "RI Religações", False),
+    # Fat. de água - Indireto em cima das aberturas (RI), depois o esgoto e, por último, o total
+    for chave, rotulo, negrito in (("iA", "Fat. de água - Indireto", True),
+                                   ("ri_CORTE", "RI Cortes/Recorte", False), ("ri_RELIGAÇÃO", "RI Religações", False),
                                    ("ri_LNA", "RI Ligações - Água", False), ("ri_SANÇÃO", "RI Fiscalização", False),
-                                   ("ri_OUTROS", "RI Outros - Água", False), ("iA", "Fat. de água - Indireto", True),
+                                   ("ri_OUTROS", "RI Outros - Água", False),
                                    ("iE", "Fat. de esgoto - Indireto", True)):
-        linhas.append(_linha_dre(rotulo, "moeda", negrito, {f: orc[f].get(chave) for f in fontes}, real.get(chave), False, fontes, combos))
+        linhas.append(_linha_dre(rotulo, "moeda", negrito, {f: orc[f].get(chave) for f in fontes}, real.get(chave), False, fontes, combos,
+                                 classe="dre-abertura" if chave.startswith("ri_") else ""))
 
     def tot(d):
         return None if d.get("iA") is None and d.get("iE") is None else (d.get("iA") or 0) + (d.get("iE") or 0)
@@ -430,7 +433,8 @@ def tabela_qtd_ticket(ctx, sup, ref):
     linhas.append('<tr class="dre-forte"><td class="dre-rotulo">Total</td>' + _cel(tq, "num") + _cel(_fmt(tv, "moeda"), "num")
                   + _cel(_fmt(tk, "dec"), "num") + _cel(tqa, "num") + _cel(_fmt(tka, "dec"), "num")
                   + _cel("-" if tk is None or tka is None else fmt_num(tk - tka, 2), "num") + "</tr>")
-    return ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Classe</th><th>Lançamentos</th><th>Valor (R$)</th>'
+    return ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Classe</th>'
+            f'<th>Lanç. {nome_mes(ref)}</th><th>Valor (R$)</th>'
             f'<th>Ticket médio (R$)</th><th>Lanç. {nome_mes(_mes_anterior(ref))}</th><th>Ticket {nome_mes(_mes_anterior(ref))}</th>'
             "<th>Δ ticket (R$)</th></tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div>")
 

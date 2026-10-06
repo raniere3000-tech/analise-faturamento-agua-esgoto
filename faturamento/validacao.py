@@ -72,17 +72,21 @@ def _indiretas_df(ctx):
 
 
 def _forecast_df(ctx):
-    from .previsao import calcula_previsao
+    from .dre import completa
+    from .previsao import LINHAS_BASICAS, calcula_previsao
     dados = calcula_previsao(ctx, TODAS)
     if not dados:
         return None
+    atual, falta = dados["atual"], dados["falta"]
+    fech = completa({k: (atual.get(k) or 0.0) + (falta.get(k) or 0.0) for k in LINHAS_BASICAS})
+    razoes = {"vmA", "vmE", "tarA", "tarE", "tickA", "tickE"}      # médias: refeitas no fechamento, sem forecast próprio
     linhas = []
     for chave, rotulo, formato, negrito in LINHAS:
-        if chave is None or dados["atual"].get(chave) is None:
+        if chave is None or atual.get(chave) is None:
             continue
-        real = dados["atual"].get(chave)
-        fc = dados["falta"].get(chave)
-        linhas.append({"Rubrica": rotulo, "Realizado": real, "Forecast": fc, "Realizado + Forecast": None if fc is None else real + fc})
+        real, f = atual.get(chave), fech.get(chave)
+        fc = None if chave in razoes or f is None else f - real
+        linhas.append({"Rubrica": rotulo, "Realizado": real, "Forecast": fc, "Realizado + Forecast": f})
     return pd.DataFrame(linhas)
 
 
@@ -117,6 +121,147 @@ def _base_utilizada(ctx):
     aviso = f" Limitado às primeiras {fmt_num(LIMITE_BASE)} linhas de cada aba." if truncada else ""
     return (f'<p>A base abaixo são as linhas que alimentam todos os cálculos (últimas duas referências, grupos até o '
             f'{html.escape(str(ctx.ultimo_grupo or "—"))}).{aviso} {botao}</p>')
+
+
+NOME_BASICA = {"dA": "DIRETAS ÁGUA", "dE": "DIRETAS ESGOTO", "ecoA": "Economias de Água", "ecoE": "Economias de Esgoto",
+               "volA": "Volume de Água (m³)", "volE": "Volume de Esgoto (m³)", "iE": "Fat. de esgoto - Indireto (LNE)",
+               "ri_CORTE": "RI Cortes/Recorte", "ri_RELIGAÇÃO": "RI Religações", "ri_LNA": "RI Ligações - Água",
+               "ri_SANÇÃO": "RI Fiscalização", "ri_OUTROS": "RI Outros - Água", "canc": "Cancelamento"}
+
+
+def _moeda(v):
+    return "-" if v is None else "R$ " + fmt_num(v, 2)
+
+
+def _tab(cab, linhas, classes=None):
+    th = "".join(f"<th>{c}</th>" for c in cab)
+    corpo = "".join("<tr" + (f' class="{classes[k]}"' if classes and classes[k] else "") + ">"
+                    + "".join(f"<td>{c}</td>" for c in l) + "</tr>" for k, l in enumerate(linhas))
+    return f'<div class="tabela-wrap"><table class="tabela-dados"><thead><tr>{th}</tr></thead><tbody>{corpo}</tbody></table></div>'
+
+
+def _explica_forecast(ctx):
+    """Memória de cálculo do forecast (Todas as superintendências): parâmetros, os três métodos com os números do mês e exemplo."""
+    from .formatacao import nome_mes
+    from .previsao import CLASSES_POR_DIA_UTIL, LINHAS_POR_GRUPO, MESES_BASE, calcula_previsao
+    d = calcula_previsao(ctx, TODAS) if getattr(ctx, "base_completa", None) is not None else None
+    titulo = f"Forecast de fechamento ({html.escape(ctx.mes_atual)})"
+    if not d:
+        return (f'<div class="val-bloco"><h4>{titulo}</h4><p>Sem meses anteriores na base: não há como projetar o fechamento.</p></div>')
+    refs, du, atual, falta = d["refs"], d["dias"], d["atual"], d["falta"]
+    meses_txt = ", ".join(nome_mes(r) for r in refs)
+    corte = d["corte"].strftime("%d/%m/%Y")
+    base = ctx.base_completa
+    faturados = sorted(set(base[base["Referencia de Leitura"] == ctx.ref_atual]["Grupo"].astype(str).str.strip()))
+
+    # ---- visão geral ----
+    intro = (
+        "<p><b>O que é:</b> o forecast responde \"quanto o mês vai fechar?\". "
+        "<b>Fechamento = Realizado + Forecast</b>, em que <b>Realizado</b> é o que já foi faturado até agora e "
+        "<b>Forecast</b> é a estimativa do que ainda falta faturar no mês. Cada linha da DRE usa um de três métodos, "
+        "escolhido conforme o jeito que aquela receita acontece ao longo do mês:</p>"
+        + _lista(["<b>Diretas, economias e volume</b> são faturados por grupo (ciclo de leitura): o que falta são os grupos que "
+                  "ainda não faturaram, e cada um entra com a sua própria média histórica.",
+                  "<b>Indiretas</b> (serviço avulso) acontecem todo dia útil: o que falta é o ritmo diário atual × os dias úteis restantes.",
+                  "<b>Cancelamento</b> não tem ritmo previsível: o mês deve chegar pelo menos à média histórica."]))
+
+    parametros = _tab(["Parâmetro", "Valor", "De onde vem"], [
+        ["Mês projetado", html.escape(ctx.mes_atual), "Última referência com linhas na fatura"],
+        ["Meses-base (histórico)", html.escape(meses_txt), f"Até {MESES_BASE} meses imediatamente anteriores ao mês projetado que existem na base (aqui: {len(refs)})"],
+        ["Data de corte (D-1)", corte, "Os arquivos são atualizados até ontem: hoje ainda não conta como decorrido"],
+        ["Grupos já faturados", html.escape(", ".join(faturados) or "nenhum"), "Grupos com linhas na fatura do mês atual"],
+        ["Grupos que faltam", html.escape(", ".join(d["faltam"]) or "nenhum"), "Faturaram nos meses-base mas ainda não no mês atual"],
+        ["Dias úteis do mês", f"{du['uteis']} (decorridos {du['uteis_decorridos']}, faltam {du['uteis_faltam']})",
+         "Seg. a sex., sem feriados nacionais, Sexta-feira Santa, São Jorge (23/04) e os de feriados_extras em regras.json; pontos facultativos contam como úteis"],
+        ["Dias úteis de corte", f"{du['corte']} (decorridos {du['corte_decorridos']}, faltam {du['corte_faltam']})",
+         "Dias úteis sem as sextas-feiras e sem as vésperas de feriado (não se faz corte nesses dias)"],
+    ])
+
+    # ---- método 1: grupos que faltam ----
+    nomes_g = ["dA", "dE", "ecoA", "ecoE", "volA", "volE"]
+    fmt_g = lambda k, v: _moeda(v) if k in ("dA", "dE") else fmt_num(v, 0)
+    linhas_g = []
+    for g, info in d["grupos"].items():
+        linhas_g.append([html.escape(g), html.escape(", ".join(nome_mes(r)[:3] + nome_mes(r)[-5:] for r in info["meses"]))]
+                        + [fmt_g(k, info["media"][k]) for k in nomes_g])
+    linhas_g.append(["<b>Forecast (soma)</b>", ""] + [f"<b>{fmt_g(k, falta[k])}</b>" for k in nomes_g])
+    tabela_g = _tab(["Grupo que falta", "Meses usados"] + [NOME_BASICA[k] for k in nomes_g], linhas_g)
+    exemplo_g = ""
+    if d["grupos"]:
+        g, info = next(iter(d["grupos"].items()))
+        partes = " + ".join(_moeda(info["por_mes"][r]["dA"]) + f" ({nome_mes(r)})" for r in info["meses"])
+        exemplo_g = (f"<p><b>Exemplo — grupo {html.escape(g)}, Diretas Água:</b> ({partes}) ÷ {len(info['meses'])} = "
+                     f"<b>{_moeda(info['media']['dA'])}</b>. Somando a média de todos os grupos que faltam chega-se ao forecast "
+                     f"de Diretas Água: <b>{_moeda(falta['dA'])}</b>. Fechamento = {_moeda(atual.get('dA'))} (realizado) + "
+                     f"{_moeda(falta['dA'])} = <b>{_moeda((atual.get('dA') or 0) + falta['dA'])}</b>.</p>")
+    metodo1 = (
+        '<p class="val-rot">Método 1 — Diretas, economias e volume: média do mesmo grupo</p>'
+        "<p>Para cada grupo que ainda não faturou no mês, calcula-se a média do que esse grupo faturou nos meses-base "
+        "(somente os meses em que ele aparece). O forecast é a soma dessas médias. Os grupos já faturados não recebem forecast: "
+        "o valor deles já está no Realizado. Economias e volume contam só linhas com Consumo Faturado &gt; 0, como no realizado.</p>"
+        + exemplo_g + (tabela_g if d["grupos"] else "<p>Nenhum grupo falta faturar: o forecast dessas linhas é zero.</p>"))
+
+    # ---- método 2: indiretas por dia útil ----
+    linhas_i = []
+    for k in CLASSES_POR_DIA_UTIL:
+        tipo = "corte" if k == "ri_CORTE" else "uteis"
+        dec, fal = du[tipo + "_decorridos"], du[tipo + "_faltam"]
+        real = atual.get(k) or 0.0
+        diario = real / dec if dec else 0.0
+        linhas_i.append([NOME_BASICA[k], _moeda(real), str(dec), _moeda(diario), str(fal), f"<b>{_moeda(falta[k])}</b>",
+                         _moeda(real + falta[k]), "dias de corte" if tipo == "corte" else "dias úteis"])
+    tabela_i = _tab(["Linha", "Realizado até D-1", "Dias decorridos", "Ticket por dia", "Dias que faltam", "Forecast",
+                     "Fechamento", "Calendário"], linhas_i)
+    k0 = "ri_RELIGAÇÃO"
+    r0, d0, f0 = atual.get(k0) or 0.0, du["uteis_decorridos"], du["uteis_faltam"]
+    exemplo_i = (f"<p><b>Exemplo — RI Religações:</b> {_moeda(r0)} ÷ {d0} dias úteis decorridos = "
+                 f"{_moeda(r0 / d0 if d0 else 0)} por dia; × {f0} dias úteis que faltam = <b>{_moeda(falta[k0])}</b>.</p>")
+    metodo2 = (
+        '<p class="val-rot">Método 2 — Indiretas: ritmo diário × dias úteis restantes</p>'
+        f"<p>Ticket por dia = realizado do mês até {corte} ÷ dias úteis decorridos até essa data. Forecast = ticket por dia × dias úteis "
+        "que faltam até o fim do mês. Cortes/Recorte usam o calendário de corte (sem sextas e sem vésperas de feriado), porque "
+        "nesses dias não há corte. O Fat. de água - Indireto é a soma das aberturas RI (Cortes, Religações, Ligações de água, "
+        "Fiscalização e Outros); o Fat. de esgoto - Indireto (LNE) é projetado do mesmo jeito.</p>"
+        + exemplo_i + tabela_i)
+
+    # ---- método 3: cancelamento ----
+    med = d["medias"].get("canc", 0.0)
+    rc = atual.get("canc") or 0.0
+    hist = " + ".join(_moeda(d["meses"][r].get("canc") or 0) for r in refs)
+    metodo3 = (
+        '<p class="val-rot">Método 3 — Cancelamento: completar até a média</p>'
+        f"<p>Média dos meses-base = ({hist}) ÷ {len(refs)} = {_moeda(med)}. Forecast = média − realizado ({_moeda(med)} − {_moeda(rc)}): "
+        "completa o que falta para chegar à média; se o realizado já atingiu a média (em valor absoluto), o forecast é zero. "
+        f"Resultado: <b>{_moeda(falta.get('canc'))}</b>.</p>")
+
+    derivadas = (
+        '<p class="val-rot">Linhas calculadas (não editáveis)</p>'
+        + _lista(["Diretas Totais = Diretas Água + Diretas Esgoto; Faturamento Bruto = Diretas Totais + Fat. de água - Indireto + Fat. de esgoto - Indireto",
+                  "Volume médio = volume ÷ economias; Tarifa média = valor direto ÷ volume; Ticket médio = valor direto ÷ economias — "
+                  "sempre refeitos a partir das somas de Realizado + Forecast (não é média das médias)",
+                  "Δ % e Δ R$ comparam o Fechamento (Realizado + Forecast) com cada orçado: Δ R$ = Fechamento − Orçado; Δ % = Fechamento ÷ Orçado − 1"])
+        + '<p class="val-rot">Edição na tela</p>'
+        + _lista(["Na aba Forecast, clique em um valor da coluna Forecast ✎ para trocar a estimativa (ex.: uma informação que a área já tem)",
+                  "Fechamento, linhas calculadas e Δ contra os orçados são refeitos na hora; a edição fica salva neste navegador",
+                  "\"↺ Restaurar automático\" volta aos valores calculados pelos métodos acima",
+                  "Por superintendência, os mesmos métodos são aplicados só às ligações daquela SUP (os números acima são de Todas)"]))
+
+    # ---- Excel ----
+    abas = {"Forecast": _forecast_df(ctx)}
+    if d["grupos"]:
+        abas["Grupos que faltam"] = pd.DataFrame(
+            [{"Grupo": g, "Meses usados": ", ".join(i["meses"]), **{NOME_BASICA[k]: i["media"][k] for k in LINHAS_POR_GRUPO}}
+             for g, i in d["grupos"].items()])
+    abas["Indiretas por dia util"] = pd.DataFrame([{
+        "Linha": NOME_BASICA[k], "Realizado": atual.get(k) or 0.0,
+        "Dias decorridos": du[("corte" if k == "ri_CORTE" else "uteis") + "_decorridos"],
+        "Dias que faltam": du[("corte" if k == "ri_CORTE" else "uteis") + "_faltam"], "Forecast": falta[k]} for k in CLASSES_POR_DIA_UTIL])
+    abas = {k: v for k, v in abas.items() if v is not None and len(v)}
+    botao = botao_download_xlsx("Baixar memória de cálculo (Excel)", "validacao_forecast.xlsx", xlsx_bytes(abas))
+
+    return (f'<div class="val-bloco"><h4>{titulo} {botao}</h4>{intro}'
+            f'<p class="val-rot">Parâmetros deste relatório</p>{parametros}{metodo1}{metodo2}{metodo3}{derivadas}'
+            f'<p class="val-rot">Resultado (Todas as superintendências)</p>{_amostra(_forecast_df(ctx), n=40)}</div>')
 
 
 def gera_validacao_html(ctx):
@@ -162,6 +307,7 @@ def gera_validacao_html(ctx):
                 "Total / Média: somas e razões recalculadas no total (não é média das médias)"],
                comum_fatura + ["<b>Qts. Dias</b>"], {"Agua": ctx.comp_agua, "Esgoto": ctx.comp_esgoto}, "comparativo_mes"),
         _bloco("Orçado por ciclo (Água / Esgoto × RF e SUP)",
+               "Duas tabelas (Água e Esgoto). O seletor \"comparar com\" acima delas escolhe a planilha de orçado (qualquer RF ou o RF SUP). "
                "Orçado de cada ciclo (grupo) = peso do ciclo × orçado total do mês. As colunas *_realizado/*_orcado seguem o mesmo formato do comparativo.",
                ["Peso do ciclo = média, nos últimos 3 meses, de (valor de água ou esgoto do grupo ÷ total do mês)",
                 "Orçado Diretas, Volume e Economias do ciclo = peso × orçado da DRE (linhas Diretas, Volume e Economias)",
@@ -193,23 +339,18 @@ def gera_validacao_html(ctx):
     ]
     indiretas = _aba("4. Indiretas", [_bloco(
         f"Orçado × Realizado das indiretas ({mes})",
-        "Cada linha RI compara o serviço avulso executado com a meta do RF / RF SUP.",
+        "Cada linha RI compara o serviço avulso executado com a meta do RF / RF SUP. Ordem na tela: Fat. de água - Indireto "
+        "(soma das aberturas), as aberturas RI (Cortes, Religações, Ligações de água, Fiscalização, Outros), Fat. de esgoto - Indireto e Total indiretas.",
         ["Realizado = soma do Valor Parcela do serviço avulso por classe (Cortes/Recorte, Religações, Ligações - Água, Fiscalização, Outros)",
          "Fat. de água - Indireto = soma das classes de água; Fat. de esgoto - Indireto = classe LNE",
          "Orçado = linhas do RF pelos nomes CORTE, RELIGAÇÃO, LNA, SANÇÃO, OUTROS (ou RI Cortes/Recorte etc.)",
-         "Δ R$ = Realizado − Orçado; Δ % = Realizado ÷ Orçado − 1"],
+         "Total indiretas = Fat. de água - Indireto + Fat. de esgoto - Indireto",
+         "Δ R$ = Realizado − Orçado; Δ % = Realizado ÷ Orçado − 1",
+         "Quantidade e ticket médio: Lanç. = número de lançamentos do serviço avulso no mês; Ticket = valor ÷ lançamentos; Δ ticket = ticket do mês − ticket do mês anterior"],
         ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia de Leitura</b>", "Orçado: <b>Sup</b>, <b>Rubrica</b>, coluna do mês"],
         {"Indiretas": _indiretas_df(ctx)}, "indiretas")])
 
-    forecast = _aba("5. Forecast", [_bloco(
-        f"Forecast de fechamento ({mes})",
-        "Realizado até agora + o que ainda deve ser faturado. A coluna Forecast é editável na tela.",
-        ["Diretas, economias e volume: cada grupo que ainda não faturou entra com a média do mesmo grupo nos últimos 3 meses",
-         "Indiretas: ticket por dia útil (realizado ÷ dias úteis decorridos até D-1) × dias úteis que faltam; Cortes sem sextas e vésperas de feriado",
-         "Cancelamento: média dos últimos 3 meses − realizado (mínimo zero)",
-         "Realizado + Forecast = fechamento projetado; comparado com cada orçado (Δ % e Δ R$)"],
-        comum_fatura + ["Serviço avulso (<b>Valor Parcela</b>, <b>Rubrica</b>) e feriados do código/regras.json"],
-        {"Forecast": _forecast_df(ctx)}, "forecast")])
+    forecast = _aba("5. Forecast", [_explica_forecast(ctx)])
 
     return ('<div class="card val-card"><h2>Validação dos cálculos</h2>'
             '<p class="nota-secao">Explicação por aba, na ordem em que você navega. Cada item mostra o cálculo, as colunas utilizadas, uma amostra e um botão para baixar o resultado em Excel e conferir.</p>'
