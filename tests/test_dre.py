@@ -163,3 +163,27 @@ def test_forecast_em_aba_propria_e_comparacao_entre_duas_planilhas(tmp_path):
     # qualquer par de planilhas de orçado tem colunas de diferença (ex.: RF01T26 × RF3T25)
     assert 'data-combo="RF3T25|RF01T26"' in html or 'data-combo="RF01T26|RF3T25"' in html
     assert '"fontes"' in html
+
+
+def test_metas_ri_do_rf_e_sem_delta_entre_orcados_nas_indiretas(tmp_path):
+    import pandas as pd
+    from faturamento import Sessao
+    from faturamento.dre import orcado
+    from dados_sinteticos import gera_pasta
+    gera_pasta(str(tmp_path), com_dre=True)
+    rf = tmp_path / "RF01T26.xlsx"
+    df = pd.read_excel(rf)
+    meses = [c for c in df.columns if c not in ("Sup", "Rubrica")]
+    extras = [("RI Cortes/Recorte", 10), ("RI Religações", 20), ("RI Ligações - Água", 30), ("RI Fiscalização", 40), ("RI Outros - Água", 50)]
+    df = df[df["Rubrica"] != "RI Cortes/Recorte"]
+    linhas = [{"Sup": "Interior", "Rubrica": r, **{m: v for m in meses}} for r, v in extras]
+    pd.concat([df, pd.DataFrame(linhas)]).to_excel(rf, index=False)
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    s.preparar()
+    s.continuar()
+    o = orcado(s.ctx, "RF01T26", "TODAS")
+    assert [o[k] for k in ("ri_CORTE", "ri_RELIGAÇÃO", "ri_LNA", "ri_SANÇÃO", "ri_OUTROS")] == [10, 20, 30, 40, 50]
+    html = open(s.caminho_html, encoding="utf-8").read()
+    ind = html[html.index('id="view-indiretas"'):html.index('id="view-tabelas"')]
+    assert "data-combo" not in ind                      # sem Δ entre orçados nas Indiretas
+    assert 'data-combo' in html[html.index('id="view-dre"'):html.index('id="view-forecast"')]   # a DRE continua com eles

@@ -4,7 +4,7 @@ import html
 
 from .config import chave_texto
 from .formatacao import nome_mes
-from .dre import ROTULOS_ORCADO, prepara
+from .dre import linha_do_orcado, prepara
 
 NOME_LINHA_DRE = {
     "bruto": "Faturamento Bruto", "dA": "DIRETAS ÁGUA", "dE": "DIRETAS ESGOTO", "iA": "Fat. de água - Indireto",
@@ -53,7 +53,7 @@ def _mapeamento_orcado(ctx):
         linhas = []
         vistos = set()
         for rub, sup, valor in zip(d["Rubrica"], d["Sup"], d["Valor"]):
-            linha = ROTULOS_ORCADO.get(chave_texto(rub))
+            linha = linha_do_orcado(chave_texto(rub))
             destino = NOME_LINHA_DRE.get(linha, "Soma (calculada)" if linha and linha.startswith("ri_") else "não usada na DRE")
             if (rub, sup) in vistos:
                 continue

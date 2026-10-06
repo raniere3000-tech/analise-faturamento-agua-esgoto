@@ -56,6 +56,17 @@ for _cl, _rotulo in LINHAS_INDIRETAS_DRE.items():
     if _cl != "LNE":
         ROTULOS_ORCADO[_rotulo] = "ri_" + _cl
 ROTULOS_ORCADO = {chave_texto(k): v for k, v in ROTULOS_ORCADO.items()}
+# Linhas "RI" do RF (metas das indiretas): reconhecidas também com pequenas variações no nome
+# (ex.: "RI Ligações - Água", "RI Ligações Água", "RI Fiscalização - Água").
+_PREFIXOS_RI = [(chave_texto("RI Cortes"), "ri_CORTE"), (chave_texto("RI Religa"), "ri_RELIGAÇÃO"),
+                (chave_texto("RI Ligac"), "ri_LNA"), (chave_texto("RI Fiscaliz"), "ri_SANÇÃO"), (chave_texto("RI Outros"), "ri_OUTROS")]
+
+
+def linha_do_orcado(chave):
+    """Linha interna (ex.: 'dA', 'ri_CORTE') para o rótulo já normalizado com `chave_texto`; None se não reconhecido."""
+    if chave in ROTULOS_ORCADO:
+        return ROTULOS_ORCADO[chave]
+    return next((linha for prefixo, linha in _PREFIXOS_RI if chave.startswith(prefixo)), None)
 
 
 def _ligacao(serie):
@@ -209,7 +220,7 @@ def orcado(ctx, fonte, sup, ref=None):
         d = d[d["Sup"].map(_sup_orcado) == _sup_orcado(sup)]
     r = {}
     for rotulo, valor in zip(d["Rubrica"].map(chave_texto), d["Valor"]):
-        chave = ROTULOS_ORCADO.get(rotulo)
+        chave = linha_do_orcado(rotulo)
         if chave:
             r[chave] = r.get(chave, 0.0) + float(valor)
     return completa(r)
@@ -365,7 +376,8 @@ def _indiretas_mes(ctx, sup, ref):
 
 def tabela_orcado_realizado(ctx, sup, ref):
     real = realizado(ctx, sup, ref)
-    fontes, combos = _fontes(ctx)
+    fontes, _ = _fontes(ctx)
+    combos = []                 # na aba Indiretas não há Δ entre orçados (só orçado × realizado)
     orc = _orcados_do_mes(ctx, sup, ref, fontes)
     linhas = []
     for chave, rotulo, negrito in (("ri_CORTE", "RI Cortes/Recorte", False), ("ri_RELIGAÇÃO", "RI Religações", False),
