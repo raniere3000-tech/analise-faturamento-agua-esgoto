@@ -190,3 +190,26 @@ def test_dias_uteis_e_forecast_das_indiretas():
     # mês fechado: nada falta; mês futuro: nada decorrido
     assert dias_uteis_do_mes("10/2026", dt.date(2026, 11, 5))["uteis_faltam"] == 0
     assert dias_uteis_do_mes("10/2026", dt.date(2026, 9, 1))["uteis_decorridos"] == 0
+
+
+def test_top100_aumento_de_consumo_com_download(analise):
+    import base64, io, re
+    html = open(analise.caminho_html, encoding="utf-8").read()
+    tab = html[html.index('id="view-tabelas"'):]
+    i = tab.index("Top 100 clientes com maior aumento de consumo — Água")
+    assert tab.index("Top 100 clientes com maior queda de consumo — Esgoto") < i
+    assert i < tab.index("Top 100 clientes com maior aumento de consumo — Esgoto")
+    b64 = re.search(r'data-arquivo="Top100_Aumentos_Consumo.xlsx" data-b64="([^"]+)"', tab).group(1)
+    xls = pd.ExcelFile(io.BytesIO(base64.b64decode(b64)))
+    assert xls.sheet_names == ["Top100_Aumento_Agua", "Top100_Aumento_Esgoto"]
+    for aba in xls.sheet_names:
+        df = pd.read_excel(xls, sheet_name=aba)
+        assert len(df) <= 100 and (df["Aumento_Consumo"] > 0).all()
+        assert df["Aumento_Consumo"].is_monotonic_decreasing
+
+
+def test_delta_faturamento_sem_casas_decimais(analise):
+    import re
+    html = open(analise.caminho_html, encoding="utf-8").read()
+    deltas = re.findall(r'<td data-field="delta-fat"[^>]*>([^<]+)</td>', html)
+    assert deltas and all("," not in d for d in deltas)

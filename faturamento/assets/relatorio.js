@@ -216,12 +216,12 @@ function recalcularTotais() {
             const el = linhaTotal.querySelector('[data-field="' + campo + '"]');
             if (el) el.innerText = fmt(valor, dec);
         }
-        function setDelta(campo, valor, pct) {
+        function setDelta(campo, valor, pct, dec) {
             const el = linhaTotal.querySelector('[data-field="' + campo + '"]');
             if (!el) return;
             const cor = valor < 0 ? '#C2560C' : '#05050D';
             el.style.color = cor;
-            el.innerText = pct ? (valor * 100).toFixed(1).replace('.', ',') + '%' : fmt(valor, 0);
+            el.innerText = pct ? (valor * 100).toFixed(1).replace('.', ',') + '%' : fmt(valor, dec || 0);
         }
 
         setCell('dias-atual', diasAt, 1);
@@ -239,13 +239,13 @@ function recalcularTotais() {
         setDelta('delta-vol', volAt - volAnt);
         setCell('vm-atual', vmAt, 2);
         setCell('vm-anterior', vmAnt, 2);
-        setDelta('delta-vm', vmAt - vmAnt);
+        setDelta('delta-vm', vmAt - vmAnt, false, 2);
         setCell('tar-atual', tarAt, 2);
         setCell('tar-anterior', tarAnt, 2);
-        setDelta('delta-tar', tarAt - tarAnt);
+        setDelta('delta-tar', tarAt - tarAnt, false, 2);
         setCell('tic-atual', ticAt, 2);
         setCell('tic-anterior', ticAnt, 2);
-        setDelta('delta-tic', ticAt - ticAnt);
+        setDelta('delta-tic', ticAt - ticAnt, false, 2);
     });
 }
 

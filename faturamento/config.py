@@ -46,6 +46,7 @@ MESES_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
 # Arquivos que o próprio pipeline gera (não devem ser lidos como entrada)
 NOME_RELATORIO_HTML = "Relatorio_Comparativo.html"
 NOME_TOP100_XLSX = "Top100_Quedas_Consumo.xlsx"
+NOME_TOP100_AUMENTO_XLSX = "Top100_Aumentos_Consumo.xlsx"
 NOMES_SAIDA_LEGADOS = ("Base_Compilada_HISTORICO.xlsx",)
 
 # ---- DRE (aba com orçado RF / orçado SUP / realizado) ----

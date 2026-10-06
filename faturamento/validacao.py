@@ -347,6 +347,12 @@ def gera_validacao_html(ctx):
                 "Queda de valor = valor anterior − valor atual; ordenado pela maior queda de consumo, 100 primeiros"],
                ["<b>N. Ligação</b>, <b>Nome Cliente</b>, <b>Grupo</b>, <b>Categoria</b>, <b>Consumo Faturado</b>, <b>Valor (R$)</b>"],
                {"Top100 Agua": r.get("top_agua"), "Top100 Esgoto": r.get("top_esgoto")}, "top100"),
+        _bloco("Top 100 clientes com maior aumento de consumo",
+               "Ligações que faturaram nos dois meses e consumiram mais no atual.",
+               ["Aumento de consumo = consumo atual − consumo anterior (só aumentos positivos); Aumento % = aumento ÷ anterior",
+                "Aumento de valor = valor atual − valor anterior; ordenado pelo maior aumento de consumo, 100 primeiros"],
+               ["<b>N. Ligação</b>, <b>Nome Cliente</b>, <b>Grupo</b>, <b>Categoria</b>, <b>Consumo Faturado</b>, <b>Valor (R$)</b>"],
+               {"Top100 Aumento Agua": r.get("aumento_agua"), "Top100 Aumento Esgoto": r.get("aumento_esgoto")}, "top100_aumento"),
     ]
     indiretas = _aba("4. Indiretas", [_bloco(
         f"Orçado × Realizado das indiretas ({mes})",
