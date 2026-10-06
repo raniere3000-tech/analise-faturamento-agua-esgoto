@@ -257,7 +257,11 @@ def test_aba_dados_no_fim_e_forecast_explicado(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert html.index('id="btn-forecast"') < html.index('id="btn-dados"')
     dados = html[html.index('id="view-dados"'):]
-    for trecho in ("Método 1", "Método 2", "Método 3", "Dias úteis de corte", "Data de corte (D-1)", "validacao_forecast.xlsx"):
+    for trecho in ("Em resumo", "Os três métodos", "Passo a passo", "Método 1", "Método 2", "Método 3", "Dias de corte",
+                   "Data de corte (D-1)", "validacao_forecast_todas.xlsx", 'data-fc-sup="LAGOS"'):
         assert trecho in dados
+    # a explicação longa saiu da aba Forecast (fica só em Dados)
+    fc = html[html.index('id="view-forecast"'):html.index('id="view-dados"')]
+    assert "Dados</b> › <b>5. Forecast" in fc and "pela média do mesmo grupo" not in fc
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert site.index('data-view="forecast"') < site.index('data-view="dados"')

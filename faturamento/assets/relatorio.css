@@ -260,3 +260,16 @@ td.num { text-align:right; }
 @media print { .barra-orcado-ciclo select { border:0; appearance:none; padding:0; } }
 /* Indiretas: aberturas RI recuadas sob o Fat. de água - Indireto */
 .tabela-dre tr.dre-abertura td.dre-rotulo { padding-left:26px; }
+/* Dados › Forecast: explicação estruturada */
+.fc-formula { background:var(--tint, #eef3f8); border-left:4px solid var(--azul, #176b9c); border-radius:6px; padding:10px 14px; margin:6px 0 10px; font-size:13.5px; color:var(--marinho); }
+.fc-formula span { font-size:12px; color:#475569; }
+.fc-passos { margin:4px 0 8px; padding-left:22px; font-size:12.5px; line-height:1.6; }
+.fc-passos li { margin-bottom:3px; }
+.fc-titulo { margin:16px 0 6px; font-size:13px; color:var(--marinho); border-bottom:1px solid #e5eaf0; padding-bottom:4px; }
+.fc-exemplo { background:#f8fafc; border:1px solid #e5eaf0; border-radius:6px; padding:8px 12px; }
+.fc-seletor label { display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:13px; color:var(--marinho); }
+.fc-seletor select { font:inherit; font-weight:400; padding:4px 10px; border:1px solid var(--linha); border-radius:8px; background:#fff; }
+.fc-sup[hidden] { display:none; }
+.tabela-dados.fc-metodos { max-width:none; width:100%; }
+.tabela-dados.fc-metodos td, .tabela-dados.fc-metodos th { white-space:normal; vertical-align:top; }
+.tabela-dados.fc-metodos td:first-child { width:24%; } .tabela-dados.fc-metodos td:nth-child(2) { width:14%; white-space:nowrap; }
