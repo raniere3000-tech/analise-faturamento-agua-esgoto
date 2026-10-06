@@ -317,6 +317,8 @@ def gera_matriz_migracao_grupos(ctx):
         values=merge["Valor_Economia"], aggfunc="sum"
     ).fillna(0)
 
+    ctx.resultados["matriz"] = crosstab.reset_index()
+    ctx.resultados["sem_faturamento"] = lista_sem_faturamento(ctx, merge)
     if crosstab.empty:
         return "<div class='card'><h2>Matriz de Migração de Grupos</h2><p>Sem dados</p></div>"
 

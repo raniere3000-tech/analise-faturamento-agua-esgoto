@@ -90,6 +90,8 @@ class Sessao:
         progresso.atualiza(88, "Tabelas Top100 geradas")
 
         df_resumo_grupo = monta_dados_resumo_grupo(ctx)
+        ctx.resultados.update({"resumo": df_resumo_grupo, "ciclos": df_ciclos_por_grupo, "minimo": ctx.df_minimo_por_grupo,
+                               "top_agua": top_agua_df, "top_esgoto": top_esg_df})
         progresso.atualiza(90, "Resumo por grupo consolidado")
 
         cards_kpis_html = gera_cards_kpis_html(df_resumo_grupo)

@@ -34,6 +34,7 @@ class Contexto:
     comp_agua: pd.DataFrame = None
     comp_esgoto: pd.DataFrame = None
     df_minimo_por_grupo: pd.DataFrame = None
+    resultados: dict = field(default_factory=dict)   # tabelas calculadas, usadas na validação (aba Dados)
 
     # Avisos exibidos no relatório
     ajustes_feitos: int = 0

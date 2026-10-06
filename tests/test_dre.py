@@ -136,7 +136,7 @@ def test_aba_dados_lista_bases_avisos_e_mapeamento(sessao):
     with open(sessao.caminho_html, encoding="utf-8") as f:
         html = f.read()
     i = html.index('id="view-dados"')
-    dados = html[i:i + 20000]
+    dados = html[i:]
     for trecho in ("Bases carregadas", "Servico avulso 09-2026.csv", "RF01T26.xlsx", "Fat. Bruto de água - Direto", "DIRETAS ÁGUA",
                    "RUBRICA NOVA SEM CLASSE"):
         assert trecho in dados
@@ -217,6 +217,15 @@ def test_dados_tem_conferencia_dos_kpis(sessao):
 
 def test_tabelas_orcado_por_ciclo_acima_das_economias(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
-    i = html.index("Água por ciclo — Realizado × Orçado RF SUP")
-    assert html.index("Comparativo Esgoto Mês a Mês") < i < html.index("Economias faturadas por ciclo")
+    tab = html[html.index('id="view-tabelas"'):]
+    j = tab.index("Água por ciclo — Realizado × Orçado RF SUP")
+    assert tab.index("Comparativo Esgoto Mês a Mês") < j < tab.index("Economias faturadas por ciclo")
     assert "Esgoto por ciclo — Realizado × Orçado RF SUP" in html and "Água por ciclo — Realizado × Orçado RF01T26" in html
+
+
+def test_dados_tem_validacao_dos_calculos(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    dados = html[html.index('id="view-dados"'):]
+    assert "Validação dos cálculos" in dados and "btn-baixar" in dados
+    pos = [dados.index(t) for t in ("1. DRE", "2. Resumo", "3. Diretas", "4. Indiretas", "5. Forecast")]
+    assert pos == sorted(pos)

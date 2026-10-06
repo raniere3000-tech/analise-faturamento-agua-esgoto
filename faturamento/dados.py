@@ -5,6 +5,7 @@ import html
 from .config import chave_texto
 from .formatacao import nome_mes
 from .dre import linha_do_orcado, prepara
+from .validacao import gera_validacao_html
 
 NOME_LINHA_DRE = {
     "bruto": "Faturamento Bruto", "dA": "DIRETAS ÁGUA", "dE": "DIRETAS ESGOTO", "iA": "Fat. de água - Indireto",
@@ -103,7 +104,7 @@ def gera_aba_dados_html(ctx):
     linhas = [[html.escape(i["tipo"]), html.escape(i["arquivo"]), f"{i['linhas']:,}".replace(",", "."),
                html.escape(i["periodo"] or "—"), html.escape(i.get("extra", ""))] for i in ctx.bases_info]
     return (f'<div class="card"><h2>Avisos</h2>{lista}</div>'
-            + _conferencia_kpis(ctx) +
+            + _conferencia_kpis(ctx) + gera_validacao_html(ctx) +
             f'<div class="card"><h2>Bases carregadas</h2>'
             + _tabela(["Tipo", "Arquivo", "Linhas", "Meses", "Observação"], linhas) + '</div>'
             f'<div class="card"><h2>Orçado: linhas reconhecidas</h2>'
