@@ -18,6 +18,11 @@ from .config import (COLUNAS_CONSUMO, COLUNAS_CRONOGRAMA, COLUNAS_ECONOMIA_TODAS
 ERROS_LEITURA = (OSError, ValueError, ImportError, KeyError, zipfile.BadZipFile)
 
 CABECALHOS_CONHECIDOS = COLUNAS_CONSUMO | COLUNAS_FATURA | COLUNAS_CRONOGRAMA
+# Cronograma: o nome da coluna é comparado sem acento/espaço/pontuação ("Qts. Dias", "QTS DIAS", "Qtd Dias" → "Qts. Dias")
+NOMES_CRONOGRAMA = {"GRUPO": "Grupo", "DATADALEITURA": "Data da Leitura", "DATALEITURA": "Data da Leitura",
+                    "QTSDIAS": "Qts. Dias", "QTDDIAS": "Qts. Dias", "QTDEDIAS": "Qts. Dias", "QTDIAS": "Qts. Dias",
+                    "QUANTIDADEDIAS": "Qts. Dias", "QUANTIDADEDEDIAS": "Qts. Dias", "DIASDELEITURA": "Qts. Dias"}
+_CHAVES_CONHECIDAS = {chave_texto(c) for c in CABECALHOS_CONHECIDOS} | set(NOMES_CRONOGRAMA)
 
 
 def _texto_csv(caminho):
@@ -30,7 +35,7 @@ def _texto_csv(caminho):
         return raw.decode("latin-1")
 
 
-def detecta_linha_cabecalho(caminho, sheet_name=0, max_linhas=10):
+def detecta_linha_cabecalho(caminho, sheet_name=0, max_linhas=30):
     """Índice da linha do cabeçalho (nas primeiras linhas) ou None se não achar.
 
     Falhar aqui não é erro: devolve None e a leitura usa a primeira linha. Isso também
@@ -42,12 +47,14 @@ def detecta_linha_cabecalho(caminho, sheet_name=0, max_linhas=10):
         if ext in (".xlsx", ".xls"):
             df_raw = pd.read_excel(caminho, sheet_name=sheet_name, header=None, dtype=str, nrows=max_linhas)
         else:
-            df_raw = pd.read_csv(io.StringIO(_texto_csv(caminho)), sep=";", header=None, dtype=str, nrows=max_linhas)
+            linhas = _texto_csv(caminho).splitlines()[:max_linhas]
+            # linhas de título têm menos colunas que o cabeçalho: lê linha a linha para não quebrar o parser
+            df_raw = pd.DataFrame([[c.strip().strip('"') for c in l.split(";")] for l in linhas])
     except ERROS_LEITURA:
         return None
     for i in range(len(df_raw)):
-        valores_linha = set(str(v).strip() for v in df_raw.iloc[i].tolist())
-        if len(valores_linha & CABECALHOS_CONHECIDOS) >= 2:
+        valores_linha = {chave_texto(v) for v in df_raw.iloc[i].tolist() if v is not None and str(v).strip()}
+        if len(valores_linha & _CHAVES_CONHECIDAS) >= 2:
             return i
     return None
 
@@ -64,14 +71,27 @@ def le_dataframe(caminho, nrows=None, sheet_name=0):
         if primeira_linha.strip().lower().startswith("sep="):
             skip += 1
         f.seek(0)
+        if primeira_linha.strip().lower().startswith("sep=") and linha_header:
+            skip = linha_header                       # a detecção já contou a linha "sep=;"
         df = pd.read_csv(f, sep=";", skiprows=skip, dtype=str)
     elif ext in (".xlsx", ".xls"):
-        df = pd.read_excel(caminho, dtype=str, header=linha_header)
+        df = pd.read_excel(caminho, sheet_name=sheet_name, dtype=str, header=linha_header, nrows=nrows)
     else:
         return None
     df.columns = df.columns.astype(str).str.strip().str.replace('"', '').str.replace('ï»¿', '')
     df.columns = [c.replace("P?blica", "Publica").replace("Pública", "Publica") for c in df.columns]
-    return df
+    return padroniza_colunas_cronograma(df)
+
+
+def padroniza_colunas_cronograma(df):
+    """Renomeia variações de nome das colunas do cronograma para os nomes padrão (só se o padrão ainda não existir)."""
+    novos, usados = {}, set(df.columns)
+    for c in df.columns:
+        alvo = NOMES_CRONOGRAMA.get(chave_texto(c))
+        if alvo and alvo not in usados and c != alvo:
+            novos[c] = alvo
+            usados.add(alvo)
+    return df.rename(columns=novos) if novos else df
 
 
 MES_ABREV = {"jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
@@ -275,12 +295,28 @@ def processa_cronograma(caminho):
             df["Aba/Mês Cronograma"] = nome
             frames.append(df)
     if not frames:
-        return pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma"])
+        print(f"   ⚠️ {nome}: nenhuma aba com as colunas Grupo, Data da Leitura e Qts. Dias.")
+        return pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma"])
     df_final = pd.concat(frames, ignore_index=True)
     df_final["Grupo"] = df_final["Grupo"].astype(str).str.strip()
     df_final = df_final[df_final["Grupo"] != ""]
-    df_final["Qts. Dias"] = pd.to_numeric(df_final["Qts. Dias"], errors="coerce")
-    return df_final.drop_duplicates(subset=["Grupo", "Aba/Mês Cronograma"])
+    df_final["Grupo"] = df_final["Grupo"].map(chave_grupo)
+    df_final["Qts. Dias"] = pd.to_numeric(df_final["Qts. Dias"].astype(str).str.replace(",", ".", regex=False), errors="coerce")
+    df_final = df_final[df_final["Grupo"].str.fullmatch(r"\d+") | df_final["Qts. Dias"].notna()]   # tira linhas de título/total
+    # mês da leitura: permite cruzar o cronograma com a fatura por grupo E mês (dias de leitura de cada mês)
+    df_final["Referencia Cronograma"] = padroniza_referencia(df_final["Data da Leitura"])
+    print(f"   ✅ Cronograma {nome}: {df_final['Grupo'].nunique()} grupos, meses: "
+          f"{', '.join(sorted(df_final['Referencia Cronograma'].dropna().unique(), key=lambda r: (r[3:], r[:2]))) or 'sem data'}")
+    return df_final[["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma"]].drop_duplicates(
+        subset=["Grupo", "Referencia Cronograma", "Aba/Mês Cronograma"])
+
+
+def chave_grupo(valor):
+    """'514', '514.0', ' 05 ' → '514', '5' (mesmo formato na fatura e no cronograma)."""
+    t = str(valor).strip()
+    if re.fullmatch(r"\d+(\.0+)?", t):
+        return str(int(float(t)))
+    return t
 
 
 def lista_arquivos_entrada(pasta):

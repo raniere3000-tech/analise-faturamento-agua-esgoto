@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from dados_sinteticos import gera_pasta
+
 from faturamento.leitura import (classifica_arquivos, detecta_linha_cabecalho, identifica_tipo, le_dataframe,
                                  processa_fatura, referencia_do_nome)
 
@@ -111,3 +113,39 @@ def test_referencia_do_nome_formatos():
     assert referencia_do_nome("Consumo 10-2026.csv") == "10/2026"
     assert referencia_do_nome("Consumo 10.2026.csv") == "10/2026"
     assert referencia_do_nome("Consumo out-26.xlsx") == "10/2026"
+
+
+CAB_CRONOGRAMA = ["Cód.Med", "Grupo", "Localidade", "Rio 01", "Rio 04", "Total Lig.", "Data da Leitura", "DS", "Qts. Dias",
+                  "Vencimento", "Próxima Leitura", "DS", "Dias Próx."]
+
+
+def _cronograma_real(grupos, mes, ano, dias_base):
+    linhas = [["CRONOGRAMA DE LEITURA E FATURAMENTO"] + [""] * 12, [""] * 13, CAB_CRONOGRAMA]
+    for i, g in enumerate(grupos):
+        linhas.append([f"M{i}", str(int(g)), "CANTAGALO", "10", "5", "15", f"{5 + i:02d}/{mes:02d}/{ano}", "SEG",
+                       str(dias_base + i % 3), f"20/{mes:02d}/{ano}", f"05/{mes % 12 + 1:02d}/{ano}", "TER", "30"])
+    return linhas
+
+
+@pytest.mark.parametrize("formato", ["xlsx", "csv"])
+def test_cronograma_no_formato_real_com_titulo_e_dias_por_mes(tmp_path, formato):
+    from faturamento import Sessao
+    gera_pasta(str(tmp_path))
+    os.remove(tmp_path / "Cronograma.csv")
+    grupos = [f"{g:02d}" for g in range(1, 9)]
+    ago, set_ = _cronograma_real(grupos, 8, 2026, 28), _cronograma_real(grupos, 9, 2026, 31)
+    if formato == "xlsx":
+        with pd.ExcelWriter(tmp_path / "Cronograma 2026.xlsx") as w:     # nomes de aba quaisquer: o mês vem da Data da Leitura
+            pd.DataFrame([["Instruções"], ["qualquer coisa"]]).to_excel(w, sheet_name="Leia-me", index=False, header=False)
+            pd.DataFrame(ago).to_excel(w, sheet_name="Planilha1", index=False, header=False)
+            pd.DataFrame(set_).to_excel(w, sheet_name="cópia final (2)", index=False, header=False)
+    else:
+        texto = "sep=;\n" + "\n".join(";".join(l) for l in ago + set_[3:])
+        (tmp_path / "Cronograma 2026.csv").write_text(texto, encoding="utf-8-sig")
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    s.preparar()
+    b = s.ctx.base_final
+    assert len(s.ctx.classificacao["cronograma"]) == 1
+    assert (b["Encontrado no Cronograma"] == "Sim").all()
+    g1 = b[b["Grupo"] == "01"].groupby("Referencia de Leitura")["Qts. Dias"].first()
+    assert g1["08/2026"] == 28 and g1["09/2026"] == 31          # dias de leitura de cada mês
