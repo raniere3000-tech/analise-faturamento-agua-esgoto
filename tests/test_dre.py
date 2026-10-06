@@ -265,3 +265,21 @@ def test_aba_dados_no_fim_e_forecast_explicado(sessao):
     assert "Dados</b> › <b>5. Forecast" in fc and "pela média do mesmo grupo" not in fc
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert site.index('data-view="forecast"') < site.index('data-view="dados"')
+
+
+def test_orcado_por_ciclo_com_peso_proprio_por_metrica(sessao):
+    from faturamento.orcado_ciclo import comparativo_orcado, pesos_por_ciclo
+    ctx = sessao.ctx
+    orc = dre.orcado(ctx, "RF01T26", dre.TODAS, ctx.ref_atual)
+    for rub, kf, kv, ke in (("AGUA", "dA", "volA", "ecoA"), ("ESGOTO", "dE", "volE", "ecoE")):
+        pesos = pesos_por_ciclo(ctx, rub)
+        assert set(pesos) == {"valor", "volume", "economias"}
+        for m in pesos:
+            assert sum(pesos[m].values()) == pytest.approx(1)
+        assert pesos["valor"] != pesos["volume"]                     # pesos de fato separados
+        comp = comparativo_orcado(ctx, rub, rub, kf, kv, ke, orc)
+        assert comp["Faturamento_anterior"].sum() == pytest.approx(orc.get(kf) or 0)
+        assert comp["Volume_Faturado_anterior"].sum() == pytest.approx(orc.get(kv) or 0)
+        assert comp["Economias_anterior"].sum() == pytest.approx(orc.get(ke) or 0)
+        g = comp["Grupo"].iloc[0]
+        assert comp["Volume_Faturado_anterior"].iloc[0] == pytest.approx(pesos["volume"][g] * (orc.get(kv) or 0))

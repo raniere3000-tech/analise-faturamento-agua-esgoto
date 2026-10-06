@@ -15,8 +15,6 @@ def gera_cards_kpis_html(df_resumo):
     t_eco_ant = df_resumo["Eco_Anterior"].sum()
     t_vol_at = df_resumo["VolFat_Atual"].sum()
     t_vol_ant = df_resumo["VolFat_Anterior"].sum()
-    t_acima_at = df_resumo["Acima_Atual"].sum()
-    t_acima_ant = df_resumo["Acima_Ant"].sum()
 
     tarifa_at = (t_fatagua_at + t_fatesgoto_at) / t_vol_at if t_vol_at else 0
     tarifa_ant = (t_fatagua_ant + t_fatesgoto_ant) / t_vol_ant if t_vol_ant else 0
@@ -55,7 +53,6 @@ def gera_cards_kpis_html(df_resumo):
     cards += card("", "Tarifa Média", "tarifa", tarifa_at, tarifa_ant, moeda=True)
     cards += card("", "Volume Médio", "vm", vm_at, vm_ant, sufixo=" m³", dec=2)
     cards += card("", "Ticket Médio", "ticket", ticket_at, ticket_ant, moeda=True)
-    cards += card("", "Acima do Mínimo", "acima", t_acima_at, t_acima_ant)
     return cards
 
 

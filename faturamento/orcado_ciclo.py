@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """Orçado por ciclo (grupo) da aba Diretas: Água e Esgoto, realizado × orçado RF e × orçado SUP.
 
-Peso do ciclo = média, nos últimos 3 meses, da participação do grupo no valor faturado (água ou esgoto) do mês.
-Orçado do ciclo = peso × orçado da DRE (diretas água/esgoto, volume e economias) do mês atual.
+Cada métrica tem o seu próprio peso por ciclo, separado para água e para esgoto:
+  - Faturamento: média, nos últimos 3 meses, da participação do grupo no valor faturado (água ou esgoto) do mês.
+  - Volume: idem, pela participação no volume faturado (Consumo Faturado, só onde > 0).
+  - Economias: idem, pela participação nas economias faturadas (Economias_Totais, só onde Consumo Faturado > 0).
+Orçado do ciclo = peso da métrica × orçado da DRE (diretas água/esgoto, volume e economias) do mês atual.
 """
 import html
 
@@ -17,23 +20,30 @@ from .tabelas_html import gera_tabela
 RUBRICAS = (("Água", "AGUA", "dA", "volA", "ecoA"), ("Esgoto", "ESGOTO", "dE", "volE", "ecoE"))
 
 
+METRICAS = ("valor", "volume", "economias")
+
+
 def pesos_por_ciclo(ctx, rubrica_txt):
-    """{grupo: peso} pela participação média do grupo nos últimos meses (soma 1)."""
+    """{métrica: {grupo: peso}} pela participação média do grupo nos últimos meses (cada métrica soma 1)."""
     base = ctx.base_completa
     refs = _refs_base(ctx)
-    if not refs:
-        return {}
-    acum = {}
+    acum = {m: {} for m in METRICAS}
+    n = {m: 0 for m in METRICAS}
     for r in refs:
         d = base[(base["Referencia de Leitura"] == r) & base["Rubrica"].str.contains(rubrica_txt, case=False, na=False)]
-        por_g = d.groupby(d["Grupo"].astype(str).str.strip())["Valor (R$)"].sum()
-        total = por_g.sum()
-        if not total:
-            continue
-        for g, v in por_g.items():
-            acum[g] = acum.get(g, 0.0) + v / total
-    n = len(refs)
-    return {g: v / n for g, v in acum.items()}
+        grupo = d["Grupo"].astype(str).str.strip()
+        pos = d["Consumo Faturado"] > 0
+        series = {"valor": d.groupby(grupo)["Valor (R$)"].sum(),
+                  "volume": d[pos].groupby(grupo[pos])["Consumo Faturado"].sum(),
+                  "economias": d[pos].groupby(grupo[pos])["Economias_Totais"].sum()}
+        for m, por_g in series.items():
+            total = por_g.sum()
+            if not total:
+                continue
+            n[m] += 1
+            for g, v in por_g.items():
+                acum[m][g] = acum[m].get(g, 0.0) + v / total
+    return {m: {g: v / n[m] for g, v in acum[m].items()} if n[m] else {} for m in METRICAS}
 
 
 def comparativo_orcado(ctx, rotulo_rubrica, rubrica_txt, k_fat, k_vol, k_eco, orc):
@@ -43,12 +53,12 @@ def comparativo_orcado(ctx, rotulo_rubrica, rubrica_txt, k_fat, k_vol, k_eco, or
     atual = base[base["Referencia de Leitura"] == ctx.ref_atual].copy()
     atual["Grupo"] = atual["Grupo"].astype(str).str.strip()
     real = agrega_por_grupo(atual, rubrica_txt).set_index("Grupo") if len(atual) else pd.DataFrame()
-    grupos = sorted(set(pesos) | set(real.index))
+    grupos = sorted(set().union(*pesos.values()) | set(real.index))
     linhas = []
     for g in grupos:
-        w = pesos.get(g, 0.0)
         r = real.loc[g] if g in real.index else None
-        fat_o, vol_o, eco_o = (w * (orc.get(k) or 0.0) for k in (k_fat, k_vol, k_eco))
+        fat_o, vol_o, eco_o = (pesos[m].get(g, 0.0) * (orc.get(k) or 0.0)
+                               for m, k in (("valor", k_fat), ("volume", k_vol), ("economias", k_eco)))
         fat_r = float(r["Faturamento"]) if r is not None else 0.0
         eco_r = float(r["Economias"]) if r is not None else 0.0
         vol_r = float(r["Volume_Faturado"]) if r is not None else 0.0
@@ -92,7 +102,10 @@ def gera_tabelas_orcado_ciclo_html(ctx):
     e = lambda v: html.escape(v, quote=True)
     opcoes = "".join(f'<option value="{e(f)}">{html.escape(f)}</option>' for f, _ in blocos)
     seletor = ('<div class="barra-orcado-ciclo"><label>Orçado por ciclo — comparar com '
-               f'<select id="selOrcCiclo" onchange="selecionarOrcadoCiclo(this.value)">{opcoes}</select></label></div>')
+               f'<select id="selOrcCiclo" onchange="selecionarOrcadoCiclo(this.value)">{opcoes}</select></label>'
+               '<p class="nota-secao">Orçado de cada grupo de leitura = orçado do mês × peso do grupo. Cada métrica tem o seu peso, separado '
+               'para água e esgoto: faturamento pela participação do grupo no valor faturado, volume pela participação no volume e '
+               'economias pela participação nas economias (média dos últimos 3 meses).</p></div>')
     corpo = "".join(f'<div class="orc-ciclo-bloco" data-orc-ciclo="{e(f)}"{"" if i == 0 else " hidden"}>{t}</div>'
                     for i, (f, t) in enumerate(blocos))
     return seletor + corpo
