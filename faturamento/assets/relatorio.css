@@ -282,3 +282,10 @@ td.num { text-align:right; }
 #view-tabelas table:not(.tabela-matriz-grupo) tbody tr.linha-media td:is([style*="C2560C"], [style*="194, 86, 12"]),
 #view-tabelas table:not(.tabela-matriz-grupo) tbody tr.linha-total td:is([style*="C2560C"], [style*="194, 86, 12"]),
 #view-tabelas table tbody tr:is(.linha-media, .linha-total):hover td:is([style*="C2560C"], [style*="194, 86, 12"]) { color:#FFB37A !important; }
+
+/* Dados: bases para download em cada item da validação */
+.val-bases { list-style:none; padding-left:0 !important; margin:4px 0 8px; }
+.val-bases li { margin:4px 0; display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; font-size:12.5px; }
+.val-filtro { color:#475569; }
+.val-filtro::before { content:"Filtro: "; font-weight:600; color:var(--marinho); }
+.btn-baixar-base { white-space:nowrap; }

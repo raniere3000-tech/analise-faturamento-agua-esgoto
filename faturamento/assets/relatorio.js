@@ -529,6 +529,20 @@ document.addEventListener('DOMContentLoaded', function () {
     carregarJustificativas();
 });
 
+// Botões "Base: ... (CSV)": a base vem embutida uma vez (script#base-dl-<chave>) e vários botões a usam
+document.addEventListener('click', function (e) {
+    const b = e.target.closest && e.target.closest('.btn-baixar-base');
+    if (!b) return;
+    const el = document.getElementById('base-dl-' + b.dataset.ref);
+    if (!el) return;
+    const bin = atob(el.textContent.trim()), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = el.dataset.arquivo; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+});
+
 // Botões "Baixar (Excel)": o arquivo vem embutido no relatório em base64
 document.addEventListener('click', function (e) {
     const b = e.target.closest && e.target.closest('.btn-baixar');
