@@ -638,3 +638,13 @@ function previsaoAplicarVisibilidade() {
 }
 function previsaoAlternar() { prevOculta = !prevOculta; prevSalvar(); previsaoAplicarVisibilidade(); }
 prevRecalcularTodas(); previsaoAplicarVisibilidade();
+
+
+// Diretas: por padrão só as colunas principais; o botão mostra as demais (dias de leitura, Δ absolutos, volume médio)
+function alternarColunas() {
+    const v = document.getElementById('view-tabelas'), compacto = v.classList.toggle('compacto');
+    document.getElementById('btn-colunas').textContent = compacto ? 'Mostrar todas as colunas' : 'Mostrar só as principais';
+    v.querySelectorAll('th[data-full]').forEach(th => { th.colSpan = parseInt(compacto ? th.dataset.comp : th.dataset.full, 10); });
+    v.querySelectorAll('th[data-full]').forEach(th => { if (compacto) th.colSpan = parseInt(th.dataset.comp, 10); });
+}
+document.querySelectorAll('#view-tabelas th[data-full]').forEach(th => { th.colSpan = parseInt(th.dataset.comp, 10); });

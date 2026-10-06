@@ -226,3 +226,18 @@ td.num { text-align:right; }
 .tabela-previsao.prev-sem-forecast .p-col-forecast { display:none; }
 .tabela-previsao th.prev-col-prev { background:#8a6a12; }
 @media print { .prev-acoes { display:none !important; } }
+
+
+/* Diretas: visual mais limpo — cabeçalho claro, sem preenchimentos coloridos, só texto laranja nas quedas */
+.barra-diretas { display:flex; justify-content:flex-end; margin:8px 0 -4px; }
+#view-tabelas.compacto .x-det { display:none; }
+#view-tabelas table { border-collapse:collapse; }
+#view-tabelas th, #view-tabelas td { border:0; border-bottom:1px solid #edf1f5; padding:4px 7px; }
+#view-tabelas th { background:#fff !important; color:#475569; font-weight:600; border-bottom:1px solid #cbd5e1; }
+#view-tabelas .header-sub th { color:#94a3b8; font-weight:500; font-size:9.5px; border-bottom:1px solid #cbd5e1; }
+#view-tabelas table:not(.tabela-matriz-grupo) tbody tr:nth-child(even) td { background:transparent !important; }
+#view-tabelas table:not(.tabela-matriz-grupo) tbody tr:hover td { background:#f8fafc !important; }
+#view-tabelas tbody tr.linha-media td, #view-tabelas tbody tr.linha-total td { background:transparent; border-top:1.5px solid #94a3b8; font-weight:700; }
+#view-tabelas table:not(.tabela-matriz-grupo) td[style*="background"] { background:transparent !important; }
+#view-tabelas td[data-field="grupo"], #view-tabelas td:first-child { color:#334155; font-weight:600; }
+#view-tabelas .card { box-shadow:none; border:1px solid #e5eaf0; }

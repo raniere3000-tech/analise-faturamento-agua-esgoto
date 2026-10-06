@@ -129,7 +129,8 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
     {aba_indiretas_html}
 </div>
 
-<div id="view-tabelas">
+<div id="view-tabelas" class="compacto">
+    <div class="barra-diretas"><button type="button" class="btn-filtro" id="btn-colunas" onclick="alternarColunas()">Mostrar todas as colunas</button></div>
     {tabela_agua_html}
     {tabela_esgoto_html}
     {tabelas_orcado_ciclo_html}

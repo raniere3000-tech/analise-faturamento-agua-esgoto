@@ -14,13 +14,15 @@ from .formatacao import fmt_int_br, fmt_moeda_br, fmt_num
 def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_ant=None, card_attrs=""):
     rot_atual = rot_atual or ctx.mes_atual_curto
     rot_ant = rot_ant or ctx.mes_anterior_curto
+    detalhe = {"dias-atual", "dias-anterior", "delta-eco", "delta-vol", "vm-atual", "vm-anterior", "delta-vm"}
+    def cl(campo):
+        return ' class="x-det"' if campo in detalhe else ""
     def td(campo, valor):
-        return f'<td data-field="{campo}">{valor}</td>'
+        return f'<td data-field="{campo}"{cl(campo)}>{valor}</td>'
     def deltac(campo, valor, dec=2, pct=False):
         cor = "#C2560C" if valor<0 else "#05050D"
-        fundo = "#FCE4D2" if valor<0 else "transparent"
         txt = f"{valor*100:.1f}%".replace(".", ",") if pct else fmt_num(valor,dec)
-        return f'<td data-field="{campo}" style="text-align:center; color:{cor}; background:{fundo};">{txt}</td>'
+        return f'<td data-field="{campo}"{cl(campo)} style="color:{cor};">{txt}</td>'
     def linha(grupo, d, is_media=False):
         delta_fat = d["Faturamento_atual"] - d["Faturamento_anterior"]
         delta_eco = d["Economias_atual"] - d["Economias_anterior"]
@@ -87,35 +89,36 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     media["Ticket_Medio_anterior"] = (media["Faturamento_anterior"] / media["Economias_anterior"]) if media["Economias_anterior"] else 0
     linhas_html += linha("Total / Média", media, is_media=True)
     sub = f'<th>{rot_atual}</th><th>{rot_ant}</th>'
-    th_dias = '<th colspan="2">Dias Leitura</th>' if com_dias else ""
-    sub_dias = sub if com_dias else ""
+    subd = f'<th class="x-det">{rot_atual}</th><th class="x-det">{rot_ant}</th>'
+    th_dias = '<th colspan="2" class="x-det">Dias Leitura</th>' if com_dias else ""
+    sub_dias = subd if com_dias else ""
     cabecalho = f"""
     <tr class="header-grupo">
         <th rowspan="2">Grupo</th>
         {th_dias}
         <th colspan="2">Faturamento</th>
-        <th colspan="1">Δ Faturamento</th>
+        <th>Δ Fat.</th>
         <th colspan="2">Economias</th>
-        <th colspan="2">Δ Economias</th>
+        <th colspan="2" data-full="2" data-comp="1">Δ Economias</th>
         <th colspan="2">Volume Faturado</th>
-        <th colspan="2">Δ Volume</th>
-        <th colspan="2">Volume Médio</th>
-        <th colspan="1">Δ Volume Médio</th>
+        <th colspan="2" data-full="2" data-comp="1">Δ Volume</th>
+        <th colspan="2" class="x-det">Volume Médio</th>
+        <th class="x-det">Δ Vol. Médio</th>
         <th colspan="2">Tarifa Média</th>
-        <th colspan="1">Δ Tarifa</th>
+        <th>Δ Tarifa</th>
         <th colspan="2">Ticket Médio</th>
-        <th colspan="1">Δ Ticket Médio</th>
+        <th>Δ Ticket</th>
     </tr>
     <tr class="header-sub">
         {sub_dias}
         {sub}
         <th></th>
         {sub}
-        <th>%</th><th>Abs</th>
+        <th>%</th><th class="x-det">Abs</th>
         {sub}
-        <th>%</th><th>Abs</th>
-        {sub}
-        <th></th>
+        <th>%</th><th class="x-det">Abs</th>
+        {subd}
+        <th class="x-det"></th>
         {sub}
         <th></th>
         {sub}
