@@ -167,7 +167,7 @@ def previsao_html(ctx, sup):
     if dados is None:
         return (f'<div class="card"><h2>Previsão de fechamento — {nome} — {nome_mes(ctx.ref_atual)}</h2>'
                 '<p class="nota-secao">Sem meses anteriores na base para projetar o fechamento.</p></div>')
-    refs, atual, falta = dados["refs"], dados["atual"], dados["falta"]
+    atual, falta = dados["atual"], dados["falta"]
     fontes, _ = _fontes(ctx)
     fontes = [f for f in fontes if not f.upper().count("SUP")] + [f for f in fontes if f.upper().count("SUP")]   # RF primeiro, SUP depois
     orc = _orcados_do_mes(ctx, sup, ctx.ref_atual, fontes)
@@ -204,15 +204,9 @@ def previsao_html(ctx, sup):
                       f'data-real="{_attr(real)}" data-auto="{_attr(auto)}" data-canc="{1 if chave == "canc" else 0}">'
                       + "".join(tds) + "</tr>")
 
-    grupos_falta = ", ".join(dados["faltam"]) if dados["faltam"] else "nenhum"
-    du = dados["dias"]
-    nota = (f"Forecast = o que ainda deve ser faturado no mês. Diretas, economias e volume: grupos que faltam (<b>{grupos_falta}</b>) "
-            f"pela média do mesmo grupo em {', '.join(nome_mes(r) for r in refs)}. Indiretas: realizado ÷ dias úteis decorridos "
-            f"até {dados['corte'].strftime('%d/%m/%Y')} (D-1) × dias úteis que faltam ({du['uteis_decorridos']} de {du['uteis']} decorridos, "
-            f"faltam {du['uteis_faltam']}; Cortes: {du['corte_decorridos']} de {du['corte']}, faltam {du['corte_faltam']}, sem sextas e vésperas de feriado). "
-            "Cancelamento: média desses meses menos o já realizado (nunca negativo). "
-            "<b>Clique em um valor da coluna Forecast para editar</b>; Realizado + Forecast, totais, médias e comparações com os orçados são recalculados. "
-            "A memória de cálculo completa está na aba Dados.")
+    nota = ("<b>Fechamento = Realizado + Forecast.</b> Clique em um valor da coluna Forecast ✎ para editar; fechamento, totais e "
+            "comparações com os orçados são refeitos na hora. Como cada linha é calculada (com os números do mês): "
+            "aba <b>Dados</b> › <b>5. Forecast</b>.")
     return (f'<div class="card prev-card"><h2 class="prev-titulo">Forecast de fechamento — {nome} — {nome_mes(ctx.ref_atual)}'
             '<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" onclick="previsaoRestaurar(this)">↺ Restaurar automático</button>'
             '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar()">Ocultar forecast</button></span></h2>'
