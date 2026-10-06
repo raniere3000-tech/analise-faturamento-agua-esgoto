@@ -312,7 +312,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v15</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v16</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -349,8 +349,8 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   <button class="tab" data-view="resumo" type="button">Resumo</button>
   <button class="tab" data-view="tabelas" type="button">Diretas</button>
   <button class="tab" data-view="indiretas" type="button">Indiretas</button>
-  <button class="tab" data-view="dados" type="button">Dados</button>
   <button class="tab" data-view="forecast" type="button">Forecast</button>
+  <button class="tab" data-view="dados" type="button">Dados</button>
 </nav>
 
 <main class="conteudo" id="inicio">
@@ -396,7 +396,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v15-20261006"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v16-20261006"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -780,12 +780,12 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     dre: ["DRE: orçado × realizado", "Realizado do mês contra o orçado RF e o orçado SUP, por superintendência"],
     indiretas: ["Indiretas", "Orçado × realizado por classe, evolução mensal e ticket médio do serviço avulso"],
     resumo: ["Resumo", "KPIs, gráfico de faturamento por grupo e destaques do mês"],
-    tabelas: ["Diretas", "Tabelas de água e esgoto por grupo, ciclos, consumo mínimo e Top 100"],
-    dados: ["Dados", "Bases carregadas, orçado reconhecido e avisos"],
+    tabelas: ["Diretas", "Tabelas de água e esgoto por grupo, orçado por ciclo, consumo mínimo e Top 100"],
+    dados: ["Dados", "Bases carregadas, avisos e explicação de como cada cálculo é feito (inclusive o forecast)"],
     forecast: ["Forecast", "Previsão de fechamento do mês, editável: ao mudar um valor, os totais e comparações se refazem"],
   };
   // quais filtros valem em cada aba (os demais ficam esmaecidos)
-  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Grupo"], tabelas: ["Grupo", "Ref"], dados: [], forecast: ["Sup", "Ref"] };
+  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Grupo"], tabelas: ["Grupo"], dados: [], forecast: ["Sup", "Ref"] };
 
   function aplicaFiltros() {
     document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));

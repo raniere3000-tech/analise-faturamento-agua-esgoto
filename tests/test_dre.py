@@ -229,3 +229,35 @@ def test_dados_tem_validacao_dos_calculos(sessao):
     assert "Validação dos cálculos" in dados and "btn-baixar" in dados
     pos = [dados.index(t) for t in ("1. DRE", "2. Resumo", "3. Diretas", "4. Indiretas", "5. Forecast")]
     assert pos == sorted(pos)
+
+
+def test_diretas_tem_so_duas_tabelas_de_orcado_com_seletor(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    tab = html[html.index('id="view-tabelas"'):]
+    assert 'id="selOrcCiclo"' in tab and "selecionarOrcadoCiclo" in html
+    for f in ("RF01T26", "RF3T25", "RF SUP"):
+        assert f'<option value="{f}">' in tab
+    # cada planilha tem um par (Água e Esgoto); só o primeiro par aparece de início
+    assert tab.count('class="orc-ciclo-bloco" data-orc-ciclo="RF01T26">') == 1
+    assert tab.count('class="orc-ciclo-bloco"') == 3 and tab.count(" hidden>") >= 2
+    assert 'data-src=' not in tab.split("Economias faturadas por ciclo")[0]      # não depende do filtro Comparar do cabeçalho
+
+
+def test_indiretas_ordem_das_linhas_e_lancamentos_do_mes(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    ind = html[html.index('id="view-indiretas"'):html.index('id="view-tabelas"')]
+    bloco = ind[ind.index('data-sup="TODAS" data-mes="09/2026"'):]
+    pos = [bloco.index(t) for t in ("Fat. de água - Indireto", "RI Cortes/Recorte", "RI Religações", "RI Ligações - Água",
+                                     "RI Outros - Água", "Fat. de esgoto - Indireto", "Total indiretas")]
+    assert pos == sorted(pos)
+    assert "<th>Lanç. Setembro/2026</th>" in bloco and "<th>Lançamentos</th>" not in ind
+
+
+def test_aba_dados_no_fim_e_forecast_explicado(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert html.index('id="btn-forecast"') < html.index('id="btn-dados"')
+    dados = html[html.index('id="view-dados"'):]
+    for trecho in ("Método 1", "Método 2", "Método 3", "Dias úteis de corte", "Data de corte (D-1)", "validacao_forecast.xlsx"):
+        assert trecho in dados
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert site.index('data-view="forecast"') < site.index('data-view="dados"')

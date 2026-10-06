@@ -49,3 +49,10 @@ def test_ref_mais_recente_e_cronologica():
     assert ref_mais_recente(["12/2025", "01/2026", "11/2025"]) == "01/2026"
     assert ref_mais_recente(["09/2026", "10/2026"]) == "10/2026"
     assert ref_mais_recente([]) is None
+
+
+def test_selo_de_versao_igual_a_versao_do_site():
+    import re
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    versao = re.search(r'const VERSAO_SITE = "(v\d+)-\d{8}"', site).group(1)
+    assert f'<span class="versao" id="versao">{versao}</span>' in site

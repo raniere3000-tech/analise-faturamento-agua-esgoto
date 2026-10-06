@@ -66,22 +66,33 @@ def comparativo_orcado(ctx, rotulo_rubrica, rubrica_txt, k_fat, k_vol, k_eco, or
 
 
 def gera_tabelas_orcado_ciclo_html(ctx):
-    """Água e Esgoto por ciclo contra cada planilha de orçado (o filtro Referência escolhe quais aparecem)."""
+    """Duas tabelas (Água e Esgoto por ciclo) contra o orçado escolhido no seletor da própria seção.
+    Cada planilha gera seu par de tabelas; o seletor mostra só o par da planilha escolhida."""
     if getattr(ctx, "base_completa", None) is None or not len(ctx.orcado):
         return ""
     fontes, _ = _fontes(ctx)
     fontes = [f for f in fontes if "SUP" not in f.upper()] + [f for f in fontes if "SUP" in f.upper()]
-    saida = ""
+    blocos = []
     for f in fontes:
         orc = orcado(ctx, f, TODAS, ctx.ref_atual)
         if not orc or all(orc.get(k) is None for k in ("dA", "dE")):
             continue
+        tabelas = ""
         for rotulo, rub, kf, kv, ke in RUBRICAS:
             comp = comparativo_orcado(ctx, rotulo, rub, kf, kv, ke, orc)
             if not len(comp):
                 continue
             slug = "orc-" + rub.lower() + "-" + "".join(c for c in f.lower() if c.isalnum())
-            saida += gera_tabela(ctx, comp, f"{rotulo} por ciclo — Realizado × Orçado {html.escape(f)} ({ctx.mes_atual})", slug,
-                                 com_dias=False, rot_atual="Realizado", rot_ant="Orçado",
-                                 card_attrs=f' data-src="{html.escape(f, quote=True)}"')
-    return saida
+            tabelas += gera_tabela(ctx, comp, f"{rotulo} por ciclo — Realizado × Orçado {html.escape(f)} ({ctx.mes_atual})", slug,
+                                   com_dias=False, rot_atual="Realizado", rot_ant="Orçado")
+        if tabelas:
+            blocos.append((f, tabelas))
+    if not blocos:
+        return ""
+    e = lambda v: html.escape(v, quote=True)
+    opcoes = "".join(f'<option value="{e(f)}">{html.escape(f)}</option>' for f, _ in blocos)
+    seletor = ('<div class="barra-orcado-ciclo"><label>Orçado por ciclo — comparar com '
+               f'<select id="selOrcCiclo" onchange="selecionarOrcadoCiclo(this.value)">{opcoes}</select></label></div>')
+    corpo = "".join(f'<div class="orc-ciclo-bloco" data-orc-ciclo="{e(f)}"{"" if i == 0 else " hidden"}>{t}</div>'
+                    for i, (f, t) in enumerate(blocos))
+    return seletor + corpo
