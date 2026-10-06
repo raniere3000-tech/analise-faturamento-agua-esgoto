@@ -9,7 +9,8 @@ from .config import CONSUMO_MINIMO_POR_CATEGORIA, MINIMO_POR_TIPO_ECONOMIA
 from .formatacao import normaliza_texto
 
 
-def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant):
+def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False):
+    """Top 100 ligações com maior queda de consumo (ou maior aumento, com `aumento=True`) entre os dois meses."""
     def prepara(df):
         df = df.copy()
         df["N. Ligação"] = df["N. Ligação"].astype(str).str.strip()
@@ -41,11 +42,15 @@ def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant):
     ).reset_index()
 
     comp = at_group.merge(ant_group, on="N. Ligação", how="inner")
-    comp["Queda_Consumo"] = comp["Consumo_Anterior"] - comp["Consumo_Atual"]
-    comp["Queda_%"] = np.where(comp["Consumo_Anterior"] > 0, comp["Queda_Consumo"] / comp["Consumo_Anterior"] * 100, 0)
-    comp["Queda_Valor_R$"] = comp["Valor_Anterior"] - comp["Valor_Atual"]
-    comp = comp[comp["Queda_Consumo"] > 0]
-    comp = comp.sort_values("Queda_Consumo", ascending=False).head(100)
+    p = "Aumento" if aumento else "Queda"
+    sinal = -1 if aumento else 1
+    comp[f"{p}_Consumo"] = sinal * (comp["Consumo_Anterior"] - comp["Consumo_Atual"])
+    # no aumento, quem não consumia no mês anterior fica sem % (vazio), em vez de 0%
+    comp[f"{p}_%"] = np.where(comp["Consumo_Anterior"] > 0, comp[f"{p}_Consumo"] / comp["Consumo_Anterior"].where(comp["Consumo_Anterior"] > 0, 1) * 100,
+                              np.nan if aumento else 0)
+    comp[f"{p}_Valor_R$"] = sinal * (comp["Valor_Anterior"] - comp["Valor_Atual"])
+    comp = comp[comp[f"{p}_Consumo"] > 0]
+    comp = comp.sort_values(f"{p}_Consumo", ascending=False).head(100)
     comp["Ranking"] = range(1, len(comp) + 1)
 
     col_nome_at = f"Consumo {ref_at}"
@@ -61,8 +66,14 @@ def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant):
     })
 
     return comp[["Ranking", "N. Ligação", "Nome_Cliente", "Grupo", "Categoria",
-        col_nome_at, col_nome_ant, "Queda_Consumo", "Queda_%",
-        col_valor_at, col_valor_ant, "Queda_Valor_R$"]]
+        col_nome_at, col_nome_ant, f"{p}_Consumo", f"{p}_%",
+        col_valor_at, col_valor_ant, f"{p}_Valor_R$"]]
+
+
+def gera_top100_aumentos(df_at, df_ant, ref_at, ref_ant):
+    """(água, esgoto): Top 100 ligações com maior aumento de consumo."""
+    print("📈 Calculando Top 100 clientes com maior aumento de consumo...")
+    return tuple(gera_top100_quedas(df_at, df_ant, rub, ref_at, ref_ant, aumento=True) for rub in ("AGUA", "ESGOTO"))
 
 
 def monta_dados_resumo_grupo(ctx):

@@ -48,7 +48,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
             {td("dias-atual", fmt_num(d["Dias_Leitura_atual"],1)) + td("dias-anterior", fmt_num(d["Dias_Leitura_anterior"],1)) if com_dias else ""}
             {td("fat-atual", fmt_num(d["Faturamento_atual"]))}
             {td("fat-anterior", fmt_num(d["Faturamento_anterior"]))}
-            {deltac("delta-fat", delta_fat)}
+            {deltac("delta-fat", delta_fat, dec=0)}
             {td("eco-atual", fmt_num(d["Economias_atual"]))}
             {td("eco-anterior", fmt_num(d["Economias_anterior"]))}
             {deltac("delta-pct-eco", delta_pct_eco, pct=True)}
@@ -627,22 +627,26 @@ def gera_tabela_dados_resumo_html(df_resumo):
     """
 
 
-def gera_tabela_top100_html(df, titulo, slug, botao_extra=""):
+def gera_tabela_top100_html(df, titulo, slug, botao_extra="", aumento=False):
+    tipo = "aumento" if aumento else "queda"
+    prefixo = "Aumento" if aumento else "Queda"
+    cabecalho = f"Top 100 clientes com maior {tipo} de consumo — {titulo}"
     if df.empty:
-        return f"<div class='card'><h2>Top 100 clientes com maior queda de consumo — {titulo}</h2><p>Sem dados</p></div>"
+        return f"<div class='card'><h2>{cabecalho} {botao_extra}</h2><p>Sem dados</p></div>"
 
     colunas = df.columns.tolist()
 
     # Colunas que exigem formatação especial
-    colunas_moeda = [c for c in colunas if c.startswith("Valor R$") or c == "Queda_Valor_R$"]
-    colunas_pct = [c for c in colunas if c == "Queda_%"]
-    colunas_num = [c for c in colunas if c.startswith("Consumo ") or c == "Queda_Consumo"]
+    colunas_moeda = [c for c in colunas if c.startswith("Valor R$") or c == f"{prefixo}_Valor_R$"]
+    colunas_pct = [c for c in colunas if c == f"{prefixo}_%"]
+    colunas_num = [c for c in colunas if c.startswith("Consumo ") or c == f"{prefixo}_Consumo"]
+    cor = "#176b9c" if aumento else "#C2560C"
 
     def formata_valor(col, v):
         if col in colunas_moeda:
             return "R$ " + fmt_num(v, 2)
         if col in colunas_pct:
-            return f"{fmt_num(v, 1)}%"
+            return "—" if pd.isna(v) else f"{fmt_num(v, 1)}%"
         if col in colunas_num:
             return fmt_num(v, 2)
         return html.escape(str(v))
@@ -657,17 +661,21 @@ def gera_tabela_top100_html(df, titulo, slug, botao_extra=""):
             texto = formata_valor(c, v)
             alinhamento = "left" if c in ("Nome_Cliente", "Grupo", "Categoria") else "center"
             destaque = ""
-            if c == "Queda_%" and isinstance(v, (int, float)) and v >= DESTAQUE_QUEDA_PCT_TOP100:
-                destaque = "color:#C2560C; font-weight:700;"
+            if c == f"{prefixo}_%" and isinstance(v, (int, float)) and v >= DESTAQUE_QUEDA_PCT_TOP100:
+                destaque = f"color:{cor}; font-weight:700;"
             tds += f"<td style='text-align:{alinhamento}; {destaque}'>{texto}</td>"
         linhas_html += f"<tr>{tds}</tr>"
 
+    explicacao = ("Ranking dos clientes com maior crescimento de consumo faturado entre os dois meses comparados (só ligações que faturaram nos dois meses; "
+                  "\"—\" no Aumento % = sem consumo no mês anterior)."
+                  if aumento else "Ranking dos clientes com maior redução de consumo faturado entre os dois meses comparados.")
+    cor_nome = "Azul" if aumento else "Laranja"
     return f"""
     <div class="card">
-    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Top 100 clientes com maior queda de consumo — {titulo} {botao_extra}</h2>
+    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">{cabecalho} {botao_extra}</h2>
     <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
-        Ranking dos clientes com maior redução de consumo faturado entre os dois meses comparados.
-        <span style="color:#C2560C; font-weight:700;">Laranja</span> = queda igual ou superior a {DESTAQUE_QUEDA_PCT_TOP100}%.
+        {explicacao}
+        <span style="color:{cor}; font-weight:700;">{cor_nome}</span> = {tipo} igual ou superior a {DESTAQUE_QUEDA_PCT_TOP100}%.
     </p>
     <table class="tabela-top100-{slug}">
         <thead><tr>{ths}</tr></thead>

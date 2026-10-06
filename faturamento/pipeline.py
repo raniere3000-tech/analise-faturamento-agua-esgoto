@@ -9,13 +9,13 @@ Rodando direto (`executar`), as duas fases acontecem em sequência.
 """
 import os
 
-from .analises import exporta_top100, monta_dados_resumo_grupo
+from .analises import exporta_top100, gera_top100_aumentos, monta_dados_resumo_grupo
 from .base import monta_base
 from .comparativo import calcula_comparativos, define_referencias
 from .dados import gera_aba_dados_html
 from .previsao import gera_aba_forecast_html
 from .dre import gera_aba_dre_html, gera_aba_indiretas_html, gera_filtros_dre_html, gera_info_filtros_json
-from .config import NOME_RELATORIO_HTML, NOME_TOP100_XLSX, TEXTO_JUSTIFICATIVA_PADRAO
+from .config import NOME_RELATORIO_HTML, NOME_TOP100_AUMENTO_XLSX, NOME_TOP100_XLSX, TEXTO_JUSTIFICATIVA_PADRAO
 from .contexto import Contexto
 from .orcado_ciclo import gera_tabelas_orcado_ciclo_html
 from .painel_html import (gera_card_leitura_html, gera_cards_insights_html, gera_cards_kpis_html,
@@ -23,7 +23,8 @@ from .painel_html import (gera_card_leitura_html, gera_cards_insights_html, gera
 from .progresso import Progresso
 from .relatorio import gera_filtro_html, gera_justificativa_html, monta_html
 from .tabelas_html import (gera_matriz_migracao_grupos, gera_tabela, gera_tabela_acima_abaixo_minimo,
-                           gera_tabela_dados_resumo_html, botao_download_xlsx, gera_tabela_top100_html, monta_quadro_ciclos_situacao)
+                           gera_tabela_dados_resumo_html, botao_download_xlsx, gera_tabela_top100_html, monta_quadro_ciclos_situacao,
+                           xlsx_bytes)
 from .top20 import aplica_ajustes_top20, calcula_top20_maior_consumo
 
 
@@ -87,11 +88,17 @@ class Sessao:
             botao_top100 = botao_download_xlsx("Baixar Top 100 (Excel)", NOME_TOP100_XLSX, f.read())
         tabela_top100_agua_html = gera_tabela_top100_html(top_agua_df, "Água", "agua", botao_top100)
         tabela_top100_esgoto_html = gera_tabela_top100_html(top_esg_df, "Esgoto", "esgoto")
+        aum_agua_df, aum_esg_df = gera_top100_aumentos(ctx.df_atual, ctx.df_anterior, ctx.ref_atual, ctx.ref_anterior)
+        botao_aumento = botao_download_xlsx("Baixar Top 100 aumentos (Excel)", NOME_TOP100_AUMENTO_XLSX,
+                                            xlsx_bytes({"Top100_Aumento_Agua": aum_agua_df, "Top100_Aumento_Esgoto": aum_esg_df}))
+        tabela_aumento_agua_html = gera_tabela_top100_html(aum_agua_df, "Água", "aumento-agua", botao_aumento, aumento=True)
+        tabela_aumento_esgoto_html = gera_tabela_top100_html(aum_esg_df, "Esgoto", "aumento-esgoto", aumento=True)
         progresso.atualiza(88, "Tabelas Top100 geradas")
 
         df_resumo_grupo = monta_dados_resumo_grupo(ctx)
         ctx.resultados.update({"resumo": df_resumo_grupo, "ciclos": df_ciclos_por_grupo, "minimo": ctx.df_minimo_por_grupo,
-                               "top_agua": top_agua_df, "top_esgoto": top_esg_df})
+                               "top_agua": top_agua_df, "top_esgoto": top_esg_df,
+                               "aumento_agua": aum_agua_df, "aumento_esgoto": aum_esg_df})
         progresso.atualiza(90, "Resumo por grupo consolidado")
 
         cards_kpis_html = gera_cards_kpis_html(df_resumo_grupo)
@@ -126,6 +133,8 @@ class Sessao:
             tabela_minimo_html=tabela_minimo_html,
             tabela_top100_agua_html=tabela_top100_agua_html,
             tabela_top100_esgoto_html=tabela_top100_esgoto_html,
+            tabela_aumento_agua_html=tabela_aumento_agua_html,
+            tabela_aumento_esgoto_html=tabela_aumento_esgoto_html,
             aba_dre_html=gera_aba_dre_html(ctx),
             aba_indiretas_html=gera_aba_indiretas_html(ctx),
             aba_dados_html=gera_aba_dados_html(ctx),
