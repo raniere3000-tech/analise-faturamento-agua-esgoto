@@ -187,3 +187,24 @@ def test_metas_ri_do_rf_e_sem_delta_entre_orcados_nas_indiretas(tmp_path):
     ind = html[html.index('id="view-indiretas"'):html.index('id="view-tabelas"')]
     assert "data-combo" not in ind                      # sem Δ entre orçados nas Indiretas
     assert 'data-combo' not in html[html.index('id="view-dre"'):html.index('id="view-forecast"')]   # DRE também sem Δ entre orçados
+
+
+def test_orcado_indiretas_com_rubrica_curta_e_valor_em_texto(tmp_path):
+    import pandas as pd
+    from faturamento import Sessao
+    from faturamento.dre import orcado
+    from dados_sinteticos import gera_pasta
+    gera_pasta(str(tmp_path), com_dre=True)
+    rf = tmp_path / "RF01T26.xlsx"
+    df = pd.read_excel(rf)
+    meses = [c for c in df.columns if c not in ("Sup", "Rubrica")]
+    df = df[df["Rubrica"] != "RI Cortes/Recorte"]
+    extras = [("CORTE", " R$ 226.713,01 "), ("RELIGAÇÃO", " R$ 184.837,03 "), ("LNA", " R$ 255.916,39 "), ("SANÇÃO", " R$ 359.404,46 ")]
+    linhas = [{"Sup": "Interior", "Rubrica": r, **{m: v for m in meses}} for r, v in extras]
+    pd.concat([df, pd.DataFrame(linhas)]).to_excel(rf, index=False)
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    s.preparar()
+    s.continuar()
+    o = orcado(s.ctx, "RF01T26", "TODAS")
+    assert o["ri_CORTE"] == pytest.approx(226713.01) and o["ri_SANÇÃO"] == pytest.approx(359404.46)
+    assert o["ri_RELIGAÇÃO"] == pytest.approx(184837.03) and o["ri_LNA"] == pytest.approx(255916.39)

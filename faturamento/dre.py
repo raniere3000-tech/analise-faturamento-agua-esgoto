@@ -55,6 +55,9 @@ ROTULOS_ORCADO = {
 for _cl, _rotulo in LINHAS_INDIRETAS_DRE.items():
     if _cl != "LNE":
         ROTULOS_ORCADO[_rotulo] = "ri_" + _cl
+# o RF também traz as linhas das indiretas só com o nome da classe (CORTE, RELIGAÇÃO, LNA, SANÇÃO, OUTROS)
+for _cl in ("CORTE", "RELIGAÇÃO", "LNA", "SANÇÃO", "OUTROS"):
+    ROTULOS_ORCADO[_cl] = "ri_" + _cl
 ROTULOS_ORCADO = {chave_texto(k): v for k, v in ROTULOS_ORCADO.items()}
 # Linhas "RI" do RF (metas das indiretas): reconhecidas também com pequenas variações no nome
 # (ex.: "RI Ligações - Água", "RI Ligações Água", "RI Fiscalização - Água").

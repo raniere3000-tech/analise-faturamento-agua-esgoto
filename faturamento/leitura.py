@@ -219,6 +219,20 @@ def processa_avulso(caminho):
     return df
 
 
+def _numero_orcado(v):
+    """Número da célula do orçado; aceita texto no formato brasileiro (ex.: ' R$ 226.713,01 ')."""
+    if isinstance(v, str):
+        t = v.replace("R$", "").replace("\xa0", "").strip()
+        if not t or t in "-–":
+            return float("nan")
+        if "," in t:
+            t = t.replace(".", "").replace(",", ".")
+        elif t.count(".") > 1:
+            t = t.replace(".", "")
+        v = t
+    return pd.to_numeric(v, errors="coerce")
+
+
 def processa_orcado(caminho, aba=0):
     """Planilha de orçado (RF / RF SUP): colunas Sup, Rubrica e um mês por coluna.
     Devolve formato longo: Sup, Rubrica, Referencia (MM/AAAA), Valor."""
@@ -226,7 +240,7 @@ def processa_orcado(caminho, aba=0):
     df = le_dataframe(caminho, sheet_name=aba)
     meses = colunas_de_mes(df.columns)
     longo = df.melt(id_vars=["Sup", "Rubrica"], value_vars=meses, var_name="Mes", value_name="Valor")
-    longo["Valor"] = pd.to_numeric(longo["Valor"], errors="coerce")
+    longo["Valor"] = longo["Valor"].map(_numero_orcado)
     longo = longo.dropna(subset=["Valor"])
     longo["Referencia"] = longo["Mes"].map(referencia_mes)
     longo["Sup"] = longo["Sup"].astype(str).str.strip()
