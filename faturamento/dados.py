@@ -65,6 +65,36 @@ def _mapeamento_orcado(ctx):
     return "".join(blocos)
 
 
+def _conferencia_kpis(ctx):
+    """De onde vêm os valores dos KPIs: soma de 'Valor (R$)' das rubricas de água e esgoto da última referência, por grupo."""
+    import pandas as pd
+    from .formatacao import fmt_num
+
+    def soma(df, rub):
+        return float(df[df["Rubrica"].str.contains(rub, case=False, na=False)]["Valor (R$)"].sum())
+    at = ctx.df_atual
+    linhas = []
+    for g, d in at.groupby("Grupo"):
+        a, e = soma(d, "AGUA"), soma(d, "ESGOTO")
+        linhas.append([html.escape(str(g)), f"{len(d):,}".replace(",", "."), "R$ " + fmt_num(a, 2), "R$ " + fmt_num(e, 2),
+                       "R$ " + fmt_num(a + e, 2)])
+    ta, te = soma(at, "AGUA"), soma(at, "ESGOTO")
+    linhas.append(["<b>Total (KPIs)</b>", f"{len(at):,}".replace(",", "."), "<b>R$ " + fmt_num(ta, 2) + "</b>",
+                   "<b>R$ " + fmt_num(te, 2) + "</b>", "<b>R$ " + fmt_num(ta + te, 2) + "</b>"])
+    rubs = ", ".join(sorted({str(r) for r in at["Rubrica"].dropna().unique()})) or "—"
+    comp = getattr(ctx, "base_completa", None)
+    fora = ""
+    if comp is not None and len(comp) > len(ctx.base_final):
+        cm = comp[comp["Referencia de Leitura"] == ctx.ref_atual]
+        extra = soma(cm, "AGUA") + soma(cm, "ESGOTO") - (ta + te)
+        if abs(extra) > 0.005:
+            fora = f' Grupos acima do {ctx.ultimo_grupo} (fora da análise): R$ {fmt_num(extra, 2)}.'
+    return (f'<div class="card"><h2>Conferência dos KPIs — {html.escape(ctx.mes_atual)}</h2>'
+            '<p class="nota-secao">Os KPIs somam o campo "Valor (R$)" da fatura, só das rubricas de água e esgoto, nos grupos até o '
+            f'{html.escape(str(ctx.ultimo_grupo or "—"))}. Rubricas presentes: {html.escape(rubs)}.{fora}</p>'
+            + _tabela(["Grupo", "Linhas", "Valor de água", "Valor de esgoto", "Total"], linhas) + '</div>')
+
+
 def gera_aba_dados_html(ctx):
     prepara(ctx)
     avisos = _avisos(ctx)
@@ -73,6 +103,7 @@ def gera_aba_dados_html(ctx):
     linhas = [[html.escape(i["tipo"]), html.escape(i["arquivo"]), f"{i['linhas']:,}".replace(",", "."),
                html.escape(i["periodo"] or "—"), html.escape(i.get("extra", ""))] for i in ctx.bases_info]
     return (f'<div class="card"><h2>Avisos</h2>{lista}</div>'
+            + _conferencia_kpis(ctx) +
             f'<div class="card"><h2>Bases carregadas</h2>'
             + _tabela(["Tipo", "Arquivo", "Linhas", "Meses", "Observação"], linhas) + '</div>'
             f'<div class="card"><h2>Orçado: linhas reconhecidas</h2>'

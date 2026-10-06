@@ -208,3 +208,8 @@ def test_orcado_indiretas_com_rubrica_curta_e_valor_em_texto(tmp_path):
     o = orcado(s.ctx, "RF01T26", "TODAS")
     assert o["ri_CORTE"] == pytest.approx(226713.01) and o["ri_SANÇÃO"] == pytest.approx(359404.46)
     assert o["ri_RELIGAÇÃO"] == pytest.approx(184837.03) and o["ri_LNA"] == pytest.approx(255916.39)
+
+
+def test_dados_tem_conferencia_dos_kpis(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert "Conferência dos KPIs" in html and "Total (KPIs)" in html
