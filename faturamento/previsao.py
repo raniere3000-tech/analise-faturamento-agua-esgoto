@@ -4,10 +4,14 @@
 Fechamento = realizado até agora (grupos já faturados) + projeção do que falta.
   - Diretas (água/esgoto), economias e volume: cada grupo que ainda não faturou entra com a média dos
     últimos 3 meses desse mesmo grupo.
-  - Indiretas e cancelamento (não têm grupo): falta = média dos últimos 3 meses − realizado, nunca negativo.
+  - Indiretas (RI e esgoto indireto): ticket por dia útil (realizado ÷ dias úteis decorridos) × dias úteis que faltam;
+    Cortes só contam dias úteis que não são sexta nem véspera de feriado.
+  - Cancelamento: falta = média dos últimos 3 meses − realizado, nunca negativo.
 A coluna "Forecast" (o que falta faturar) é editável no relatório; totais, médias e comparações são refeitos no navegador (relatorio.js).
 """
+import calendar
 import copy
+import datetime as dt
 import html
 
 import pandas as pd
@@ -19,6 +23,49 @@ MESES_BASE = 3
 # linhas que o usuário edita (as demais são calculadas a partir delas)
 LINHAS_BASICAS = ["dA", "dE", "iE", "ri_CORTE", "ri_RELIGAÇÃO", "ri_LNA", "ri_SANÇÃO", "ri_OUTROS", "ecoA", "ecoE", "volA", "volE", "canc"]
 LINHAS_POR_GRUPO = ["dA", "dE", "ecoA", "ecoE", "volA", "volE"]
+
+
+# ---------- dias úteis ----------
+CLASSES_POR_DIA_UTIL = ["iE", "ri_CORTE", "ri_RELIGAÇÃO", "ri_LNA", "ri_SANÇÃO", "ri_OUTROS"]
+
+
+def _pascoa(ano):
+    a, b, c = ano % 19, ano // 100, ano % 100
+    d, e = b // 4, b % 4
+    g = (8 * b + 13) // 25
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 19 * l) // 433
+    mes = (h + l - 7 * m + 114) // 31
+    dia = (h + l - 7 * m + 114) % 31 + 1
+    return dt.date(ano, mes, dia)
+
+
+def feriados(ano):
+    """Feriados nacionais, de Carnaval/Corpus Christi e do estado do RJ (São Jorge)."""
+    p = _pascoa(ano)
+    dias = [(1, 1), (21, 4), (23, 4), (1, 5), (7, 9), (12, 10), (2, 11), (15, 11), (20, 11), (25, 12)]
+    fixos = {dt.date(ano, m, d) for d, m in dias}
+    moveis = {p - dt.timedelta(days=48), p - dt.timedelta(days=47), p - dt.timedelta(days=2), p + dt.timedelta(days=60)}
+    return fixos | moveis
+
+
+def _eh_util(d, fer):
+    return d.weekday() < 5 and d not in fer
+
+
+def dias_uteis_do_mes(ref, corte):
+    """Dias úteis do mês `ref` (MM/AAAA): total/decorridos até `corte` (inclusive) e os de corte (sem sextas e vésperas de feriado)."""
+    m, a = int(ref[:2]), int(ref[3:])
+    fer = feriados(a) | feriados(a + 1)
+    dias = [dt.date(a, m, n) for n in range(1, calendar.monthrange(a, m)[1] + 1)]
+    uteis = [d for d in dias if _eh_util(d, fer)]
+    cortes = [d for d in uteis if d.weekday() != 4 and (d + dt.timedelta(days=1)) not in fer]
+    f = lambda lista: (len(lista), sum(1 for d in lista if d <= corte))
+    (tu, du), (tc, dc) = f(uteis), f(cortes)
+    return {"uteis": tu, "uteis_decorridos": du, "uteis_faltam": tu - du,
+            "corte": tc, "corte_decorridos": dc, "corte_faltam": tc - dc}
 
 
 def _mes_deslocado(ref, n):
@@ -79,13 +126,20 @@ def calcula_previsao(ctx, sup):
         historico = [por_mes[r][g] for r in refs if g in por_mes[r]]
         for k in LINHAS_POR_GRUPO:
             falta[k] += sum(h[k] for h in historico) / len(historico)
+    corte = getattr(ctx, "data_corte", None) or dt.date.today()
+    du = dias_uteis_do_mes(ctx.ref_atual, corte)
+    for k in CLASSES_POR_DIA_UTIL:                 # indiretas: ticket por dia útil × dias úteis que faltam
+        real = atual.get(k) or 0.0
+        sufixo = "corte" if k == "ri_CORTE" else "uteis"
+        decorridos, faltam_dias = du[sufixo + "_decorridos"], du[sufixo + "_faltam"]
+        falta[k] = (real / decorridos) * faltam_dias if decorridos else 0.0
     for k in LINHAS_BASICAS:
-        if k in LINHAS_POR_GRUPO:
+        if k in LINHAS_POR_GRUPO or k in CLASSES_POR_DIA_UTIL:
             continue
         media = sum(meses[r].get(k) or 0.0 for r in refs) / len(refs)
         real = atual.get(k) or 0.0
         falta[k] = 0.0 if abs(real) >= abs(media) else media - real
-    return {"refs": refs, "meses": meses, "atual": atual, "falta": falta, "faltam": faltam}
+    return {"refs": refs, "meses": meses, "atual": atual, "falta": falta, "faltam": faltam, "dias": du, "corte": corte}
 
 
 def _attr(v):
