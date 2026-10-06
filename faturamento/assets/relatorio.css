@@ -60,13 +60,13 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--azul-claro);
 .obs-dias b { color:var(--preto); font-weight:600; }
 
 /* ===== KPIs: faixa única ===== */
-.kpis-grid { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:1px; max-width:1800px; margin:16px auto; background:var(--linha); border:1px solid var(--linha); border-radius:8px; overflow:hidden; }
+.kpis-grid { display:grid; grid-template-columns:repeat(9, minmax(0,1fr)); gap:1px; max-width:1800px; margin:16px auto; background:var(--linha); border:1px solid var(--linha); border-radius:8px; overflow:hidden; }
 .kpi-card { background:#FFFFFF; padding:9px 12px 9px; border-top:3px solid var(--marinho); min-width:0; }
 .kpi-card.negativo { border-top-color:var(--laranja); }
 .kpi-card h3 { font-family:var(--fonte); font-size:11px; font-weight:500; color:var(--azul-claro); margin:0 0 4px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .kpi-valor { font-family:var(--fonte-cond); font-size:15px; font-weight:600; margin:0; color:var(--preto); letter-spacing:-.01em; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .kpi-delta { font-size:11px; margin:2px 0 0 0; font-weight:600; white-space:nowrap; font-variant-numeric:tabular-nums; }
-@media (max-width: 1100px) { .kpis-grid { grid-template-columns:repeat(4, minmax(0,1fr)); } }
+@media (max-width: 1100px) { .kpis-grid { grid-template-columns:repeat(3, minmax(0,1fr)); } }
 @media (max-width: 560px)  { .kpis-grid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
 
 /* ===== Destaques ===== */

@@ -168,3 +168,13 @@ def test_previsao_de_fechamento_projeta_grupos_que_faltam(tmp_path):
     assert r["falta"]["dA"] > 0 and r["atual"]["dA"] > 0
     html = open(s.caminho_html, encoding="utf-8").read()
     assert "tabela-previsao" in html and "Previsão de fechamento" in html
+
+
+def test_kpi_faturamento_total_antes_de_agua_e_esgoto(sessao_pipeline=None):
+    import pandas as pd
+    from faturamento.painel_html import gera_cards_kpis_html
+    df = pd.DataFrame([{"FatAgua_Atual": 100.0, "FatAgua_Anterior": 80.0, "FatEsgoto_Atual": 50.0, "FatEsgoto_Anterior": 40.0,
+                        "Eco_Atual": 10, "Eco_Anterior": 10, "VolFat_Atual": 5, "VolFat_Anterior": 5, "Acima_Atual": 1, "Acima_Ant": 1}])
+    h = gera_cards_kpis_html(df)
+    assert h.index("Faturamento Total") < h.index("Faturamento Água") < h.index("Faturamento Esgoto")
+    assert "R$ 150,00" in h

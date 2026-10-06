@@ -391,6 +391,7 @@ function recalcularKPIsResumo() {
         }
     }
 
+    setKpi('fattotal', fatAguaAt + fatEsgotoAt, fatAguaAnt + fatEsgotoAnt, { moeda: true });
     setKpi('fatagua', fatAguaAt, fatAguaAnt, { moeda: true });
     setKpi('fatesgoto', fatEsgotoAt, fatEsgotoAnt, { moeda: true });
     setKpi('eco', ecoAt, ecoAnt);
