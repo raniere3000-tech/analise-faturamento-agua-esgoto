@@ -62,58 +62,78 @@ class Sessao:
         print(f"Economia Mista: {(b['Economia Mista'] == 'Sim').sum()}")
         print(f"Grupos com cronograma: {(b['Encontrado no Cronograma'] == 'Sim').sum()}")
         progresso.atualiza(58, "Base processada")
+        # Cada etapa avisa ANTES de começar o que está sendo criado (o site mostra o item atual e os já concluídos)
+        passo = progresso.atualiza
 
         print("=" * 70)
         print("ETAPA 5/6 — COMPARATIVOS")
         print("=" * 70)
+        passo(59, "Calculando: comparativos de água e esgoto por grupo")
         define_referencias(ctx)
         calcula_comparativos(ctx)
-        progresso.atualiza(68, "Comparativos")
 
         print("📊 Gerando tabelas e insights auxiliares...")
+        passo(66, "Criando tabela: Economias faturadas por ciclo (ativas × cortadas)")
         quadro_ciclos_html, df_ciclos_por_grupo = monta_quadro_ciclos_situacao(ctx)
-        progresso.atualiza(74, "Ciclos ativo/cortada finalizado")
 
+        passo(70, "Criando tabela: Matriz de migração de grupos")
         matriz_html = gera_matriz_migracao_grupos(ctx)
-        progresso.atualiza(78, "Matriz de migração finalizada")
 
+        passo(74, "Criando tabela: Economias acima × abaixo do consumo mínimo")
         tabela_minimo_html, ctx.df_minimo_por_grupo = gera_tabela_acima_abaixo_minimo(ctx)
-        progresso.atualiza(82, "Tabela de consumo mínimo finalizada")
 
+        passo(78, "Criando tabelas: Top 100 maior queda de consumo (água e esgoto)")
         top_agua_df, top_esg_df = exporta_top100(ctx.df_atual, ctx.df_anterior, ctx.ref_atual,
                                                  ctx.ref_anterior, self.caminho_top100)
-        progresso.atualiza(86, "Top100 exportado")
-
         with open(self.caminho_top100, "rb") as f:
             botao_top100 = botao_download_xlsx("Baixar Top 100 (Excel)", NOME_TOP100_XLSX, f.read())
         tabela_top100_agua_html = gera_tabela_top100_html(top_agua_df, "Água", "agua", botao_top100)
         tabela_top100_esgoto_html = gera_tabela_top100_html(top_esg_df, "Esgoto", "esgoto")
+
+        passo(80, "Criando tabelas: Top 100 maior aumento de consumo (água e esgoto)")
         aum_agua_df, aum_esg_df = gera_top100_aumentos(ctx.df_atual, ctx.df_anterior, ctx.ref_atual, ctx.ref_anterior)
         botao_aumento = botao_download_xlsx("Baixar Top 100 aumentos (Excel)", NOME_TOP100_AUMENTO_XLSX,
                                             xlsx_bytes({"Top100_Aumento_Agua": aum_agua_df, "Top100_Aumento_Esgoto": aum_esg_df}))
         tabela_aumento_agua_html = gera_tabela_top100_html(aum_agua_df, "Água", "aumento-agua", botao_aumento, aumento=True)
         tabela_aumento_esgoto_html = gera_tabela_top100_html(aum_esg_df, "Esgoto", "aumento-esgoto", aumento=True)
-        progresso.atualiza(88, "Tabelas Top100 geradas")
 
+        passo(82, "Calculando: resumo consolidado por grupo")
         df_resumo_grupo = monta_dados_resumo_grupo(ctx)
         ctx.resultados.update({"resumo": df_resumo_grupo, "ciclos": df_ciclos_por_grupo, "minimo": ctx.df_minimo_por_grupo,
                                "top_agua": top_agua_df, "top_esgoto": top_esg_df,
                                "aumento_agua": aum_agua_df, "aumento_esgoto": aum_esg_df})
-        progresso.atualiza(90, "Resumo por grupo consolidado")
 
+        passo(83, "Criando KPIs do Resumo (8 cards)")
         cards_kpis_html = gera_cards_kpis_html(df_resumo_grupo)
+        passo(84, "Criando gráfico: Faturamento total por grupo")
         grafico_faturamento_html = gera_grafico_faturamento_html(ctx, df_resumo_grupo)
+        passo(84.5, "Criando quadro: Dias de leitura (média)")
         card_leitura_html = gera_card_leitura_html(ctx, df_resumo_grupo)
+        passo(85, "Criando cards: Destaques do mês")
         cards_insights_html = gera_cards_insights_html(ctx, ctx.comp_agua, ctx.comp_esgoto, df_ciclos_por_grupo,
                                                        top_agua_df, top_esg_df)
+        passo(85.5, "Criando tabela: Resumo consolidado por grupo")
         tabela_dados_resumo_html = gera_tabela_dados_resumo_html(df_resumo_grupo)
-        progresso.atualiza(93, "KPIs, gráfico e insights gerados")
 
         print("=" * 70)
         print("ETAPA 6/6 — GERAÇÃO HTML COM ABAS")
         print("=" * 70)
         if texto_justificativa is None:
             texto_justificativa = TEXTO_JUSTIFICATIVA_PADRAO
+        passo(86, "Criando tabelas: Comparativo Água e Esgoto mês a mês")
+        tabela_agua_html = gera_tabela(ctx, ctx.comp_agua, "Comparativo Água Mês a Mês", "agua")
+        tabela_esgoto_html = gera_tabela(ctx, ctx.comp_esgoto, "Comparativo Esgoto Mês a Mês", "esgoto")
+        passo(87, "Criando tabelas: Orçado por ciclo (água e esgoto)")
+        tabelas_orcado_ciclo_html = gera_tabelas_orcado_ciclo_html(ctx)
+        passo(88, "Criando aba DRE: tabela realizado × orçado por superintendência e mês")
+        aba_dre_html = gera_aba_dre_html(ctx)
+        passo(90, "Criando aba Indiretas: orçado × realizado, gráfico de evolução e ticket médio")
+        aba_indiretas_html = gera_aba_indiretas_html(ctx)
+        passo(92, "Criando aba Forecast: projeção por grupo, indiretas e cancelamento")
+        aba_forecast_html = gera_aba_forecast_html(ctx)
+        passo(94, "Criando aba Dados: explicação de cada cálculo e bases para download")
+        aba_dados_html = gera_aba_dados_html(ctx)
+        passo(98, "Montando o relatório final (HTML)")
         html_final = monta_html(
             ctx,
             alerta_minimo_html=ctx.alerta_minimo_html,
@@ -125,9 +145,9 @@ class Sessao:
             cards_insights_html=cards_insights_html,
             tabela_dados_resumo_html=tabela_dados_resumo_html,
             justificativa_html=gera_justificativa_html(ctx, texto_justificativa),
-            tabela_agua_html=gera_tabela(ctx, ctx.comp_agua, "Comparativo Água Mês a Mês", "agua"),
-            tabela_esgoto_html=gera_tabela(ctx, ctx.comp_esgoto, "Comparativo Esgoto Mês a Mês", "esgoto"),
-            tabelas_orcado_ciclo_html=gera_tabelas_orcado_ciclo_html(ctx),
+            tabela_agua_html=tabela_agua_html,
+            tabela_esgoto_html=tabela_esgoto_html,
+            tabelas_orcado_ciclo_html=tabelas_orcado_ciclo_html,
             quadro_ciclos_html=quadro_ciclos_html,
             matriz_html=matriz_html,
             tabela_minimo_html=tabela_minimo_html,
@@ -135,10 +155,10 @@ class Sessao:
             tabela_top100_esgoto_html=tabela_top100_esgoto_html,
             tabela_aumento_agua_html=tabela_aumento_agua_html,
             tabela_aumento_esgoto_html=tabela_aumento_esgoto_html,
-            aba_dre_html=gera_aba_dre_html(ctx),
-            aba_indiretas_html=gera_aba_indiretas_html(ctx),
-            aba_dados_html=gera_aba_dados_html(ctx),
-            aba_forecast_html=gera_aba_forecast_html(ctx),
+            aba_dre_html=aba_dre_html,
+            aba_indiretas_html=aba_indiretas_html,
+            aba_dados_html=aba_dados_html,
+            aba_forecast_html=aba_forecast_html,
             filtros_dre_html=gera_filtros_dre_html(ctx),
             info_filtros_json=gera_info_filtros_json(ctx),
         )

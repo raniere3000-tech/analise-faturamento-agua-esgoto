@@ -283,3 +283,38 @@ def test_orcado_por_ciclo_com_peso_proprio_por_metrica(sessao):
         assert comp["Economias_anterior"].sum() == pytest.approx(orc.get(ke) or 0)
         g = comp["Grupo"].iloc[0]
         assert comp["Volume_Faturado_anterior"].iloc[0] == pytest.approx(pesos["volume"][g] * (orc.get(kv) or 0))
+
+
+def test_dados_explica_cada_tabela_e_grafico_com_bases_para_baixar(sessao):
+    import base64, io, re
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    dados = html[html.index('id="view-dados"'):]
+    for titulo in ("Tabela DRE", "KPIs (8 cards)", "Gráfico — Faturamento total por grupo", "Dias de leitura (média)",
+                   "Destaques do mês", "Resumo consolidado por grupo", "Comparativo Água / Esgoto", "Orçado por ciclo",
+                   "ativas × cortadas", "Matriz de migração", "consumo mínimo", "maior queda de consumo", "maior aumento de consumo",
+                   "Indiretas: orçado × realizado", "Evolução mensal por classe", "Quantidade e ticket médio", "Forecast de fechamento"):
+        assert titulo in dados, titulo
+    assert dados.count("Como a tabela / o gráfico é montado") >= 15
+    # cada base aparece embutida uma vez e é referenciada por vários botões
+    for ch in ("fatura", "fatura_mensal", "avulso", "cancelamento", "orcado"):
+        assert dados.count(f'id="base-dl-{ch}"') == 1
+        assert dados.count(f'data-ref="{ch}"') >= 2
+    b64 = re.search(r'id="base-dl-fatura" data-arquivo="base_fatura.csv">([^<]+)<', dados).group(1)
+    df = pd.read_csv(io.BytesIO(base64.b64decode(b64)), sep=";", decimal=",", encoding="utf-8-sig")
+    assert {"N. Ligação", "Grupo", "Valor (R$)", "Superintendência", "Entra em economias/volume"} <= set(df.columns)
+    assert set(df["Referencia de Leitura"]) == {"08/2026", "09/2026"}
+
+
+def test_progresso_avisa_cada_grafico_tabela_e_kpi(tmp_path):
+    msgs = []
+    gera_pasta(str(tmp_path), com_dre=True)
+    s = Sessao(str(tmp_path), progresso=lambda p, t: msgs.append((p, t)))
+    s.preparar()
+    s.continuar()
+    textos = [t for _, t in msgs]
+    for t in ("Criando KPIs do Resumo (8 cards)", "Criando gráfico: Faturamento total por grupo",
+              "Criando tabela: Matriz de migração de grupos", "Criando aba Indiretas: orçado × realizado, gráfico de evolução e ticket médio",
+              "Criando aba Forecast: LAGOS", "Criando aba Dados: bases para download"):
+        assert t in textos, t
+    pcts = [p for p, _ in msgs]
+    assert pcts == sorted(pcts)                          # a barra só avança

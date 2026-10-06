@@ -305,6 +305,15 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 body.relatorio-aberto { height: 100vh; overflow: hidden; }
 body.relatorio-aberto .conteudo { min-height: 0; }
 #quadroRelatorio { min-height: 0; }
+/* etapas da geração (gráficos, tabelas, KPIs) */
+.etapas { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: #C8D4EA; }
+.etapas[hidden] { display: none; }
+.etapas li { display: inline-flex; align-items: center; gap: 5px; }
+.etapas li span { font-weight: 800; }
+.etapas li.ok span { color: #7ee0bc; }
+.etapas li.atual { color: #fff; font-weight: 700; }
+.etapas li.atual span { color: #ffd166; animation: pulsa 1s infinite alternate; }
+@keyframes pulsa { from { opacity: .35; } to { opacity: 1; } }
 </style>
 </head>
 <body>
@@ -312,7 +321,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v20</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v21</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -335,6 +344,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   <div class="progresso" id="progresso" hidden>
     <div class="prog-linha"><div class="barra"><div class="barra-fill" id="barraFill"></div></div><b id="statusPct">0%</b><span id="statusTexto">Preparando…</span></div>
     <p class="nota" id="statusNota"></p>
+    <ol class="etapas" id="listaEtapas" hidden aria-live="polite"></ol>
     <div class="arquivos" id="listaArquivos" hidden></div>
     <details class="log">
       <summary>Detalhes da leitura</summary>
@@ -396,7 +406,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v20-20261006"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v21-20261006"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -436,7 +446,23 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     return worker;
   }
 
+  // Etapas da geração: o item em andamento e os já concluídos (gráficos, tabelas, KPIs, abas)
+  let etapas = [];
+  function limpaEtapas() { etapas = []; $("listaEtapas").innerHTML = ""; $("listaEtapas").hidden = true; }
+  function registraEtapa(texto, concluir) {
+    if (!/^(Criando|Calculando|Montando)/.test(texto) && !concluir) return;
+    const ultima = etapas[etapas.length - 1];
+    if (ultima && !ultima.ok && ultima.texto !== texto) ultima.ok = true;
+    if (!concluir && (!ultima || ultima.texto !== texto)) etapas.push({ texto, ok: false });
+    if (concluir && ultima) ultima.ok = true;
+    const lista = $("listaEtapas");
+    lista.hidden = !etapas.length;
+    lista.innerHTML = etapas.slice(-8).map((e) =>
+      `<li class="${e.ok ? "ok" : "atual"}"><span>${e.ok ? "✓" : "●"}</span>${escapa(e.texto)}</li>`).join("");
+  }
+
   function setStatus(texto, pct) {
+    registraEtapa(texto, texto === "Finalizado" || texto === "Relatório gerado");
     $("statusTexto").textContent = texto;
     if (typeof pct === "number") {
       const p = Math.max(0, Math.min(100, pct));
@@ -560,6 +586,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     progresso.classList.remove("erro");
     $("logExecucao").textContent = "";
     $("listaArquivos").innerHTML = "";
+    limpaEtapas();
     $("statusNota").textContent = worker ? "Lendo os arquivos da pasta…" : "Carregando o Python no navegador. Na primeira vez pode levar cerca de 1 minuto.";
     setStatus("Lendo a pasta…", 0);
     bloqueia(true);
@@ -751,6 +778,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     progresso.hidden = false;
     progresso.classList.remove("erro");
     $("statusNota").textContent = ajustes.length ? `Usando ${ajustes.length} cliente(s) com valores alterados.` : "Usando os valores originais.";
+    limpaEtapas();
     setStatus("Processando…", 52);
     bloqueia(true);
     pegaWorker().postMessage({ fase: "continuar", ajustes });

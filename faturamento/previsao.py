@@ -231,5 +231,9 @@ def gera_aba_forecast_html(ctx):
     """Aba "Forecast": um bloco por superintendência (o filtro Superintendência escolhe qual aparece)."""
     from .dre import lista_sups, prepara
     prepara(ctx)
-    return "".join(f'<div class="prev-bloco" data-sup="{html.escape(sup, quote=True)}">{previsao_html(ctx, sup)}</div>'
-                   for sup in lista_sups(ctx))
+    sups = lista_sups(ctx)
+    blocos = []
+    for i, sup in enumerate(sups):
+        ctx.progresso.etapa(i, len(sups), 92, 94, f"Criando aba Forecast: {_nome_sup(sup)}")
+        blocos.append(f'<div class="prev-bloco" data-sup="{html.escape(sup, quote=True)}">{previsao_html(ctx, sup)}</div>')
+    return "".join(blocos)
