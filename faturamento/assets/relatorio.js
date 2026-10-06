@@ -538,7 +538,7 @@ document.addEventListener('click', function (e) {
 // ===== Previsão de fechamento (aba DRE): células editáveis, totais refeitos aqui no navegador =====
 const PREV_BASICAS = ['dA', 'dE', 'iE', 'ri_CORTE', 'ri_RELIGAÇÃO', 'ri_LNA', 'ri_SANÇÃO', 'ri_OUTROS', 'ecoA', 'ecoE', 'volA', 'volE', 'canc'];
 const PREV_CLASSES_RI = ['ri_CORTE', 'ri_RELIGAÇÃO', 'ri_LNA', 'ri_SANÇÃO', 'ri_OUTROS'];
-const PREV_CHAVE_LS = 'faturamento_previsao_v1';
+const PREV_CHAVE_LS = 'faturamento_previsao_v2';
 let prevEdicoes = {}, prevOculta = false;
 try { const salvo = JSON.parse(localStorage.getItem(PREV_CHAVE_LS) || '{}'); prevEdicoes = salvo.edicoes || {}; prevOculta = !!salvo.oculta; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
 function prevSalvar() { try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta })); } catch (e) { /* ignora */ } }
@@ -565,34 +565,37 @@ const prevChave = (tab, k) => `${tab.dataset.mes}|${tab.dataset.prev}|${k}`;
 
 function prevRecalcular(tab) {
     const linha = k => tab.querySelector(`tr[data-k="${k}"]`);
-    const F = {};
+    const FC = {}, C = {};                       // FC: forecast (editável) · C: realizado + forecast
     PREV_BASICAS.forEach(k => {
         const tr = linha(k); if (!tr) return;
-        const ed = prevEdicoes[prevChave(tab, k)];
-        F[k] = ed !== undefined ? ed : prevAttr(tr, 'data-auto');
+        const ed = prevEdicoes[prevChave(tab, k)], real = prevAttr(tr, 'data-real');
+        FC[k] = ed !== undefined ? ed : prevAttr(tr, 'data-auto');
+        C[k] = (real == null && FC[k] == null) ? null : (real || 0) + (FC[k] || 0);
     });
-    const soma = ks => ks.some(k => F[k] != null) ? ks.reduce((a, k) => a + (F[k] || 0), 0) : null;
+    const soma = (o, ks) => ks.some(k => o[k] != null) ? ks.reduce((a, k) => a + (o[k] || 0), 0) : null;
     const div = (a, b) => (a != null && b) ? a / b : null;
-    F.dTot = soma(['dA', 'dE']); F.iA = soma(PREV_CLASSES_RI);
-    F.bruto = soma(['dTot', 'iA', 'iE']);
-    F.vmA = div(F.volA, F.ecoA); F.vmE = div(F.volE, F.ecoE);
-    F.tarA = div(F.dA, F.volA); F.tarE = div(F.dE, F.volE);
-    F.tickA = div(F.dA, F.ecoA); F.tickE = div(F.dE, F.ecoE);
-    const proporcao = ['vmA', 'vmE', 'tarA', 'tarE', 'tickA', 'tickE'];
+    C.dTot = soma(C, ['dA', 'dE']); C.iA = soma(C, PREV_CLASSES_RI); C.bruto = soma(C, ['dTot', 'iA', 'iE']);
+    FC.dTot = soma(FC, ['dA', 'dE']); FC.iA = soma(FC, PREV_CLASSES_RI); FC.bruto = soma(FC, ['dTot', 'iA', 'iE']);
+    C.vmA = div(C.volA, C.ecoA); C.vmE = div(C.volE, C.ecoE);
+    C.tarA = div(C.dA, C.volA); C.tarE = div(C.dE, C.volE);
+    C.tickA = div(C.dA, C.ecoA); C.tickE = div(C.dE, C.ecoE);
     tab.querySelectorAll('tbody tr[data-k]').forEach(tr => {
-        const k = tr.dataset.k, formato = tr.dataset.fmt, real = prevAttr(tr, 'data-real'), v = F[k] === undefined ? null : F[k];
+        const k = tr.dataset.k, formato = tr.dataset.fmt, v = C[k] === undefined ? null : C[k];
         const cel = tr.querySelector('.p-prev');
-        if (cel && document.activeElement !== cel) cel.textContent = prevFmt(v, formato);
+        if (cel && document.activeElement !== cel) cel.textContent = prevFmt(FC[k] === undefined ? null : FC[k], formato);
         if (cel) cel.classList.toggle('editado', prevEdicoes[prevChave(tab, k)] !== undefined);
-        const falta = tr.querySelector('.p-falta');
-        if (falta) falta.textContent = (proporcao.includes(k) || v == null || real == null) ? '-' : prevFmt(v - real, formato);
-        const marca = (el, base) => {
-            const pct = (v != null && base) ? v / base - 1 : null;
+        const fech = tr.querySelector('.p-fech'); if (fech) fech.textContent = prevFmt(v, formato);
+        const neg = (x) => x !== null && x < -0.0005 && tr.dataset.canc !== '1';
+        tr.querySelectorAll('.p-dorc').forEach(el => {
+            const base = prevAttr(el, 'data-orc'), pct = (v != null && base) ? v / base - 1 : null;
             el.textContent = pct === null ? '-' : prevN(pct * 100, 1) + '%';
-            el.classList.toggle('neg', pct !== null && pct < -0.0005 && tr.dataset.canc !== '1');
-        };
-        const ant = tr.querySelector('.p-dant'); if (ant) marca(ant, prevAttr(ant, 'data-ant'));
-        tr.querySelectorAll('.p-dorc').forEach(el => marca(el, prevAttr(el, 'data-orc')));
+            el.classList.toggle('neg', neg(pct));
+        });
+        tr.querySelectorAll('.p-dorcv').forEach(el => {
+            const base = prevAttr(el, 'data-orc'), d = (v != null && base != null) ? v - base : null;
+            el.textContent = d === null ? '-' : prevFmt(d, formato);
+            el.classList.toggle('neg', neg(d === null || !base ? null : d / base));
+        });
     });
 }
 
@@ -629,8 +632,8 @@ function previsaoRestaurar(botao) {
     prevSalvar(); prevRecalcular(tab);
 }
 function previsaoAplicarVisibilidade() {
-    document.querySelectorAll('.prev-corpo').forEach(c => { c.style.display = prevOculta ? 'none' : ''; });
-    document.querySelectorAll('.btn-prev-toggle').forEach(b => { b.textContent = prevOculta ? 'Mostrar previsão' : 'Ocultar previsão'; });
+    document.querySelectorAll('table.tabela-previsao').forEach(t => t.classList.toggle('prev-sem-forecast', prevOculta));
+    document.querySelectorAll('.btn-prev-toggle').forEach(b => { b.textContent = prevOculta ? 'Mostrar forecast' : 'Ocultar forecast'; });
     document.querySelectorAll('.btn-prev-restaurar').forEach(b => { b.style.display = prevOculta ? 'none' : ''; });
 }
 function previsaoAlternar() { prevOculta = !prevOculta; prevSalvar(); previsaoAplicarVisibilidade(); }

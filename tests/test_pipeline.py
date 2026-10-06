@@ -167,7 +167,7 @@ def test_previsao_de_fechamento_projeta_grupos_que_faltam(tmp_path):
     assert r["faltam"] == ["06", "07", "08"]
     assert r["falta"]["dA"] > 0 and r["atual"]["dA"] > 0
     html = open(s.caminho_html, encoding="utf-8").read()
-    assert "tabela-previsao" in html and "Previsão de fechamento" in html
+    assert "tabela-previsao" in html and "Forecast de fechamento" in html
 
 
 def test_kpi_faturamento_total_antes_de_agua_e_esgoto(sessao_pipeline=None):

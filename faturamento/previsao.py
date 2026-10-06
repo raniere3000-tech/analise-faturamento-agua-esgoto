@@ -5,7 +5,7 @@ Fechamento = realizado até agora (grupos já faturados) + projeção do que fal
   - Diretas (água/esgoto), economias e volume: cada grupo que ainda não faturou entra com a média dos
     últimos 3 meses desse mesmo grupo.
   - Indiretas e cancelamento (não têm grupo): falta = média dos últimos 3 meses − realizado, nunca negativo.
-A coluna "Previsão" é editável no relatório; totais, médias e comparações são refeitos no navegador (relatorio.js).
+A coluna "Forecast" (o que falta faturar) é editável no relatório; totais, médias e comparações são refeitos no navegador (relatorio.js).
 """
 import copy
 import html
@@ -101,16 +101,17 @@ def previsao_html(ctx, sup):
     if dados is None:
         return (f'<div class="card"><h2>Previsão de fechamento — {nome} — {nome_mes(ctx.ref_atual)}</h2>'
                 '<p class="nota-secao">Sem meses anteriores na base para projetar o fechamento.</p></div>')
-    refs, meses, atual, falta = dados["refs"], dados["meses"], dados["atual"], dados["falta"]
+    refs, atual, falta = dados["refs"], dados["atual"], dados["falta"]
     fontes, _ = _fontes(ctx)
+    fontes = [f for f in fontes if not f.upper().count("SUP")] + [f for f in fontes if f.upper().count("SUP")]   # RF primeiro, SUP depois
     orc = _orcados_do_mes(ctx, sup, ctx.ref_atual, fontes)
-    mes_ant = meses[refs[-1]]
 
-    cab = ["<th>Linha</th>"] + [f"<th>{nome_mes(r)}<br>(fechado)</th>" for r in refs]
-    cab += ['<th>Realizado<br>até agora</th>', "<th>A faturar<br>(projeção)</th>",
-            '<th class="prev-col-prev">Previsão de<br>fechamento ✎</th>', f"<th>Δ %<br>vs {nome_mes(refs[-1])}</th>"]
+    cab = ["<th>Rubrica</th>"]
     cab += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{html.escape(f)}</th>' for f in fontes]
-    cab += [f'<th data-src="{e(f)}" data-tipo="dreal">Δ %<br>vs {html.escape(f)}</th>' for f in fontes]
+    cab += ["<th>Realizado</th>", '<th class="prev-col-prev p-col-forecast">Forecast ✎</th>', "<th>Realizado<br>+ Forecast</th>"]
+    for f in fontes:
+        cab += [f'<th data-src="{e(f)}" data-tipo="dreal">Δ %<br>vs {html.escape(f)}</th>',
+                f'<th data-src="{e(f)}" data-tipo="dreal">Δ R$<br>vs {html.escape(f)}</th>']
     ncol = len(cab)
 
     linhas = []
@@ -120,34 +121,33 @@ def previsao_html(ctx, sup):
             continue
         basica = chave in LINHAS_BASICAS
         real = atual.get(chave)
-        auto = None if real is None or chave not in LINHAS_BASICAS else real + falta[chave]
+        auto = falta.get(chave) if basica and real is not None else None     # forecast = o que ainda vai ser faturado
         tds = [f'<td class="dre-rotulo">{html.escape(rotulo)}</td>']
-        tds += [f'<td class="num">{_fmt(meses[r].get(chave), formato)}</td>' for r in refs]
+        tds += [f'<td class="num" data-src="{e(f)}" data-tipo="orc">{_fmt(orc[f].get(chave), formato)}</td>' for f in fontes]
         tds.append(f'<td class="num p-real">{_fmt(real, formato)}</td>')
-        tds.append('<td class="num p-falta">-</td>')
-        cls = "num p-prev" + (" prev-edit" if basica else "")
+        cls = "num p-prev p-col-forecast" + (" prev-edit" if basica else "")
         editavel = ' contenteditable="true" spellcheck="false"' if basica else ""
-        dica = "Clique para editar" if basica else "Calculado a partir das linhas editáveis"
+        dica = "Clique para editar o forecast" if basica else "Calculado a partir das linhas editáveis"
         tds.append(f'<td class="{cls}" data-k="{chave}"{editavel} title="{dica}">{_fmt(auto, formato)}</td>')
-        tds.append(f'<td class="num p-dant" data-ant="{_attr(mes_ant.get(chave))}">-</td>')
-        tds += [f'<td class="num" data-src="{e(f)}" data-tipo="orc" data-orc="{_attr(orc[f].get(chave))}">{_fmt(orc[f].get(chave), formato)}</td>'
-                for f in fontes]
-        tds += [f'<td class="num p-dorc" data-src="{e(f)}" data-tipo="dreal" data-orc="{_attr(orc[f].get(chave))}">-</td>' for f in fontes]
+        tds.append('<td class="num p-fech">-</td>')
+        for f in fontes:
+            o = _attr(orc[f].get(chave))
+            tds.append(f'<td class="num p-dorc" data-src="{e(f)}" data-tipo="dreal" data-orc="{o}">-</td>')
+            tds.append(f'<td class="num p-dorcv" data-src="{e(f)}" data-tipo="dreal" data-orc="{o}">-</td>')
         linhas.append(f'<tr class="{"dre-forte" if negrito else ""}" data-k="{chave}" data-fmt="{formato}" '
                       f'data-real="{_attr(real)}" data-auto="{_attr(auto)}" data-canc="{1 if chave == "canc" else 0}">'
                       + "".join(tds) + "</tr>")
 
     grupos_falta = ", ".join(dados["faltam"]) if dados["faltam"] else "nenhum"
-    nota = (f"Realizado até agora (grupos já faturados em {nome_mes(ctx.ref_atual)}) + projeção dos grupos que faltam "
-            f"(<b>{grupos_falta}</b>: média do mesmo grupo em {', '.join(nome_mes(r) for r in refs)}). "
-            "Indiretas e cancelamento: média dos mesmos meses menos o já realizado. "
-            "<b>Clique em um valor da coluna Previsão para editar</b>; totais, médias e comparações são recalculados.")
-    return (f'<div class="card prev-card"><h2 class="prev-titulo">Previsão de fechamento — {nome} — {nome_mes(ctx.ref_atual)}'
+    nota = (f"Forecast = o que ainda deve ser faturado: grupos que faltam (<b>{grupos_falta}</b>) pela média do mesmo grupo em "
+            f"{', '.join(nome_mes(r) for r in refs)}; indiretas e cancelamento pela média desses meses menos o já realizado. "
+            "<b>Clique em um valor da coluna Forecast para editar</b>; Realizado + Forecast, totais, médias e comparações com os orçados são recalculados.")
+    return (f'<div class="card prev-card"><h2 class="prev-titulo">Forecast de fechamento — {nome} — {nome_mes(ctx.ref_atual)}'
             '<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" onclick="previsaoRestaurar(this)">↺ Restaurar automático</button>'
-            '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar()">Ocultar previsão</button></span></h2>'
-            f'<div class="prev-corpo"><p class="nota-secao">{nota}</p>'
+            '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar()">Ocultar forecast</button></span></h2>'
+            f'<p class="nota-secao prev-nota">{nota}</p>'
             f'<div class="tabela-wrap"><table class="tabela-dre tabela-previsao" data-prev="{e(sup)}" data-mes="{ctx.ref_atual}"><thead><tr>' + "".join(cab)
-            + "</tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div></div></div>")
+            + "</tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div></div>")
 
 
 def gera_aba_forecast_html(ctx):

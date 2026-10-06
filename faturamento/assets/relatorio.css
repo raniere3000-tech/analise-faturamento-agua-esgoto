@@ -223,5 +223,6 @@ td.num { text-align:right; }
 .tabela-previsao tbody tr td.prev-edit:focus { background:#FFFFFF; outline:2px solid var(--azul-claro); }
 .tabela-previsao tbody tr td.prev-edit.editado { background:#FFE9A8; font-weight:700; }
 .tabela-previsao td.p-prev { font-weight:700; }
+.tabela-previsao.prev-sem-forecast .p-col-forecast { display:none; }
 .tabela-previsao th.prev-col-prev { background:#8a6a12; }
 @media print { .prev-acoes { display:none !important; } }
