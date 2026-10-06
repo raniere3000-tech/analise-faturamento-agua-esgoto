@@ -536,6 +536,34 @@ def _destaques_df(ctx):
     return pd.DataFrame(linhas) if linhas else None
 
 
+def _indiretas_forecast_df(ctx):
+    """Tabelas da aba Indiretas (Todas as superintendências, mês atual): orçados, realizado, forecast automático e fechamento."""
+    from .previsao import LINHAS_IND_AGUA, LINHAS_IND_ESGOTO, _valor_linha, calcula_previsao
+    from .dre import _orcados_do_mes
+    d = calcula_previsao(ctx, TODAS) if getattr(ctx, "base_completa", None) is not None else None
+    real = d["atual"] if d else realizado(ctx, TODAS, ctx.ref_atual)
+    falta = dict(d["falta"]) if d else {}
+    falta["iA"] = sum(falta.get(k, 0.0) for k, *_ in LINHAS_IND_AGUA if k != "iA")
+    falta["tot"] = falta["iA"] + falta.get("iE", 0.0)
+    fontes, _ = _fontes(ctx)
+    orc = _orcados_do_mes(ctx, TODAS, ctx.ref_atual, fontes)
+    linhas = []
+    for tabela, defs in (("Água", LINHAS_IND_AGUA), ("Esgoto e total", LINHAS_IND_ESGOTO)):
+        for chave, rotulo, *_ in defs:
+            r = _valor_linha(real, chave)
+            fc = falta.get(chave, 0.0)
+            fech = None if r is None else r + fc
+            l = {"Tabela": tabela, "Classe": rotulo}
+            l.update({f"Orçado {f}": _valor_linha(orc[f], chave) for f in fontes})
+            l.update({"Realizado": r, "Forecast": fc, "Realizado + Forecast": fech})
+            for f in fontes:
+                o = _valor_linha(orc[f], chave)
+                l[f"Δ % vs {f}"] = (fech / o - 1) * 100 if o and fech is not None else None
+                l[f"Δ R$ vs {f}"] = fech - o if o is not None and fech is not None else None
+            linhas.append(l)
+    return pd.DataFrame(linhas)
+
+
 def _evolucao_df(ctx):
     from .dre import CLASSES_ORDEM, NOME_CLASSE, _indiretas_mes, prepara
     from .formatacao import nome_mes
@@ -546,23 +574,6 @@ def _evolucao_df(ctx):
     por_mes = {m: _indiretas_mes(ctx, TODAS, m) for m in meses}
     linhas = [{"Classe": NOME_CLASSE[cl], **{nome_mes(m): por_mes[m][cl][1] for m in meses}} for cl in CLASSES_ORDEM]
     linhas.append({"Classe": "Total", **{nome_mes(m): sum(v[1] for v in por_mes[m].values()) for m in meses}})
-    return pd.DataFrame(linhas)
-
-
-def _qtd_ticket_df(ctx):
-    from .dre import CLASSES_ORDEM, NOME_CLASSE, _indiretas_mes, _mes_anterior, prepara
-    prepara(ctx)
-    if ctx.avulso is None or not len(ctx.avulso):
-        return None
-    at, an = _indiretas_mes(ctx, TODAS, ctx.ref_atual), _indiretas_mes(ctx, TODAS, _mes_anterior(ctx.ref_atual))
-    linhas = []
-    for cl in CLASSES_ORDEM + ["Total"]:
-        (q, v), (qa, va) = (at[cl], an[cl]) if cl != "Total" else (
-            (sum(x[0] for x in at.values()), sum(x[1] for x in at.values())), (sum(x[0] for x in an.values()), sum(x[1] for x in an.values())))
-        tk, tka = (v / q if q else None), (va / qa if qa else None)
-        linhas.append({"Classe": NOME_CLASSE.get(cl, cl), "Lanç. mês atual": q, "Valor mês atual": v, "Ticket mês atual": tk,
-                       "Lanç. mês anterior": qa, "Ticket mês anterior": tka,
-                       "Δ ticket": None if tk is None or tka is None else tk - tka})
     return pd.DataFrame(linhas)
 
 
@@ -729,33 +740,31 @@ def gera_validacao_html(ctx):
     passo(96.5, "Criando aba Dados: explicação das Indiretas")
     base_av = ("avulso", "Referencia = mês; some Valor Parcela (e conte as linhas) por Classe")
     indiretas = _aba("4. Indiretas", [
-        _bloco(f"Tabela — Indiretas: orçado × realizado ({mes})",
-               "cada linha RI (serviço avulso executado) contra a meta do RF / RF SUP.",
-               ["Realizado = soma do Valor Parcela do serviço avulso por classe (Cortes/Recorte, Religações, Ligações - Água, Fiscalização, Outros)",
-                "Fat. de água - Indireto = soma das classes de água; Fat. de esgoto - Indireto = classe LNE",
-                "Total indiretas = Fat. de água - Indireto + Fat. de esgoto - Indireto",
+        _bloco(f"Tabelas — Indiretas: orçado × realizado × forecast, Água e Esgoto ({mes})",
+               "duas tabelas: (1) Água — Fat. de água - Indireto e as aberturas RI; (2) Esgoto e total — Fat. de esgoto - Indireto (LNE) e "
+               "Total indiretas. Cada uma com orçado de cada planilha, realizado, forecast editável, realizado + forecast e as diferenças.",
+               ["Realizado = soma do Valor Parcela do serviço avulso por classe no mês, até D-1",
+                "Forecast (mês atual) = realizado ÷ dias úteis decorridos × dias úteis que faltam; Cortes usam os dias de corte (sem sextas e vésperas de feriado)",
+                "Fat. de água - Indireto = soma das aberturas RI (realizado e forecast); Total indiretas = água + esgoto",
+                "Realizado + Forecast = fechamento projetado; Δ R$ = fechamento − orçado; Δ % = fechamento ÷ orçado − 1",
                 "Orçado = linhas do RF pelos nomes CORTE, RELIGAÇÃO, LNA, SANÇÃO, OUTROS (ou RI Cortes/Recorte etc.)",
-                "Δ R$ = Realizado − Orçado; Δ % = Realizado ÷ Orçado − 1"],
-               ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b>", "Orçado: <b>Sup</b>, <b>Rubrica</b>, coluna do mês"],
-               {"Indiretas": _indiretas_df(ctx)}, "indiretas",
+                "Meses anteriores (mês fechado): sem forecast; o fechamento é o próprio realizado"],
+               ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b>", "Orçado: <b>Sup</b>, <b>Rubrica</b>, coluna do mês",
+                "Calendário: feriados do código e de regras.json"],
+               {"Indiretas com forecast": _indiretas_forecast_df(ctx), "Orcado x realizado": _indiretas_df(ctx)}, "indiretas",
                bases=[base_av, ("orcado", f"Referencia = {ra}; linhas RI / CORTE / RELIGAÇÃO / LNA / SANÇÃO / OUTROS")],
-               montagem=["Ordem: Fat. de água - Indireto, as aberturas RI (recuadas), Fat. de esgoto - Indireto e Total indiretas",
-                         "Colunas: orçado de cada planilha, realizado, Δ % e Δ R$; Δ em vermelho quando abaixo do orçado"]),
-        _bloco("Gráfico e tabela — Evolução mensal por classe",
-               "o valor do serviço avulso por classe em cada mês do arquivo.",
+               montagem=["Tabela Água: Fat. de água - Indireto (negrito) e as aberturas RI recuadas; tabela Esgoto e total: LNE e Total indiretas",
+                         "Colunas: Orçado de cada planilha · Realizado · Forecast ✎ · Realizado + Forecast · Δ % e Δ R$ contra cada planilha",
+                         "Forecast editável no mês atual: clique, digite e Enter; a mesma edição vale na aba Forecast (e vice-versa); "
+                         "\"↺ Restaurar automático\" volta ao cálculo",
+                         "Δ em vermelho quando o fechamento fica abaixo do orçado"]),
+        _bloco("Gráfico — Evolução mensal por classe",
+               "o valor do serviço avulso por classe em cada mês do arquivo, abaixo das tabelas.",
                ["Para cada mês e classe: soma do Valor Parcela (rubricas marcadas para excluir ficam de fora)",
                 "Total = soma das classes no mês"],
                ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b>"],
                {"Evolucao": _evolucao_df(ctx)}, "evolucao_indiretas", bases=[base_av],
-               montagem=["Gráfico de barras empilhadas: uma barra por mês, uma cor por classe; valor de cada faixa dentro dela e total em cima",
-                         "Tabela ao lado com os mesmos números; o mês selecionado no filtro fica destacado"]),
-        _bloco(f"Tabela — Quantidade e ticket médio ({mes})",
-               "número de lançamentos, valor e ticket médio por classe, contra o mês anterior.",
-               ["Lanç. = quantidade de linhas do serviço avulso da classe no mês", "Ticket = valor ÷ lançamentos",
-                "Δ ticket = ticket do mês − ticket do mês anterior"],
-               ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b>"],
-               {"Quantidade e ticket": _qtd_ticket_df(ctx)}, "qtd_ticket", bases=[base_av],
-               montagem=["Uma linha por classe e a linha Total; Δ ticket em vermelho quando cai"]),
+               montagem=["Barras empilhadas, largura inteira: uma barra por mês, uma cor por classe; valor de cada faixa dentro dela e total em cima"]),
     ])
 
     passo(97, "Criando aba Dados: memória de cálculo do Forecast")

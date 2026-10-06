@@ -243,15 +243,24 @@ def test_diretas_tem_so_duas_tabelas_de_orcado_com_seletor(sessao):
     assert 'data-src=' not in tab.split("Economias faturadas por ciclo")[0]      # não depende do filtro Comparar do cabeçalho
 
 
-def test_indiretas_ordem_das_linhas_e_lancamentos_do_mes(sessao):
+def test_indiretas_duas_tabelas_com_forecast_editavel_e_grafico_embaixo(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     ind = html[html.index('id="view-indiretas"'):html.index('id="view-tabelas"')]
     bloco = ind[ind.index('data-sup="TODAS" data-mes="09/2026"'):]
+    bloco = bloco[:bloco.index('class="sup-bloco"')] if 'class="sup-bloco"' in bloco else bloco
     pos = [bloco.index(t) for t in ("Fat. de água - Indireto", "RI Cortes/Recorte", "RI Religações", "RI Ligações - Água",
-                                     "RI Outros - Água", "Fat. de esgoto - Indireto", "Total indiretas")]
-    assert pos == sorted(pos)
-    assert "<th>Lanç. Setembro/2026</th>" in bloco and "<th>Lançamentos</th>" not in ind
-
+                                     "RI Outros - Água", "Fat. de esgoto - Indireto", "Total indiretas", "Evolução mensal por classe")]
+    assert pos == sorted(pos)                                     # gráfico abaixo das duas tabelas
+    assert bloco.count('class="tabela-dre tabela-previsao"') == 2
+    for col in ("Orçado<br>RF01T26", "Orçado<br>RF SUP", "Realizado", "Forecast ✎", "Realizado<br>+ Forecast", "Δ %<br>vs RF01T26",
+                "Δ R$<br>vs RF SUP"):
+        assert col in bloco, col
+    assert 'data-k="ri_CORTE" contenteditable="true"' in bloco and 'data-k="iE" contenteditable="true"' in bloco
+    assert "Quantidade e ticket médio" not in ind and "<th>Lançamentos</th>" not in ind
+    # mês fechado: sem forecast editável
+    ago = ind[ind.index('data-sup="TODAS" data-mes="08/2026"'):]
+    ago = ago[:ago.index('class="sup-bloco"')]
+    assert "contenteditable" not in ago and "Mês fechado" in ago
 
 def test_aba_dados_no_fim_e_forecast_explicado(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
@@ -292,9 +301,9 @@ def test_dados_explica_cada_tabela_e_grafico_com_bases_para_baixar(sessao):
     for titulo in ("Tabela DRE", "KPIs (8 cards)", "Gráfico — Faturamento total por grupo", "Dias de leitura (média)",
                    "Destaques do mês", "Resumo consolidado por grupo", "Comparativo Água / Esgoto", "Orçado por ciclo",
                    "ativas × cortadas", "Matriz de migração", "consumo mínimo", "maior queda de consumo", "maior aumento de consumo",
-                   "Indiretas: orçado × realizado", "Evolução mensal por classe", "Quantidade e ticket médio", "Forecast de fechamento"):
+                   "Indiretas: orçado × realizado × forecast", "Gráfico — Evolução mensal por classe", "Forecast de fechamento"):
         assert titulo in dados, titulo
-    assert dados.count("Como a tabela / o gráfico é montado") >= 15
+    assert dados.count("Como a tabela / o gráfico é montado") >= 14
     # cada base aparece embutida uma vez e é referenciada por vários botões
     for ch in ("fatura", "fatura_mensal", "avulso", "cancelamento", "orcado"):
         assert dados.count(f'id="base-dl-{ch}"') == 1

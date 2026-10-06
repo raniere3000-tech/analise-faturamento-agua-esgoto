@@ -596,6 +596,7 @@ function prevRecalcular(tab) {
     const div = (a, b) => (a != null && b) ? a / b : null;
     C.dTot = soma(C, ['dA', 'dE']); C.iA = soma(C, PREV_CLASSES_RI); C.bruto = soma(C, ['dTot', 'iA', 'iE']);
     FC.dTot = soma(FC, ['dA', 'dE']); FC.iA = soma(FC, PREV_CLASSES_RI); FC.bruto = soma(FC, ['dTot', 'iA', 'iE']);
+    C.tot = soma(C, ['iA', 'iE']); FC.tot = soma(FC, ['iA', 'iE']);            // Total indiretas (aba Indiretas)
     C.vmA = div(C.volA, C.ecoA); C.vmE = div(C.volE, C.ecoE);
     C.tarA = div(C.dA, C.volA); C.tarE = div(C.dE, C.volE);
     C.tickA = div(C.dA, C.ecoA); C.tickE = div(C.dE, C.ecoE);
@@ -643,13 +644,13 @@ document.addEventListener('focusout', e => {
         else prevEdicoes[chave] = v;
         prevSalvar();
     }
-    prevRecalcular(tab);
+    prevRecalcularTodas();                       // a mesma linha aparece no Forecast e nas Indiretas
 });
 
 function previsaoRestaurar(botao) {
     const tab = botao.closest('.prev-card').querySelector('table.tabela-previsao');
     Object.keys(prevEdicoes).filter(c => c.startsWith(`${tab.dataset.mes}|${tab.dataset.prev}|`)).forEach(c => delete prevEdicoes[c]);
-    prevSalvar(); prevRecalcular(tab);
+    prevSalvar(); prevRecalcularTodas();
 }
 function previsaoAplicarVisibilidade() {
     document.querySelectorAll('table.tabela-previsao').forEach(t => t.classList.toggle('prev-sem-forecast', prevOculta));
