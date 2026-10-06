@@ -98,7 +98,7 @@ def test_opcoes_de_referencia_comparam_rf_com_rf_sup(sessao):
 def test_relatorio_tem_abas_e_nao_tem_download(sessao):
     with open(sessao.caminho_html, encoding="utf-8") as f:
         html = f.read()
-    for trecho in ('id="btn-dre"', ">Diretas</button>", 'id="btn-indiretas"', 'data-sup="LAGOS"', "Orçado<br>RF SUP", "Orçado<br>RF3T25", 'data-combo="RF01T26|RF SUP"'):
+    for trecho in ('id="btn-dre"', ">Diretas</button>", 'id="btn-indiretas"', 'data-sup="LAGOS"', "Orçado<br>RF SUP", "Orçado<br>RF3T25"):
         assert trecho in html
     assert "RUBRICA NOVA SEM CLASSE" in html                      # aviso de rubrica fora da relação
 
@@ -161,7 +161,7 @@ def test_forecast_em_aba_propria_e_comparacao_entre_duas_planilhas(tmp_path):
     assert "tabela-previsao" in html[i:j]
     assert "tabela-previsao" not in html[html.index('id="view-dre"'):html.index('id="view-forecast"')]
     # qualquer par de planilhas de orçado tem colunas de diferença (ex.: RF01T26 × RF3T25)
-    assert 'data-combo="RF3T25|RF01T26"' in html or 'data-combo="RF01T26|RF3T25"' in html
+    assert 'data-combo' not in html[html.index('id="view-dre"'):html.index('id="view-forecast"')]
     assert '"fontes"' in html
 
 
@@ -186,4 +186,4 @@ def test_metas_ri_do_rf_e_sem_delta_entre_orcados_nas_indiretas(tmp_path):
     html = open(s.caminho_html, encoding="utf-8").read()
     ind = html[html.index('id="view-indiretas"'):html.index('id="view-tabelas"')]
     assert "data-combo" not in ind                      # sem Δ entre orçados nas Indiretas
-    assert 'data-combo' in html[html.index('id="view-dre"'):html.index('id="view-forecast"')]   # a DRE continua com eles
+    assert 'data-combo' not in html[html.index('id="view-dre"'):html.index('id="view-forecast"')]   # DRE também sem Δ entre orçados

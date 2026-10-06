@@ -280,7 +280,7 @@ def _celulas_delta(real, orc, formato, eh_canc, fonte):
 def _fontes(ctx):
     """Planilhas de orçado: RFs primeiro, depois RF SUP. E as combinações RF × RF SUP (comparação entre orçados)."""
     fontes = fontes_rf(ctx) + fontes_sup(ctx)
-    combos = [(a, b) for i, a in enumerate(fontes) for b in fontes[i + 1:]]      # qualquer par de planilhas
+    combos = []                 # sem comparativo entre orçados: só orçado × realizado
     return fontes, combos
 
 
@@ -360,7 +360,7 @@ def gera_aba_dre_html(ctx):
         for sup in lista_sups(ctx):
             blocos.append(_bloco(sup, ref, (
                 f'<div class="card"><h2>DRE — {html.escape(_nome_sup(sup))} — {nome_mes(ref)}</h2>'
-                f'<p class="nota-secao">{nota}. Em Referência: compare o realizado com cada RF ou com o RF SUP, ou compare só os orçados (RF × RF SUP).</p>'
+                f'<p class="nota-secao">{nota}. Em Referência: compare o realizado com cada RF ou com o RF SUP.</p>'
                 f'{tabela_dre(ctx, sup, ref)}</div>')))
     return "".join(blocos)
 
