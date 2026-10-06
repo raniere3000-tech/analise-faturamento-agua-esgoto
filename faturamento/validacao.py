@@ -320,8 +320,10 @@ def gera_validacao_html(ctx):
         _bloco("Orçado por ciclo (Água / Esgoto × RF e SUP)",
                "Duas tabelas (Água e Esgoto). O seletor \"comparar com\" acima delas escolhe a planilha de orçado (qualquer RF ou o RF SUP). "
                "Orçado de cada ciclo (grupo) = peso do ciclo × orçado total do mês. As colunas *_realizado/*_orcado seguem o mesmo formato do comparativo.",
-               ["Peso do ciclo = média, nos últimos 3 meses, de (valor de água ou esgoto do grupo ÷ total do mês)",
-                "Orçado Diretas, Volume e Economias do ciclo = peso × orçado da DRE (linhas Diretas, Volume e Economias)",
+               ["Cada métrica tem o seu peso por ciclo, separado para água e para esgoto (média dos últimos 3 meses da participação do grupo no total do mês)",
+                "Peso do faturamento = valor de água (ou esgoto) do grupo ÷ valor total do mês → Orçado Diretas do ciclo = peso × orçado Diretas Água (ou Esgoto)",
+                "Peso do volume = volume faturado do grupo ÷ volume total (só Consumo Faturado &gt; 0) → Orçado Volume do ciclo = peso × orçado Volume",
+                "Peso das economias = economias do grupo ÷ economias totais (só Consumo Faturado &gt; 0) → Orçado Economias do ciclo = peso × orçado Economias",
                 "Volume médio, tarifa e ticket orçados = razões dos orçados do ciclo"],
                comum_fatura + ["Planilhas de orçado (linhas Diretas Água/Esgoto, Volume e Economias faturadas)"],
                _orcado_ciclo_dfs(ctx), "orcado_ciclo"),
