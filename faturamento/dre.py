@@ -415,69 +415,17 @@ def _indiretas_mes(ctx, sup, ref):
     return {cl: (int(g.loc[cl, "size"]), float(g.loc[cl, "sum"])) if cl in g.index else (0, 0.0) for cl in CLASSES_ORDEM}
 
 
-def tabela_orcado_realizado(ctx, sup, ref):
-    real = realizado(ctx, sup, ref)
-    fontes, _ = _fontes(ctx)
-    combos = []                 # na aba Indiretas não há Δ entre orçados (só orçado × realizado)
-    orc = _orcados_do_mes(ctx, sup, ref, fontes)
-    linhas = []
-    # Fat. de água - Indireto em cima das aberturas (RI), depois o esgoto e, por último, o total
-    for chave, rotulo, negrito in (("iA", "Fat. de água - Indireto", True),
-                                   ("ri_CORTE", "RI Cortes/Recorte", False), ("ri_RELIGAÇÃO", "RI Religações", False),
-                                   ("ri_LNA", "RI Ligações - Água", False), ("ri_SANÇÃO", "RI Fiscalização", False),
-                                   ("ri_OUTROS", "RI Outros - Água", False),
-                                   ("iE", "Fat. de esgoto - Indireto", True)):
-        linhas.append(_linha_dre(rotulo, "moeda", negrito, {f: orc[f].get(chave) for f in fontes}, real.get(chave), False, fontes, combos,
-                                 classe="dre-abertura" if chave.startswith("ri_") else ""))
-
-    def tot(d):
-        return None if d.get("iA") is None and d.get("iE") is None else (d.get("iA") or 0) + (d.get("iE") or 0)
-    linhas.append(_linha_dre("Total indiretas", "moeda", True, {f: tot(orc[f]) for f in fontes}, tot(real), False, fontes, combos))
-    return ('<div class="tabela-wrap"><table class="tabela-dre">' + _cabecalho(ctx, "Classe / linha da DRE", fontes, combos)
-            + "<tbody>" + "".join(linhas) + "</tbody></table></div>")
-
-
-def tabela_evolucao(ctx, sup, ref, meses):
+def grafico_evolucao(ctx, sup, ref, meses):
+    """Só o gráfico de barras empilhadas da evolução mensal por classe (largura inteira)."""
     por_mes = {m: _indiretas_mes(ctx, sup, m) for m in meses}
-    cab = "".join(f'<th class="{"mes-sel" if m == ref else ""}">{nome_mes(m)}</th>' for m in meses)
-    linhas = []
-    for cl in CLASSES_ORDEM:
-        cel = "".join(_cel(fmt_num(por_mes[m][cl][1], 0), "num mes-sel" if m == ref else "num") for m in meses)
-        linhas.append(f'<tr><td class="dre-rotulo">{NOME_CLASSE[cl]}</td>{cel}</tr>')
-    cel = "".join(_cel(fmt_num(sum(v[1] for v in por_mes[m].values()), 0), "num mes-sel" if m == ref else "num") for m in meses)
-    linhas.append(f'<tr class="dre-forte"><td class="dre-rotulo">Total</td>{cel}</tr>')
     dados = {"meses": [nome_mes(m) for m in meses],
              "series": [{"classe": NOME_CLASSE[cl], "valores": [round(por_mes[m][cl][1], 2) for m in meses]} for cl in CLASSES_ORDEM]}
-    grafico = (f'<div class="grafico-area grafico-indiretas"><canvas class="canvas-indiretas" '
-               f'data-dados="{html.escape(json.dumps(dados), quote=True)}" data-mes="{html.escape(nome_mes(ref))}"></canvas></div>')
-    tabela = ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Classe</th>' + cab
-              + "</tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div>")
-    return f'<div class="duas-colunas"><div>{grafico}</div><div>{tabela}</div></div>'
-
-
-def tabela_qtd_ticket(ctx, sup, ref):
-    atual, ant = _indiretas_mes(ctx, sup, ref), _indiretas_mes(ctx, sup, _mes_anterior(ref))
-    linhas = []
-    tq = tv = tqa = tva = 0
-    for cl in CLASSES_ORDEM:
-        (q, v), (qa, va) = atual[cl], ant[cl]
-        tq, tv, tqa, tva = tq + q, tv + v, tqa + qa, tva + va
-        tk, tka = _div(v, q), _div(va, qa)
-        d = None if tk is None or tka is None else tk - tka
-        linhas.append(f'<tr><td class="dre-rotulo">{NOME_CLASSE[cl]}</td>' + _cel(q, "num") + _cel(_fmt(v, "moeda"), "num")
-                      + _cel(_fmt(tk, "dec"), "num") + _cel(qa, "num") + _cel(_fmt(tka, "dec"), "num")
-                      + _cel("-" if d is None else fmt_num(d, 2), "num " + ("neg" if d is not None and d < -0.005 else "")) + "</tr>")
-    tk, tka = _div(tv, tq), _div(tva, tqa)
-    linhas.append('<tr class="dre-forte"><td class="dre-rotulo">Total</td>' + _cel(tq, "num") + _cel(_fmt(tv, "moeda"), "num")
-                  + _cel(_fmt(tk, "dec"), "num") + _cel(tqa, "num") + _cel(_fmt(tka, "dec"), "num")
-                  + _cel("-" if tk is None or tka is None else fmt_num(tk - tka, 2), "num") + "</tr>")
-    return ('<div class="tabela-wrap"><table class="tabela-dre"><thead><tr><th>Classe</th>'
-            f'<th>Lanç. {nome_mes(ref)}</th><th>Valor (R$)</th>'
-            f'<th>Ticket médio (R$)</th><th>Lanç. {nome_mes(_mes_anterior(ref))}</th><th>Ticket {nome_mes(_mes_anterior(ref))}</th>'
-            "<th>Δ ticket (R$)</th></tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div>")
+    return (f'<div class="grafico-area grafico-indiretas grafico-largo"><canvas class="canvas-indiretas" '
+            f'data-dados="{html.escape(json.dumps(dados), quote=True)}" data-mes="{html.escape(nome_mes(ref))}"></canvas></div>')
 
 
 def gera_aba_indiretas_html(ctx):
+    from .previsao import indiretas_previsao_html
     prepara(ctx)
     if not len(ctx.avulso):
         return '<div class="card"><h2>Indiretas</h2><p>Nenhum arquivo de serviço avulso encontrado na pasta (o nome precisa conter "avulso").</p></div>'
@@ -486,12 +434,19 @@ def gera_aba_indiretas_html(ctx):
     for ref in lista_meses(ctx):
         for sup in lista_sups(ctx):
             nome = html.escape(_nome_sup(sup))
+            agua, esgoto = indiretas_previsao_html(ctx, sup, ref)
+            no_mes = ref == ctx.ref_atual
+            nota = ("Realizado = serviço avulso do mês até D-1, por classe da rubrica. Forecast = ritmo por dia útil × dias úteis que "
+                    "faltam (Cortes: dias de corte). <b>Clique em um valor da coluna Forecast ✎ para editar</b> — a edição vale também "
+                    "na aba Forecast. Orçado das linhas \"RI\" só aparece se a planilha RF tiver essas linhas."
+                    if no_mes else "Mês fechado: o fechamento é o próprio realizado (sem forecast).")
+            acoes = ('<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" '
+                     'onclick="previsaoRestaurar(this)">↺ Restaurar automático</button></span>') if no_mes else ""
             blocos.append(_bloco(sup, ref, (
-                f'<div class="card"><h2>Indiretas: orçado × realizado — {nome} — {nome_mes(ref)}</h2>'
-                '<p class="nota-secao">Realizado = serviço avulso do mês, por classe da rubrica. Orçado das linhas "RI" só aparece se a planilha RF tiver essas linhas.</p>'
-                f'{tabela_orcado_realizado(ctx, sup, ref)}</div>'
-                f'<div class="card"><h2>Evolução mensal por classe — {nome}</h2>{tabela_evolucao(ctx, sup, ref, meses_av)}</div>'
-                f'<div class="card"><h2>Quantidade e ticket médio — {nome} — {nome_mes(ref)}</h2>{tabela_qtd_ticket(ctx, sup, ref)}</div>')))
+                f'<div class="card prev-card"><h2 class="prev-titulo">Indiretas: orçado × realizado × forecast — {nome} — {nome_mes(ref)}'
+                f'{acoes}</h2><p class="nota-secao prev-nota">{nota}</p>'
+                f'<div class="ind-tabelas"><h3 class="ind-sub">Água</h3>{agua}<h3 class="ind-sub">Esgoto e total</h3>{esgoto}</div></div>'
+                f'<div class="card"><h2>Evolução mensal por classe — {nome}</h2>{grafico_evolucao(ctx, sup, ref, meses_av)}</div>')))
     return "".join(blocos)
 
 

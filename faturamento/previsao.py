@@ -198,52 +198,69 @@ def _attr(v):
     return "" if v is None else repr(round(float(v), 6))
 
 
+def _valor_linha(d, chave):
+    """Valor de uma linha; "tot" = Fat. de água - Indireto + Fat. de esgoto - Indireto (Total indiretas)."""
+    if chave == "tot":
+        a, b = d.get("iA"), d.get("iE")
+        return None if a is None and b is None else (a or 0) + (b or 0)
+    return d.get(chave)
+
+
+def tabela_previsao_html(ctx, sup, ref, linhas_def, atual, falta, editavel=True, primeira="Rubrica", ocultas=()):
+    """Tabela Orçados | Realizado | Forecast ✎ | Realizado + Forecast | Δ % e Δ R$ por orçado.
+    linhas_def: [(chave, rótulo, formato, negrito, classe)] (chave None = linha em branco).
+    As edições ficam guardadas por mês × SUP × linha (relatorio.js): editar aqui muda todas as tabelas iguais (Forecast e Indiretas)."""
+    e = lambda v: html.escape(v, quote=True)
+    fontes, _ = _fontes(ctx)
+    fontes = [f for f in fontes if not f.upper().count("SUP")] + [f for f in fontes if f.upper().count("SUP")]   # RF primeiro, SUP depois
+    orc = _orcados_do_mes(ctx, sup, ref, fontes)
+    cab = [f"<th>{primeira}</th>"]
+    cab += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{html.escape(f)}</th>' for f in fontes]
+    cab += ["<th>Realizado</th>", '<th class="prev-col-prev p-col-forecast">Forecast' + (" ✎" if editavel else "") + "</th>",
+            "<th>Realizado<br>+ Forecast</th>"]
+    for f in fontes:
+        cab += [f'<th data-src="{e(f)}" data-tipo="dreal">Δ %<br>vs {html.escape(f)}</th>',
+                f'<th data-src="{e(f)}" data-tipo="dreal">Δ R$<br>vs {html.escape(f)}</th>']
+    linhas = []
+    # linhas ocultas: entram no recálculo do navegador (ex.: aberturas RI para o Total indiretas) mas não aparecem
+    extra = [(k, k, "moeda", False, "prev-oculta") for k in ocultas]
+    for chave, rotulo, formato, negrito, classe in list(linhas_def) + extra:
+        if chave is None:
+            linhas.append(f'<tr class="dre-vazia"><td colspan="{len(cab)}"></td></tr>')
+            continue
+        basica = chave in LINHAS_BASICAS and editavel
+        real = _valor_linha(atual, chave)
+        auto = falta.get(chave) if basica and real is not None else None     # forecast = o que ainda vai ser faturado
+        tds = [f'<td class="dre-rotulo">{html.escape(rotulo)}</td>']
+        tds += [f'<td class="num" data-src="{e(f)}" data-tipo="orc">{_fmt(_valor_linha(orc[f], chave), formato)}</td>' for f in fontes]
+        tds.append(f'<td class="num p-real">{_fmt(real, formato)}</td>')
+        cls = "num p-prev p-col-forecast" + (" prev-edit" if basica else "")
+        attrs = ' contenteditable="true" spellcheck="false"' if basica else ""
+        dica = ("Clique para editar o forecast" if basica else
+                "Calculado a partir das linhas editáveis" if editavel else "Mês fechado: sem forecast")
+        tds.append(f'<td class="{cls}" data-k="{chave}"{attrs} title="{dica}">{_fmt(auto, formato)}</td>')
+        tds.append('<td class="num p-fech">-</td>')
+        for f in fontes:
+            o = _attr(_valor_linha(orc[f], chave))
+            tds.append(f'<td class="num p-dorc" data-src="{e(f)}" data-tipo="dreal" data-orc="{o}">-</td>')
+            tds.append(f'<td class="num p-dorcv" data-src="{e(f)}" data-tipo="dreal" data-orc="{o}">-</td>')
+        linhas.append(f'<tr class="{"dre-forte" if negrito else classe}" data-k="{chave}" data-fmt="{formato}" '
+                      f'data-real="{_attr(real)}" data-auto="{_attr(auto)}" data-canc="{1 if chave == "canc" else 0}">'
+                      + "".join(tds) + "</tr>")
+    return (f'<div class="tabela-wrap"><table class="tabela-dre tabela-previsao" data-prev="{e(sup)}" data-mes="{ref}"><thead><tr>'
+            + "".join(cab) + "</tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div>")
+
+
 def previsao_html(ctx, sup):
     if getattr(ctx, "base_completa", None) is None:
         return ""
     dados = calcula_previsao(ctx, sup)
     nome = html.escape(_nome_sup(sup))
-    e = lambda v: html.escape(v, quote=True)
     if dados is None:
         return (f'<div class="card"><h2>Previsão de fechamento — {nome} — {nome_mes(ctx.ref_atual)}</h2>'
                 '<p class="nota-secao">Sem meses anteriores na base para projetar o fechamento.</p></div>')
-    atual, falta = dados["atual"], dados["falta"]
-    fontes, _ = _fontes(ctx)
-    fontes = [f for f in fontes if not f.upper().count("SUP")] + [f for f in fontes if f.upper().count("SUP")]   # RF primeiro, SUP depois
-    orc = _orcados_do_mes(ctx, sup, ctx.ref_atual, fontes)
-
-    cab = ["<th>Rubrica</th>"]
-    cab += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{html.escape(f)}</th>' for f in fontes]
-    cab += ["<th>Realizado</th>", '<th class="prev-col-prev p-col-forecast">Forecast ✎</th>', "<th>Realizado<br>+ Forecast</th>"]
-    for f in fontes:
-        cab += [f'<th data-src="{e(f)}" data-tipo="dreal">Δ %<br>vs {html.escape(f)}</th>',
-                f'<th data-src="{e(f)}" data-tipo="dreal">Δ R$<br>vs {html.escape(f)}</th>']
-    ncol = len(cab)
-
-    linhas = []
-    for chave, rotulo, formato, negrito in LINHAS:
-        if chave is None:
-            linhas.append(f'<tr class="dre-vazia"><td colspan="{ncol}"></td></tr>')
-            continue
-        basica = chave in LINHAS_BASICAS
-        real = atual.get(chave)
-        auto = falta.get(chave) if basica and real is not None else None     # forecast = o que ainda vai ser faturado
-        tds = [f'<td class="dre-rotulo">{html.escape(rotulo)}</td>']
-        tds += [f'<td class="num" data-src="{e(f)}" data-tipo="orc">{_fmt(orc[f].get(chave), formato)}</td>' for f in fontes]
-        tds.append(f'<td class="num p-real">{_fmt(real, formato)}</td>')
-        cls = "num p-prev p-col-forecast" + (" prev-edit" if basica else "")
-        editavel = ' contenteditable="true" spellcheck="false"' if basica else ""
-        dica = "Clique para editar o forecast" if basica else "Calculado a partir das linhas editáveis"
-        tds.append(f'<td class="{cls}" data-k="{chave}"{editavel} title="{dica}">{_fmt(auto, formato)}</td>')
-        tds.append('<td class="num p-fech">-</td>')
-        for f in fontes:
-            o = _attr(orc[f].get(chave))
-            tds.append(f'<td class="num p-dorc" data-src="{e(f)}" data-tipo="dreal" data-orc="{o}">-</td>')
-            tds.append(f'<td class="num p-dorcv" data-src="{e(f)}" data-tipo="dreal" data-orc="{o}">-</td>')
-        linhas.append(f'<tr class="{"dre-forte" if negrito else ""}" data-k="{chave}" data-fmt="{formato}" '
-                      f'data-real="{_attr(real)}" data-auto="{_attr(auto)}" data-canc="{1 if chave == "canc" else 0}">'
-                      + "".join(tds) + "</tr>")
-
+    atual = dados["atual"]
+    linhas_def = [(c, r, f, n, "") for c, r, f, n in LINHAS]
     fx = dados["projecao"]["faixa"]
     faixa = "; ".join(f"{nome}: {_fmt((atual.get(k) or 0) + fx[k][0], 'moeda')} a {_fmt((atual.get(k) or 0) + fx[k][1], 'moeda')}"
                       for k, nome in (("dA", "Diretas Água"), ("dE", "Diretas Esgoto"))) if dados["faltam"] else ""
@@ -255,8 +272,31 @@ def previsao_html(ctx, sup):
             '<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" onclick="previsaoRestaurar(this)">↺ Restaurar automático</button>'
             '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar()">Ocultar forecast</button></span></h2>'
             f'<p class="nota-secao prev-nota">{nota}</p>'
-            f'<div class="tabela-wrap"><table class="tabela-dre tabela-previsao" data-prev="{e(sup)}" data-mes="{ctx.ref_atual}"><thead><tr>' + "".join(cab)
-            + "</tr></thead><tbody>" + "".join(linhas) + "</tbody></table></div></div>")
+            + tabela_previsao_html(ctx, sup, ctx.ref_atual, linhas_def, atual, dados["falta"]) + "</div>")
+
+
+# Aba Indiretas: as mesmas colunas do Forecast, separadas em água e esgoto
+LINHAS_IND_AGUA = [("iA", "Fat. de água - Indireto", "moeda", True, ""),
+                   ("ri_CORTE", "RI Cortes/Recorte", "moeda", False, "dre-abertura"),
+                   ("ri_RELIGAÇÃO", "RI Religações", "moeda", False, "dre-abertura"),
+                   ("ri_LNA", "RI Ligações - Água", "moeda", False, "dre-abertura"),
+                   ("ri_SANÇÃO", "RI Fiscalização", "moeda", False, "dre-abertura"),
+                   ("ri_OUTROS", "RI Outros - Água", "moeda", False, "dre-abertura")]
+LINHAS_IND_ESGOTO = [("iE", "Fat. de esgoto - Indireto (LNE)", "moeda", True, ""),
+                     ("tot", "Total indiretas (água + esgoto)", "moeda", True, "")]
+
+
+def indiretas_previsao_html(ctx, sup, ref):
+    """As duas tabelas da aba Indiretas (água e esgoto) para uma SUP × mês. No mês atual, o forecast é editável."""
+    from .dre import realizado
+    atual_mes = ref == ctx.ref_atual
+    dados = calcula_previsao(ctx, sup) if atual_mes and getattr(ctx, "base_completa", None) is not None else None
+    real = dados["atual"] if dados else realizado(ctx, sup, ref)
+    falta = dados["falta"] if dados else {}
+    editavel = bool(dados)
+    return (tabela_previsao_html(ctx, sup, ref, LINHAS_IND_AGUA, real, falta, editavel, "Classe — Água"),
+            tabela_previsao_html(ctx, sup, ref, LINHAS_IND_ESGOTO, real, falta, editavel, "Classe — Esgoto e total",
+                                 ocultas=[k for k, *_ in LINHAS_IND_AGUA if k != "iA"]))
 
 
 def gera_aba_forecast_html(ctx):

@@ -289,3 +289,10 @@ td.num { text-align:right; }
 .val-filtro { color:#475569; }
 .val-filtro::before { content:"Filtro: "; font-weight:600; color:var(--marinho); }
 .btn-baixar-base { white-space:nowrap; }
+
+/* Indiretas: duas tabelas (água / esgoto e total) com forecast editável; gráfico de evolução embaixo, largura inteira */
+.tabela-previsao tr.prev-oculta { display:none; }
+.ind-sub { margin:14px 0 6px; font-size:13px; color:var(--marinho); text-transform:uppercase; letter-spacing:.04em; }
+.grafico-largo { height:360px; }
+.ind-tabelas table { table-layout:fixed; width:100%; }
+.ind-tabelas th:first-child { width:22%; }
