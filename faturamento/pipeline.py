@@ -17,6 +17,7 @@ from .previsao import gera_aba_forecast_html
 from .dre import gera_aba_dre_html, gera_aba_indiretas_html, gera_filtros_dre_html, gera_info_filtros_json
 from .config import NOME_RELATORIO_HTML, NOME_TOP100_XLSX, TEXTO_JUSTIFICATIVA_PADRAO
 from .contexto import Contexto
+from .orcado_ciclo import gera_tabelas_orcado_ciclo_html
 from .painel_html import (gera_card_leitura_html, gera_cards_insights_html, gera_cards_kpis_html,
                           gera_grafico_faturamento_html)
 from .progresso import Progresso
@@ -115,8 +116,9 @@ class Sessao:
             cards_insights_html=cards_insights_html,
             tabela_dados_resumo_html=tabela_dados_resumo_html,
             justificativa_html=gera_justificativa_html(ctx, texto_justificativa),
-            tabela_agua_html=gera_tabela(ctx, ctx.comp_agua, "Água", "agua"),
-            tabela_esgoto_html=gera_tabela(ctx, ctx.comp_esgoto, "Esgoto", "esgoto"),
+            tabela_agua_html=gera_tabela(ctx, ctx.comp_agua, "Comparativo Água Mês a Mês", "agua"),
+            tabela_esgoto_html=gera_tabela(ctx, ctx.comp_esgoto, "Comparativo Esgoto Mês a Mês", "esgoto"),
+            tabelas_orcado_ciclo_html=gera_tabelas_orcado_ciclo_html(ctx),
             quadro_ciclos_html=quadro_ciclos_html,
             matriz_html=matriz_html,
             tabela_minimo_html=tabela_minimo_html,

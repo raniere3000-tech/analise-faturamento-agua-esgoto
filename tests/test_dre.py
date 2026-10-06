@@ -213,3 +213,10 @@ def test_orcado_indiretas_com_rubrica_curta_e_valor_em_texto(tmp_path):
 def test_dados_tem_conferencia_dos_kpis(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert "Conferência dos KPIs" in html and "Total (KPIs)" in html
+
+
+def test_tabelas_orcado_por_ciclo_acima_das_economias(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    i = html.index("Água por ciclo — Realizado × Orçado RF SUP")
+    assert html.index("Comparativo Esgoto Mês a Mês") < i < html.index("Economias faturadas por ciclo")
+    assert "Esgoto por ciclo — Realizado × Orçado RF SUP" in html and "Água por ciclo — Realizado × Orçado RF01T26" in html

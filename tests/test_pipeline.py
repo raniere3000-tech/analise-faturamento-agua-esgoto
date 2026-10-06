@@ -65,7 +65,7 @@ def test_alerta_de_categoria_sem_minimo(analise):
 
 def test_html_tem_as_secoes_principais(analise):
     html = lê_html(analise)
-    for trecho in ("Comparativo Água", "Comparativo Esgoto", "Matriz de migração de grupos",
+    for trecho in ("Comparativo Água Mês a Mês", "Comparativo Esgoto Mês a Mês", "Matriz de migração de grupos",
                    "Economias acima x abaixo do consumo mínimo", "Top 100 clientes com maior queda de consumo",
                    "Setembro/2026 vs Agosto/2026"):
         assert trecho in html, trecho

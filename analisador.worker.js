@@ -9,7 +9,7 @@ const ARQUIVOS_PY = [
   "faturamento/__init__.py", "faturamento/analises.py", "faturamento/base.py", "faturamento/comparativo.py",
   "faturamento/dre.py", "faturamento/dados.py",
   "faturamento/config.py", "faturamento/contexto.py", "faturamento/formatacao.py", "faturamento/leitura.py",
-  "faturamento/origem.py", "faturamento/previsao.py", "faturamento/painel_html.py", "faturamento/pipeline.py", "faturamento/progresso.py",
+  "faturamento/origem.py", "faturamento/orcado_ciclo.py", "faturamento/previsao.py", "faturamento/painel_html.py", "faturamento/pipeline.py", "faturamento/progresso.py",
   "faturamento/relatorio.py", "faturamento/tabelas_html.py", "faturamento/top20.py",
   "faturamento/regras.json", "faturamento/assets/relatorio.css", "faturamento/assets/relatorio.js",
 ];

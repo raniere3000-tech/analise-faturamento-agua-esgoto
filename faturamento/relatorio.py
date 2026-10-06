@@ -62,7 +62,7 @@ def gera_filtro_html(ctx):
 
 def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, cards_kpis_html,
                grafico_faturamento_html, card_leitura_html, cards_insights_html, tabela_dados_resumo_html,
-               justificativa_html, tabela_agua_html, tabela_esgoto_html, quadro_ciclos_html, matriz_html,
+               justificativa_html, tabela_agua_html, tabela_esgoto_html, tabelas_orcado_ciclo_html, quadro_ciclos_html, matriz_html,
                tabela_minimo_html, tabela_top100_agua_html, tabela_top100_esgoto_html,
                aba_dre_html, aba_indiretas_html, aba_dados_html, aba_forecast_html, filtros_dre_html, info_filtros_json):
     chave_justificativa = "justificativas_" + ctx.mes_atual.replace(" ", "_").replace("/", "_")
@@ -132,6 +132,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
 <div id="view-tabelas">
     {tabela_agua_html}
     {tabela_esgoto_html}
+    {tabelas_orcado_ciclo_html}
     {quadro_ciclos_html}
     {matriz_html}
     {tabela_minimo_html}

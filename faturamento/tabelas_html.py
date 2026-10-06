@@ -11,7 +11,9 @@ from .config import DESTAQUE_QUEDA_PCT_TOP100, MINIMO_POR_TIPO_ECONOMIA
 from .formatacao import fmt_int_br, fmt_moeda_br, fmt_num
 
 
-def gera_tabela(ctx, comp, titulo, slug):
+def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_ant=None, card_attrs=""):
+    rot_atual = rot_atual or ctx.mes_atual_curto
+    rot_ant = rot_ant or ctx.mes_anterior_curto
     def td(campo, valor):
         return f'<td data-field="{campo}">{valor}</td>'
     def deltac(campo, valor, dec=2, pct=False):
@@ -33,16 +35,15 @@ def gera_tabela(ctx, comp, titulo, slug):
         attrs=""
         if not is_media:
             attrs = (
-                f'data-dias-atual="{d["Dias_Leitura_atual"]}" data-dias-anterior="{d["Dias_Leitura_anterior"]}" '
+                (f'data-dias-atual="{d["Dias_Leitura_atual"]}" data-dias-anterior="{d["Dias_Leitura_anterior"]}" ' if com_dias else "") + (
                 f'data-fat-atual="{d["Faturamento_atual"]}" data-fat-anterior="{d["Faturamento_anterior"]}" '
                 f'data-eco-atual="{d["Economias_atual"]}" data-eco-anterior="{d["Economias_anterior"]}" '
-                f'data-vol-atual="{d["Volume_Faturado_atual"]}" data-vol-anterior="{d["Volume_Faturado_anterior"]}"'
+                f'data-vol-atual="{d["Volume_Faturado_atual"]}" data-vol-anterior="{d["Volume_Faturado_anterior"]}"')
             )
         return f"""
         <tr class="{classe}" data-grupo="{g_attr}" {attrs}>
             {td("grupo", html.escape(str(grupo), quote=True))}
-            {td("dias-atual", fmt_num(d["Dias_Leitura_atual"],1))}
-            {td("dias-anterior", fmt_num(d["Dias_Leitura_anterior"],1))}
+            {td("dias-atual", fmt_num(d["Dias_Leitura_atual"],1)) + td("dias-anterior", fmt_num(d["Dias_Leitura_anterior"],1)) if com_dias else ""}
             {td("fat-atual", fmt_num(d["Faturamento_atual"]))}
             {td("fat-anterior", fmt_num(d["Faturamento_anterior"]))}
             {deltac("delta-fat", delta_fat)}
@@ -85,10 +86,13 @@ def gera_tabela(ctx, comp, titulo, slug):
     media["Ticket_Medio_atual"] = (media["Faturamento_atual"] / media["Economias_atual"]) if media["Economias_atual"] else 0
     media["Ticket_Medio_anterior"] = (media["Faturamento_anterior"] / media["Economias_anterior"]) if media["Economias_anterior"] else 0
     linhas_html += linha("Total / Média", media, is_media=True)
-    cabecalho=f"""
+    sub = f'<th>{rot_atual}</th><th>{rot_ant}</th>'
+    th_dias = '<th colspan="2">Dias Leitura</th>' if com_dias else ""
+    sub_dias = sub if com_dias else ""
+    cabecalho = f"""
     <tr class="header-grupo">
         <th rowspan="2">Grupo</th>
-        <th colspan="2">Dias Leitura</th>
+        {th_dias}
         <th colspan="2">Faturamento</th>
         <th colspan="1">Δ Faturamento</th>
         <th colspan="2">Economias</th>
@@ -103,24 +107,24 @@ def gera_tabela(ctx, comp, titulo, slug):
         <th colspan="1">Δ Ticket Médio</th>
     </tr>
     <tr class="header-sub">
-        <th title="{ctx.mes_atual}">{ctx.mes_atual_curto}</th><th title="{ctx.mes_anterior}">{ctx.mes_anterior_curto}</th>
-        <th title="{ctx.mes_atual}">{ctx.mes_atual_curto}</th><th title="{ctx.mes_anterior}">{ctx.mes_anterior_curto}</th>
+        {sub_dias}
+        {sub}
         <th></th>
-        <th title="{ctx.mes_atual}">{ctx.mes_atual_curto}</th><th title="{ctx.mes_anterior}">{ctx.mes_anterior_curto}</th>
+        {sub}
         <th>%</th><th>Abs</th>
-        <th title="{ctx.mes_atual}">{ctx.mes_atual_curto}</th><th title="{ctx.mes_anterior}">{ctx.mes_anterior_curto}</th>
+        {sub}
         <th>%</th><th>Abs</th>
-        <th title="{ctx.mes_atual}">{ctx.mes_atual_curto}</th><th title="{ctx.mes_anterior}">{ctx.mes_anterior_curto}</th>
+        {sub}
         <th></th>
-        <th title="{ctx.mes_atual}">{ctx.mes_atual_curto}</th><th title="{ctx.mes_anterior}">{ctx.mes_anterior_curto}</th>
+        {sub}
         <th></th>
-        <th title="{ctx.mes_atual}">{ctx.mes_atual_curto}</th><th title="{ctx.mes_anterior}">{ctx.mes_anterior_curto}</th>
+        {sub}
         <th></th>
     </tr>
     """
     return f"""
-    <div class="card">
-    <h2>Comparativo {titulo}</h2>
+    <div class="card"{card_attrs}>
+    <h2>{titulo}</h2>
     <table class="tabela-comparativo" id="tabela-{slug}">
         <thead>{cabecalho}</thead>
         <tbody>{linhas_html}</tbody>
