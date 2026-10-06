@@ -5,7 +5,7 @@ import os
 import pandas as pd
 
 from .config import COLUNAS_ECONOMIA_TOTAIS
-from .leitura import (classifica_arquivos, processa_avulso, processa_consumo, processa_cronograma,
+from .leitura import (chave_grupo, classifica_arquivos, processa_avulso, processa_consumo, processa_cronograma,
                       processa_fatura_completa, processa_orcado)
 
 
@@ -19,6 +19,26 @@ def _processa_lista(progresso, lista, func, ini, fin, desc):
         resultados.append(func(caminho))
         progresso.etapa(i, total, ini, fin, f"{desc} ({i}/{total})")
     return resultados
+
+
+def _cruza_cronograma(base, crono):
+    """Dias de leitura de cada linha: pelo grupo E mês (Data da Leitura do cronograma = mês da Referencia de Leitura);
+    sem esse mês no cronograma, usa a última linha do grupo."""
+    cols = ["Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma"]
+    if not len(crono):
+        return base.assign(**{c: pd.NA for c in cols})
+    chave = base["Grupo"].map(chave_grupo)
+    por_mes = crono.dropna(subset=["Referencia Cronograma"]).drop_duplicates(["Grupo", "Referencia Cronograma"], keep="last")
+    por_mes = por_mes.set_index(["Grupo", "Referencia Cronograma"])[cols]
+    por_grupo = crono.drop_duplicates("Grupo", keep="last").set_index("Grupo")[cols]
+    idx = pd.MultiIndex.from_arrays([chave, base["Referencia de Leitura"]])
+    achados = por_mes.reindex(idx).reset_index(drop=True)
+    reserva = por_grupo.reindex(chave).reset_index(drop=True)
+    faltam = achados["Qts. Dias"].isna()
+    for c in cols:
+        achados[c] = achados[c].where(~faltam, reserva[c])
+    base = base.drop(columns=[c for c in cols if c in base.columns]).reset_index(drop=True)
+    return pd.concat([base, achados], axis=1)
 
 
 def monta_base(ctx):
@@ -76,11 +96,19 @@ def monta_base(ctx):
 
     cronogramas = _processa_lista(progresso, ctx.classificacao["cronograma"], processa_cronograma, 40, 45, "Processando cronogramas")
     cronograma_total = (
-        pd.concat(cronogramas, ignore_index=True).drop_duplicates(subset="Grupo", keep="last")
-        if cronogramas else pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma"])
+        pd.concat(cronogramas, ignore_index=True)
+        if cronogramas else pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma"])
     )
     print(f"✅ Cronogramas: {len(cronograma_total)} linhas")
-    ctx.bases_info += [{"tipo": "Cronograma", "arquivo": os.path.basename(c), "linhas": len(d), "periodo": ""}
+    if ctx.classificacao["cronograma"] and not len(cronograma_total):
+        ctx.avisos_base.append("O cronograma foi encontrado, mas nenhuma linha válida foi lida (são necessárias as colunas Grupo, "
+                               "Data da Leitura e Qts. Dias): os dias de leitura ficaram vazios.")
+    elif not ctx.classificacao["cronograma"]:
+        ctx.avisos_base.append("Nenhum cronograma de leitura reconhecido na pasta (colunas Grupo, Data da Leitura e Qts. Dias): "
+                               "os dias de leitura ficaram vazios.")
+    ctx.bases_info += [{"tipo": "Cronograma", "arquivo": os.path.basename(c), "linhas": len(d),
+                        "periodo": periodo(d["Referencia Cronograma"]) if "Referencia Cronograma" in d else "",
+                        "extra": f"{d['Grupo'].nunique()} grupos" if len(d) else "nenhuma linha válida"}
                        for c, d in zip(ctx.classificacao["cronograma"], cronogramas)]
     for nome, info in ctx.orcado.items():
         ctx.bases_info.append({"tipo": "Orçado SUP" if info["tipo"] == "sup" else "Orçado RF", "arquivo": info["arquivo"],
@@ -102,8 +130,19 @@ def monta_base(ctx):
     )
     base_final["Encontrado no Consumo"] = base_final["N. Ligação_consumo"].notna().map({True: "Sim", False: "Não"})
 
-    base_final = base_final.merge(cronograma_total, on="Grupo", how="left")
+    base_final = _cruza_cronograma(base_final, cronograma_total)
     base_final["Encontrado no Cronograma"] = base_final["Qts. Dias"].notna().map({True: "Sim", False: "Não"})
+    # ciclos considerados = os grupos que existem na fatura (já cruzada com o consumo); grupos só do cronograma são ignorados
+    if len(cronograma_total):
+        ciclos = sorted(base_final["Grupo"].dropna().astype(str).str.strip().unique(), key=lambda g: (len(g), g))
+        sem = sorted(base_final.loc[base_final["Qts. Dias"].isna(), "Grupo"].dropna().astype(str).str.strip().unique(),
+                     key=lambda g: (len(g), g))
+        achados = len(ciclos) - len(sem)
+        print(f"✅ Cronograma × fatura/consumo: {achados} de {len(ciclos)} ciclos com dias de leitura")
+        ctx.cronograma_resumo = {"ciclos": len(ciclos), "achados": achados, "sem": sem}
+        if sem:
+            ctx.avisos_base.append(f"Ciclos da fatura/consumo sem linha no cronograma ({len(sem)} de {len(ciclos)}): "
+                                   + ", ".join(sem[:15]) + (" …" if len(sem) > 15 else "") + " — ficaram sem dias de leitura.")
 
     cols_excl = [c for c in base_final.columns if c.endswith("_consumo") or c.endswith("_cronograma")] + ["N. Ligação_consumo", "Referência"]
     base_final = base_final.drop(columns=cols_excl, errors="ignore")

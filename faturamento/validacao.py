@@ -634,7 +634,7 @@ def gera_validacao_html(ctx):
                "a média de dias de leitura dos grupos nos dois meses e a diferença.",
                ["Dias de leitura do grupo = média de Qts. Dias (cronograma) das linhas de água e esgoto do grupo",
                 "Média = média simples entre os grupos; Δ = atual − anterior"],
-               comum_fatura + ["<b>Qts. Dias</b> (cronograma, cruzado por grupo)"], {"Dias de leitura": _dias_df(r.get("resumo"))},
+               comum_fatura + ["<b>Qts. Dias</b> (cronograma: cruzado por grupo e mês pela Data da Leitura; sem o mês, usa a última linha do grupo)"], {"Dias de leitura": _dias_df(r.get("resumo"))},
                "dias_leitura", bases=[("fatura", f"{f_atual_ant}; média de Qts. Dias por Grupo")],
                montagem=["Faixa com os dois meses e o Δ em dias (laranja quando diminui)"]),
         _bloco(f"Destaques do mês — {mes}",

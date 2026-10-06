@@ -61,4 +61,4 @@ python acompanhamento_faturamento.py
 - O nº da ligação é o mesmo em todas as bases
 - Só considera as rubricas `VALOR DE AGUA` e `VALOR DE ESGOTO`
 - Uma linha por ligação por mês
-- O cronograma é cruzado por grupo, não por mês
+- O cronograma é lido em qualquer aba (e com título acima do cabeçalho) que tenha as colunas Grupo, Data da Leitura e Qts. Dias, e é cruzado com a fatura por grupo e mês (mês da Data da Leitura); sem o mês, usa a última linha do grupo. Só valem os ciclos que existem na fatura/consumo
