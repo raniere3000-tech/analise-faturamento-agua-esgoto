@@ -184,8 +184,9 @@ def test_dias_uteis_e_forecast_das_indiretas():
     import datetime as dt
     from faturamento.previsao import dias_uteis_do_mes, feriados
     assert dt.date(2026, 10, 12) in feriados(2026) and dt.date(2026, 4, 3) in feriados(2026)   # 12/10 e Sexta Santa
-    d = dias_uteis_do_mes("10/2026", dt.date(2026, 10, 6))
-    assert d == {"uteis": 21, "uteis_decorridos": 4, "uteis_faltam": 17, "corte": 16, "corte_decorridos": 3, "corte_faltam": 13}
+    d = dias_uteis_do_mes("10/2026", dt.date(2026, 10, 5))     # hoje 06/10, dados até D-1
+    assert d == {"uteis": 21, "uteis_decorridos": 3, "uteis_faltam": 18, "corte": 16, "corte_decorridos": 2, "corte_faltam": 14}
+    assert dt.date(2026, 2, 16) not in feriados(2026) and dt.date(2026, 6, 4) not in feriados(2026)   # facultativos contam como úteis
     # mês fechado: nada falta; mês futuro: nada decorrido
     assert dias_uteis_do_mes("10/2026", dt.date(2026, 11, 5))["uteis_faltam"] == 0
     assert dias_uteis_do_mes("10/2026", dt.date(2026, 9, 1))["uteis_decorridos"] == 0

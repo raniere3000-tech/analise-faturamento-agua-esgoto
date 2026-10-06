@@ -16,6 +16,7 @@ import html
 
 import pandas as pd
 
+from .config import REGRAS
 from .dre import (LINHAS, TODAS, _filtra, _fmt, _fontes, _nome_sup, _orcados_do_mes, _pct, realizado)
 from .formatacao import fmt_num, nome_mes
 
@@ -43,12 +44,18 @@ def _pascoa(ano):
 
 
 def feriados(ano):
-    """Feriados nacionais, de Carnaval/Corpus Christi e do estado do RJ (São Jorge)."""
+    """Feriados nacionais, Sexta Santa e São Jorge (RJ), mais os de "feriados_extras" em regras.json (AAAA-MM-DD).
+    Pontos facultativos (Carnaval, Corpus Christi, 28/10...) contam como dia útil."""
     p = _pascoa(ano)
     dias = [(1, 1), (21, 4), (23, 4), (1, 5), (7, 9), (12, 10), (2, 11), (15, 11), (20, 11), (25, 12)]
     fixos = {dt.date(ano, m, d) for d, m in dias}
-    moveis = {p - dt.timedelta(days=48), p - dt.timedelta(days=47), p - dt.timedelta(days=2), p + dt.timedelta(days=60)}
-    return fixos | moveis
+    extras = set()
+    for t in REGRAS.get("feriados_extras", []):
+        try:
+            extras.add(dt.date.fromisoformat(str(t).strip()))
+        except ValueError:
+            pass
+    return fixos | {p - dt.timedelta(days=2)} | extras
 
 
 def _eh_util(d, fer):
@@ -126,7 +133,7 @@ def calcula_previsao(ctx, sup):
         historico = [por_mes[r][g] for r in refs if g in por_mes[r]]
         for k in LINHAS_POR_GRUPO:
             falta[k] += sum(h[k] for h in historico) / len(historico)
-    corte = getattr(ctx, "data_corte", None) or dt.date.today()
+    corte = getattr(ctx, "data_corte", None) or (dt.date.today() - dt.timedelta(days=1))   # a atualização é D-1
     du = dias_uteis_do_mes(ctx.ref_atual, corte)
     for k in CLASSES_POR_DIA_UTIL:                 # indiretas: ticket por dia útil × dias úteis que faltam
         real = atual.get(k) or 0.0
