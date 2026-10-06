@@ -28,13 +28,17 @@ NOME_MALICIOSO = '<img src=x onerror=alert("xss")> & CIA'
 
 
 def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 2026),
-               categoria_sem_minimo=True, formato_fatura="xlsx", injeta_cliente_html=False, com_dre=False):
-    """Cria fatura (2 meses), consumo (1 arquivo por mês) e cronograma em `destino`."""
+               categoria_sem_minimo=True, formato_fatura="xlsx", injeta_cliente_html=False, com_dre=False,
+               n_meses=2, grupos_faltando=0, tendencia_atual=1.0):
+    """Cria fatura (`n_meses` meses), consumo (1 arquivo por mês) e cronograma em `destino`.
+    `grupos_faltando`: os últimos grupos não aparecem no mês atual; `tendencia_atual`: multiplica o consumo do mês atual."""
     rnd = random.Random(semente)
     os.makedirs(destino, exist_ok=True)
     m, a = mes_atual
-    mes_ant, ano_ant = (m - 1, a) if m > 1 else (12, a - 1)
-    meses = [(mes_ant, ano_ant), (m, a)]
+    meses = []
+    for k in range(n_meses - 1, -1, -1):
+        t = a * 12 + (m - 1) - k
+        meses.append((t % 12 + 1, t // 12))
     grupos = [f"{g:02d}" for g in range(1, n_grupos + 1)]
     categorias = CATEGORIAS + (["CATEGORIA NOVA"] if categoria_sem_minimo else [])
 
@@ -67,6 +71,8 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
             if rnd.random() < 0.03:                       # ligação ausente no mês
                 continue
             consumo = max(0.0, l["base"] * rnd.uniform(0.6, 1.3))
+            if (mm, aa) == (m, a):
+                consumo *= tendencia_atual
             if rnd.random() < 0.05:
                 consumo = 0.0
             if l["lig"] == "999999":
@@ -74,7 +80,11 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
             valor_agua = round(consumo * rnd.uniform(4.0, 6.0), 2)
             valor_esg = round(valor_agua * 0.8, 2)
             extras = [(r, -20.0) for r in CANCELAMENTOS] if com_dre and rnd.random() < 0.1 else []
+            # grupo que ainda não faturou no mês atual (os sorteios acontecem igual, para comparar com o mês completo)
+            falta_no_mes = (mm, aa) == (m, a) and grupos_faltando and l["grupo"] in grupos[-grupos_faltando:]
             for rub, val in (("VALOR DE AGUA", valor_agua), ("VALOR DE ESGOTO", valor_esg), ("VALOR DE OUTRO", 3.5), *extras):
+                if falta_no_mes:
+                    continue
                 fat.append({
                     "N. da Ligacao": l["lig"], "Grupo": l["grupo"], "Nome Cliente": l["cliente"],
                     "Categoria": l["categoria"], "Situacao Ligacao": l["situacao"], "Situacao Conta": l["conta"],
@@ -84,8 +94,11 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
                 })
             eco = {f"Qtd. Economia {t}": 0 for t in ("Residencial", "Comercial", "Industrial", "Publica", "Outros")}
             eco[f"Qtd. Economia {l['eco']}"] = l["n_eco"]
+            leitura = round(rnd.uniform(100, 9000))
+            if falta_no_mes:
+                continue
             linhas_consumo.append({
-                "N. Ligacao": l["lig"], "Leitura Atual": round(rnd.uniform(100, 9000)),
+                "N. Ligacao": l["lig"], "Leitura Atual": leitura,
                 "Consumo Medido": round(consumo, 1), "Consumo Faturado": round(consumo, 1), **eco,
             })
         consumos[(mm, aa)] = pd.DataFrame(linhas_consumo)

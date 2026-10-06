@@ -146,9 +146,10 @@ def _forecast_geral():
         '<div class="fc-formula"><b>Fechamento do mês = Realizado + Forecast</b><br>'
         '<span>Realizado = o que já foi faturado até ontem (D-1) · Forecast = estimativa do que ainda falta faturar até o fim do mês</span></div>')
     metodos = _tab(["Linhas da DRE", "Método", "Fórmula do forecast", "Por que assim"], [
-        ["Diretas Água e Esgoto, economias e volume", "<b>1. Média do grupo</b>",
-         "Soma, para cada grupo que ainda não faturou, da média desse grupo nos últimos 3 meses",
-         "As diretas são faturadas por grupo (ciclo de leitura): o que falta são os grupos que ainda não foram lidos"],
+        ["Diretas Água e Esgoto, economias e volume", "<b>1. Grupo × tendência do mês</b>",
+         "Para cada grupo que falta: economias × volume por economia × tarifa do próprio grupo (até 6 meses, média ponderada), "
+         "corrigidos pelos fatores de tendência dos grupos que já faturaram",
+         "As diretas são faturadas por grupo; os grupos já lidos mostram se o mês está caindo ou subindo em economias, consumo e tarifa"],
         ["Indiretas (RI Cortes, Religações, Ligações de água, Fiscalização, Outros e Fat. de esgoto - Indireto)", "<b>2. Ritmo por dia útil</b>",
          "(Realizado ÷ dias úteis decorridos) × dias úteis que faltam",
          "O serviço avulso acontece todo dia útil; Cortes usam só os dias de corte (sem sextas e vésperas de feriado)"],
@@ -160,10 +161,15 @@ def _forecast_geral():
     ], classe_tabela="tabela-dados fc-metodos")
     passos = _lista([
         "<b>Data de corte e histórico.</b> A data de corte é ontem (D-1), porque os arquivos são atualizados até o dia anterior. "
-        "O histórico são os até 3 meses imediatamente anteriores ao mês projetado que existem na base.",
+        "O histórico das diretas usa até 6 meses anteriores ao mês projetado (cancelamento: até 3).",
         "<b>Grupos faturados × grupos que faltam.</b> Grupos com linhas na fatura do mês já estão no Realizado. Grupos que faturaram "
         "no histórico e ainda não no mês são os que faltam.",
-        "<b>Forecast de cada linha.</b> Aplica-se o método da tabela acima (média do grupo, ritmo por dia útil ou completar até a média).",
+        "<b>Tendência do mês.</b> Compara-se o que os grupos já faturados realizaram com o que o método previa para eles: "
+        "fator de economias, de volume por economia e de tarifa (separados para água e esgoto).",
+        "<b>Forecast de cada linha.</b> Aplica-se o método da tabela acima (grupo × tendência, ritmo por dia útil ou completar até a média). "
+        "As diretas ganham também uma faixa provável (pessimista–otimista).",
+        "<b>Conferência do método (backtest).</b> O mesmo cálculo é refeito nos meses passados, como se os últimos grupos ainda não "
+        "tivessem faturado, e o erro é comparado com o da média simples.",
         "<b>Linhas calculadas.</b> Diretas Totais, Fat. de água - Indireto, Faturamento Bruto, volume médio, tarifa e ticket são refeitos a partir do fechamento.",
         "<b>Comparação com o orçado.</b> Δ R$ = Fechamento − Orçado; Δ % = Fechamento ÷ Orçado − 1, para cada planilha (RF ou RF SUP).",
         "<b>Ajuste manual (opcional).</b> Na aba Forecast, clique em um valor da coluna Forecast ✎ para trocá-lo; fechamento, totais e Δ "
@@ -173,23 +179,27 @@ def _forecast_geral():
             f'<p class="val-rot">Passo a passo</p>{passos}')
 
 
+def _fmt_k(k, v):
+    return _moeda(v) if k in ("dA", "dE") else fmt_num(v, 0)
+
+
 def _explica_forecast(ctx, sup):
     """Memória de cálculo do forecast de uma superintendência, com os números do mês."""
     from .formatacao import nome_mes
-    from .previsao import CLASSES_POR_DIA_UTIL, LINHAS_POR_GRUPO, MESES_BASE, calcula_previsao
+    from .previsao import CLASSES_POR_DIA_UTIL, MESES_BASE, MESES_HIST, calcula_previsao
     d = calcula_previsao(ctx, sup)
     if not d:
         return '<p>Sem meses anteriores na base: não há como projetar o fechamento.</p>'
     refs, du, atual, falta = d["refs"], d["dias"], d["atual"], d["falta"]
     corte = d["corte"].strftime("%d/%m/%Y")
-    from .dre import _filtra
-    base = ctx.base_completa
-    faturados = sorted(set(_filtra(base[base["Referencia de Leitura"] == ctx.ref_atual], sup)["Grupo"].astype(str).str.strip()))
+    faturados = d["faturados"]
 
     parametros = _tab(["Parâmetro", "Valor", "De onde vem"], [
         ["Mês projetado", html.escape(ctx.mes_atual), "Última referência com linhas na fatura"],
-        ["Histórico (meses-base)", html.escape(", ".join(nome_mes(r) for r in refs)),
-         f"Até {MESES_BASE} meses anteriores ao mês projetado que existem na base (aqui: {len(refs)})"],
+        ["Histórico das diretas", html.escape(", ".join(nome_mes(r) for r in d["refs_hist"])),
+         f"Até {MESES_HIST} meses anteriores ao mês projetado que existem na base (aqui: {len(d['refs_hist'])})"],
+        ["Histórico do cancelamento", html.escape(", ".join(nome_mes(r) for r in refs)),
+         f"Até {MESES_BASE} meses anteriores (aqui: {len(refs)})"],
         ["Data de corte (D-1)", corte, "Arquivos atualizados até ontem: hoje ainda não conta como decorrido"],
         ["Grupos já faturados", html.escape(", ".join(faturados) or "nenhum"), "Têm linhas na fatura do mês: já estão no Realizado"],
         ["Grupos que faltam", html.escape(", ".join(d["faltam"]) or "nenhum"), "Faturaram no histórico e ainda não no mês"],
@@ -200,20 +210,88 @@ def _explica_forecast(ctx, sup):
     ])
 
     # método 1
-    nomes_g = ["dA", "dE", "ecoA", "ecoE", "volA", "volE"]
-    fmt_g = lambda k, v: _moeda(v) if k in ("dA", "dE") else fmt_num(v, 0)
-    if d["grupos"]:
-        linhas_g = [[html.escape(g), html.escape(", ".join(nome_mes(r) for r in i["meses"]))] + [fmt_g(k, i["media"][k]) for k in nomes_g]
-                    for g, i in d["grupos"].items()]
-        linhas_g.append(["<b>Forecast (soma)</b>", ""] + [f"<b>{fmt_g(k, falta[k])}</b>" for k in nomes_g])
-        g, info = next(iter(d["grupos"].items()))
-        partes = " + ".join(f"{_moeda(info['por_mes'][r]['dA'])} ({nome_mes(r)})" for r in info["meses"])
-        corpo1 = (f'<p class="fc-exemplo"><b>Exemplo — grupo {html.escape(g)}, Diretas Água:</b> ({partes}) ÷ {len(info["meses"])} = '
-                  f'<b>{_moeda(info["media"]["dA"])}</b>. Somando todos os grupos que faltam: forecast de <b>{_moeda(falta["dA"])}</b>; '
-                  f'fechamento = {_moeda(atual.get("dA"))} + {_moeda(falta["dA"])} = <b>{_moeda((atual.get("dA") or 0) + falta["dA"])}</b>.</p>'
-                  + _tab(["Grupo que falta", "Meses usados"] + [NOME_BASICA[k] for k in nomes_g], linhas_g))
+    proj, refs_h = d["projecao"], d["refs_hist"]
+    nomes_s = {"A": "Água", "E": "Esgoto"}
+    pct = lambda f: ("+" if f >= 1 else "−") + fmt_num(abs(f - 1) * 100, 1) + "%"
+    linhas_f = []
+    for s in ("A", "E"):
+        f = proj["fatores"].get(s)
+        if not f:
+            continue
+        for k, nome in (("eco", "Economias"), ("vme", "Volume por economia"), ("tar", "Tarifa (R$/m³)")):
+            linhas_f.append([nomes_s[s], nome, fmt_num(f["bruto"][k], 4) + f" ({pct(f['bruto'][k])})",
+                             fmt_num(f["confianca"] * 100, 0) + "%", f"<b>{fmt_num(f['aplicado'][k], 4)} ({pct(f['aplicado'][k])})</b>"])
+    tabela_f = _tab(["Serviço", "Fator", "Medido nos grupos já faturados", "Confiança", "Fator aplicado"], linhas_f)
+    linhas_g = []
+    for g, info in proj["grupos"].items():
+        for s in ("A", "E"):
+            x = info.get(s)
+            if not x:
+                continue
+            b = x["base"]
+            if b["simples"]:
+                linhas_g.append([html.escape(g), nomes_s[s], str(len(info["meses"])), "—", "—", "—",
+                                 fmt_num(x["eco"], 0), fmt_num(x["vol"], 0), f"<b>{_moeda(x['valor'])}</b> (média ponderada do valor)"])
+            else:
+                linhas_g.append([html.escape(g), nomes_s[s], str(len(info["meses"])), fmt_num(b["eco"], 0), fmt_num(b["vme"], 2),
+                                 fmt_num(b["tar"], 2), fmt_num(x["eco"], 0), fmt_num(x["vol"], 0), f"<b>{_moeda(x['valor'])}</b>"])
+    fx = proj["faixa"]
+    linhas_fx = [[NOME_BASICA[k], _fmt_k(k, fx[k][0]), f"<b>{_fmt_k(k, falta[k])}</b>", _fmt_k(k, fx[k][1]),
+                  _fmt_k(k, (atual.get(k) or 0) + fx[k][0]) + " – " + _fmt_k(k, (atual.get(k) or 0) + fx[k][1])]
+                 for k in ("dA", "dE", "ecoA", "ecoE", "volA", "volE")]
+    if proj["grupos"]:
+        g, info = next(iter(proj["grupos"].items()))
+        x, fa = info["A"], proj["fatores"]["A"]["aplicado"]
+        if x["base"]["simples"]:
+            exemplo = (f'<p class="fc-exemplo"><b>Exemplo — grupo {html.escape(g)}, Água:</b> sem economias/volume no histórico; '
+                       f'entra a média ponderada do valor: <b>{_moeda(x["valor"])}</b>.</p>')
+        else:
+            b = x["base"]
+            exemplo = (
+                f'<p class="fc-exemplo"><b>Exemplo — grupo {html.escape(g)}, Água:</b> '
+                f'economias = {fmt_num(b["eco"], 0)} (média ponderada) × {fmt_num(fa["eco"], 4)} = <b>{fmt_num(x["eco"], 0)}</b>; '
+                f'volume = {fmt_num(x["eco"], 0)} × {fmt_num(b["vme"], 2)} m³/economia × {fmt_num(fa["vme"], 4)} = <b>{fmt_num(x["vol"], 0)} m³</b>; '
+                f'faturamento = {fmt_num(x["vol"], 0)} m³ × R$ {fmt_num(b["tar"], 2)}/m³ × {fmt_num(fa["tar"], 4)} = <b>{_moeda(x["valor"])}</b>.</p>')
+        corpo1 = (
+            "<p><b>1º — Base de cada grupo</b> (do próprio histórico, separada para água e esgoto): economias, volume por economia "
+            "(volume ÷ economias) e tarifa (valor ÷ volume), cada um pela média ponderada dos meses — o mais antigo pesa 1 e o mais "
+            "recente pesa " + str(len(refs_h)) + ", então os meses recentes contam mais.</p>"
+            "<p><b>2º — Tendência do mês</b>: nos grupos que já faturaram, compara-se o realizado com o que essa base previa para eles. "
+            "Fator de economias = economias reais ÷ economias-base; fator de volume = volume real ÷ (economias reais × volume por economia-base); "
+            "fator de tarifa = valor real ÷ (volume real × tarifa-base), que capta um reajuste de tarifa no mês. No começo do mês há poucos grupos, então o fator é puxado para 1 "
+            "conforme a <b>confiança</b> (parte das economias-base que já faturou): fator aplicado = 1 + confiança × (fator medido − 1).</p>"
+            + tabela_f +
+            "<p><b>3º — Forecast do grupo</b> = economias-base × fator de economias × volume por economia × fator de volume × tarifa × fator de tarifa.</p>"
+            + exemplo
+            + _tab(["Grupo", "Serviço", "Meses", "Economias-base", "m³/economia", "Tarifa R$/m³", "Economias prev.", "Volume prev. (m³)", "Faturamento prev."], linhas_g)
+            + "<p><b>4º — Faixa provável (~80%)</b>: usa a oscilação histórica de cada grupo (desvio padrão ÷ média) aplicada à previsão. "
+            "Pessimista = forecast − 1,28 × desvio combinado; otimista = forecast + 1,28 × desvio combinado.</p>"
+            + _tab(["Linha", "Forecast pessimista", "Forecast", "Forecast otimista", "Fechamento provável"], linhas_fx))
     else:
         corpo1 = '<p>Todos os grupos já faturaram: o forecast de diretas, economias e volume é zero.</p>'
+    bt = d["backtest"]
+    if bt:
+        linhas_bt, erros = [], {"novo": [], "antigo": []}
+        for l in bt:
+            for c, nome in (("dA", "Água"), ("dE", "Esgoto")):
+                en, ea = l["erro_novo"][c], l["erro_antigo"][c]
+                if en is not None:
+                    erros["novo"].append(abs(en)); erros["antigo"].append(abs(ea))
+                fmt_e = lambda e: "—" if e is None else ("+" if e >= 0 else "−") + fmt_num(abs(e) * 100, 1) + "%"
+                linhas_bt.append([nome_mes(l["mes"]), html.escape(", ".join(l["faltam"])), nome, _moeda(l["real"][c]),
+                                  _moeda(l["novo"][c]), fmt_e(en), _moeda(l["antigo"][c]), fmt_e(ea)])
+        mn = sum(erros["novo"]) / len(erros["novo"]) if erros["novo"] else None
+        ma = sum(erros["antigo"]) / len(erros["antigo"]) if erros["antigo"] else None
+        resumo_bt = ("" if mn is None else
+                     f'<p class="fc-exemplo">Erro médio absoluto: <b>método atual {fmt_num(mn * 100, 1)}%</b> × média simples de 3 meses '
+                     f'{fmt_num(ma * 100, 1)}%. Quanto menor, melhor.</p>')
+        corpo_bt = ("<p>Para conferir o método, cada mês do histórico é refeito como se os últimos grupos ainda não tivessem faturado "
+                    "(mesma quantidade de grupos que falta agora), usando só os meses anteriores a ele. A previsão é comparada com o que "
+                    "esses grupos realmente faturaram.</p>" + resumo_bt
+                    + _tab(["Mês testado", "Grupos simulados como faltantes", "Serviço", "Real", "Método atual", "Erro",
+                            "Média simples 3 meses", "Erro"], linhas_bt))
+    else:
+        corpo_bt = "<p>Histórico insuficiente para o backtest (são necessários pelo menos 3 meses na base).</p>"
 
     # método 2
     linhas_i = []
@@ -237,10 +315,20 @@ def _explica_forecast(ctx, sup):
 
     df = _forecast_df(ctx, sup, d)
     abas = {"Forecast": df}
-    if d["grupos"]:
+    if proj["grupos"]:
         abas["Grupos que faltam"] = pd.DataFrame(
-            [{"Grupo": g, "Meses usados": ", ".join(i["meses"]), **{NOME_BASICA[k]: i["media"][k] for k in LINHAS_POR_GRUPO}}
-             for g, i in d["grupos"].items()])
+            [{"Grupo": g, "Serviço": nomes_s[s], "Meses usados": ", ".join(i["meses"]),
+              "Economias-base": i[s]["base"]["eco"], "m3 por economia": i[s]["base"]["vme"], "Tarifa R$/m3": i[s]["base"]["tar"],
+              "Economias prev.": i[s]["eco"], "Volume prev.": i[s]["vol"], "Faturamento prev.": i[s]["valor"]}
+             for g, i in proj["grupos"].items() for s in ("A", "E") if s in i])
+        abas["Fatores de tendencia"] = pd.DataFrame(
+            [{"Serviço": nomes_s[s], "Fator": k, "Medido": f["bruto"][k], "Confiança": f["confianca"], "Aplicado": f["aplicado"][k]}
+             for s, f in proj["fatores"].items() for k in ("eco", "vme", "tar")])
+    if bt:
+        abas["Backtest"] = pd.DataFrame([{"Mês": l["mes"], "Grupos": ", ".join(l["faltam"]), "Serviço": c, "Real": l["real"][c],
+                                          "Método atual": l["novo"][c], "Erro atual": l["erro_novo"][c],
+                                          "Média simples": l["antigo"][c], "Erro média simples": l["erro_antigo"][c]}
+                                         for l in bt for c in ("dA", "dE")])
     abas["Indiretas por dia util"] = pd.DataFrame([{
         "Linha": NOME_BASICA[k], "Realizado": atual.get(k) or 0.0,
         "Dias decorridos": du[("corte" if k == "ri_CORTE" else "uteis") + "_decorridos"],
@@ -251,7 +339,8 @@ def _explica_forecast(ctx, sup):
 
     return (f'<p>{botao}</p>'
             f'<h5 class="fc-titulo">A. Parâmetros do mês</h5>{parametros}'
-            f'<h5 class="fc-titulo">B. Método 1 — Diretas, economias e volume (média do grupo)</h5>{corpo1}'
+            f'<h5 class="fc-titulo">B. Método 1 — Diretas, economias e volume (grupo × tendência do mês)</h5>{corpo1}'
+            f'<h5 class="fc-titulo">B2. Conferência do método 1 nos meses anteriores (backtest)</h5>{corpo_bt}'
             f'<h5 class="fc-titulo">C. Método 2 — Indiretas (ritmo por dia útil)</h5>{corpo2}'
             f'<h5 class="fc-titulo">D. Método 3 — Cancelamento (completar até a média)</h5>{corpo3}'
             f'<h5 class="fc-titulo">E. Resultado: Realizado + Forecast</h5>{_amostra(df, n=40)}')
