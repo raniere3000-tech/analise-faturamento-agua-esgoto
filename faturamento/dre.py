@@ -84,7 +84,7 @@ def prepara(ctx):
     mapa = {}
     base = ctx.base_final
     if "Nome da Localidade" in base.columns:
-        t = base.dropna(subset=["Nome da Localidade"])
+        t = base.dropna(subset=["Nome da Localidade"]).drop_duplicates("N. Ligação")
         mapa.update(dict(zip(_ligacao(t["N. Ligação"]), t["Nome da Localidade"])))
     avu = ctx.avulso if ctx.avulso is not None else pd.DataFrame()
     if len(avu) and "Nome da Localidade" in avu.columns:
@@ -97,9 +97,15 @@ def prepara(ctx):
             return df
         df = df.copy()
         cid = df["Nome da Localidade"] if "Nome da Localidade" in df.columns else pd.Series(index=df.index, dtype=object)
-        cid = cid.where(cid.notna(), _ligacao(df[col_lig]).map(mapa))
+        faltam = cid.isna()
+        if faltam.any():
+            cid = cid.where(~faltam, _ligacao(df.loc[faltam, col_lig]).map(mapa))
         df["__cidade"] = cid
-        df["__sup"] = cid.map(lambda c: SUP_POR_CIDADE.get(chave_texto(c), SEM_SUP) if pd.notna(c) else SEM_SUP)
+        unicas = cid.dropna().unique()                    # SUP calculada uma vez por cidade, não por linha
+        df["__sup"] = cid.map({c: SUP_POR_CIDADE.get(chave_texto(c), SEM_SUP) for c in unicas}).fillna(SEM_SUP)
+        if "Rubrica" in df.columns and "__serv" not in df.columns:   # serviço da linha (A = água, E = esgoto)
+            rub = df["Rubrica"].astype(str)
+            df["__serv"] = rub.map({r: "E" if "ESGOTO" in r.upper() else "A" if "AGUA" in r.upper() else "" for r in rub.unique()})
         return df
 
     ctx.base_final = marca(ctx.base_final, "N. Ligação")
@@ -134,9 +140,21 @@ def prepara(ctx):
     ctx.dre_pronto = True
 
 
+def _cache(ctx, nome, chave, funcao):
+    """Guarda no contexto o resultado de `funcao()` enquanto `chave` (ids das bases usadas) não mudar."""
+    atual = ctx.__dict__.get(nome)
+    if atual is None or atual[0] != chave:
+        atual = ctx.__dict__[nome] = (chave, funcao())
+    return atual[1]
+
+
 def lista_sups(ctx):
     prepara(ctx)
-    sups = set(ctx.base_final["__sup"])
+    return list(_cache(ctx, "_lista_sups", (id(ctx.base_final), id(ctx.avulso)), lambda: _lista_sups(ctx)))
+
+
+def _lista_sups(ctx):
+    sups = set(ctx.base_final["__sup"].unique())
     if len(ctx.avulso):
         sups |= set(ctx.avulso["__sup"])
     return [TODAS] + sorted(sups - {SEM_SUP}) + ([SEM_SUP] if SEM_SUP in sups else [])
@@ -153,11 +171,27 @@ def _div(a, b):
 
 
 def realizado(ctx, sup, ref=None):
+    """Realizado da DRE (com cache: a mesma SUP × mês é pedida por várias abas)."""
     ref = ref or ctx.ref_atual
-    at = _filtra(ctx.base_final[ctx.base_final["Referencia de Leitura"] == ref], sup)
+    cache = ctx.__dict__.setdefault("_cache_realizado", {})
+    chave = (id(ctx.base_final), id(ctx.avulso), sup, ref)
+    if chave not in cache:
+        cache[chave] = _realizado(ctx, sup, ref)
+    return dict(cache[chave])
+
+
+def _por_mes(ctx, base):
+    """{mês: linhas da base} — a base é separada por mês uma vez só (a DRE pede cada mês × SUP)."""
+    return _cache(ctx, "_por_mes_%d" % id(base), id(base),
+                  lambda: {r: d for r, d in base.groupby("Referencia de Leitura", sort=False)})
+
+
+def _realizado(ctx, sup, ref):
+    at = _por_mes(ctx, ctx.base_final).get(ref, ctx.base_final.iloc[:0])
+    at = _filtra(at, sup)
     r = {}
     for k, rub in (("A", "AGUA"), ("E", "ESGOTO")):
-        d = at[at["Rubrica"].str.contains(rub, case=False, na=False)]
+        d = at[at["__serv"] == k] if "__serv" in at.columns else at[at["Rubrica"].str.contains(rub, case=False, na=False)]
         pos = d[d["Consumo Faturado"] > 0]
         r["d" + k] = float(d["Valor (R$)"].sum())
         r["eco" + k] = float(pos["Economias_Totais"].sum())
@@ -233,10 +267,14 @@ def orcado(ctx, fonte, sup, ref=None):
 def lista_meses(ctx):
     """Meses (MM/AAAA, em ordem) que têm dados de fatura, serviço avulso ou cancelamento."""
     prepara(ctx)
-    refs = set(ctx.base_final["Referencia de Leitura"].dropna())
+    return list(_cache(ctx, "_lista_meses", (id(ctx.base_final), id(ctx.avulso), id(ctx.cancelamento)), lambda: _lista_meses(ctx)))
+
+
+def _lista_meses(ctx):
+    refs = set(ctx.base_final["Referencia de Leitura"].dropna().unique())
     for df, col in ((ctx.avulso, "Referencia"), (ctx.cancelamento, "Referencia de Leitura")):
         if df is not None and len(df):
-            refs |= set(df[col].dropna())
+            refs |= set(df[col].dropna().unique())
     return sorted(refs, key=lambda r: (r[3:], r[:2]))
 
 

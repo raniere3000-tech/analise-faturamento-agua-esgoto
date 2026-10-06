@@ -18,8 +18,8 @@ import html
 import pandas as pd
 
 from .config import REGRAS
-from .dre import (LINHAS, TODAS, _filtra, _fmt, _fontes, _nome_sup, _orcados_do_mes, _pct, realizado)
-from .formatacao import fmt_num, nome_mes
+from .dre import LINHAS, TODAS, _fmt, _fontes, _nome_sup, _orcados_do_mes, realizado
+from .formatacao import nome_mes
 from .projecao_grupos import backtest, projeta
 
 MESES_BASE = 3
@@ -84,10 +84,54 @@ def _mes_deslocado(ref, n):
     return f"{t % 12 + 1:02d}/{t // 12}"
 
 
+def _refs_existentes(ctx):
+    base = ctx.base_completa
+    cache = ctx.__dict__.get("_refs_existentes")
+    if cache is None or cache[0] is not base:
+        cache = ctx._refs_existentes = (base, set(base["Referencia de Leitura"].dropna().unique()))
+    return cache[1]
+
+
 def _refs_base(ctx, n_meses=MESES_BASE):
     """Até `n_meses` meses imediatamente anteriores ao atual que existem na base (do mais antigo ao mais novo)."""
-    existentes = set(ctx.base_completa["Referencia de Leitura"].dropna())
+    existentes = _refs_existentes(ctx)
     return [r for r in (_mes_deslocado(ctx.ref_atual, n) for n in range(n_meses, 0, -1)) if r in existentes]
+
+
+def resumo_mensal(ctx):
+    """Soma por mês × grupo × superintendência, colunas dA, dE, ecoA, ecoE, volA, volE (economias/volume só com Consumo > 0).
+    Calculado uma vez por relatório: alimenta forecast, backtest e orçado por ciclo sem varrer a base de novo."""
+    from .dre import prepara
+    prepara(ctx)
+    base = ctx.base_completa
+    cache = ctx.__dict__.get("_resumo_mensal")
+    if cache is not None and cache[0] is base:
+        return cache[1]
+    d = base[base["__serv"].isin(["A", "E"])]
+    pos = d["Consumo Faturado"] > 0
+    t = pd.DataFrame({"ref": d["Referencia de Leitura"], "g": d["Grupo"].astype(str).str.strip(), "sup": d["__sup"],
+                      "s": d["__serv"], "d": d["Valor (R$)"], "eco": d["Economias_Totais"].where(pos, 0),
+                      "vol": d["Consumo Faturado"].where(pos, 0)})
+    agg = t.groupby(["ref", "g", "sup", "s"]).sum().unstack("s", fill_value=0)
+    agg.columns = [f"{m}{sv}" for m, sv in agg.columns]
+    for c in LINHAS_POR_GRUPO:
+        if c not in agg.columns:
+            agg[c] = 0.0
+    agg = agg[LINHAS_POR_GRUPO].astype(float)
+    ctx._resumo_mensal = (base, agg)
+    return agg
+
+
+def valores_grupo(ctx, ref, sup):
+    """{grupo: {dA, dE, ecoA, ecoE, volA, volE}} de um mês e superintendência (a partir do resumo mensal)."""
+    agg = resumo_mensal(ctx)
+    if ref not in agg.index.get_level_values("ref"):
+        return {}
+    x = agg.xs(ref, level="ref")
+    if sup != TODAS:
+        x = x[x.index.get_level_values("sup") == sup]
+    x = x.groupby(level="g").sum()
+    return {g: {k: float(v) for k, v in linha.items()} for g, linha in zip(x.index, x.to_dict("records"))}
 
 
 def _completo(ctx):
@@ -97,28 +141,17 @@ def _completo(ctx):
     return c
 
 
-def _por_grupo(df, rubrica_txt):
-    d = df[df["Rubrica"].str.contains(rubrica_txt, case=False, na=False)]
-    pos = d[d["Consumo Faturado"] > 0]
-    return d, pos
-
-
-def _valores_grupo(df_mes):
-    """{grupo: {dA, dE, ecoA, ecoE, volA, volE}} de um mês (já filtrado por SUP)."""
-    saida = {}
-    for g, bloco in df_mes.groupby(df_mes["Grupo"].astype(str).str.strip()):
-        r = {}
-        for k, rub in (("A", "AGUA"), ("E", "ESGOTO")):
-            d, pos = _por_grupo(bloco, rub)
-            r["d" + k] = float(d["Valor (R$)"].sum())
-            r["eco" + k] = float(pos["Economias_Totais"].sum())
-            r["vol" + k] = float(pos["Consumo Faturado"].sum())
-        saida[g] = r
-    return saida
-
-
 def calcula_previsao(ctx, sup):
-    """Devolve dict com meses-base, realizado completo dos meses-base, realizado até agora, projeção e previsão."""
+    """Devolve dict com meses-base, realizado completo dos meses-base, realizado até agora, projeção e previsão.
+    Com cache: a aba Forecast e a aba Dados pedem a mesma SUP."""
+    cache = ctx.__dict__.setdefault("_cache_previsao", {})
+    chave = (id(ctx.base_final), id(ctx.base_completa), sup, ctx.ref_atual, getattr(ctx, "data_corte", None))
+    if chave not in cache:
+        cache[chave] = _calcula_previsao(ctx, sup)
+    return cache[chave]
+
+
+def _calcula_previsao(ctx, sup):
     refs = _refs_base(ctx)
     if not refs:
         return None
@@ -126,11 +159,10 @@ def calcula_previsao(ctx, sup):
     meses = {r: realizado(cheio, sup, r) for r in refs}
     atual = realizado(ctx, sup, ctx.ref_atual)
 
-    base = ctx.base_completa
     refs_hist = _refs_base(ctx, MESES_HIST)
-    mes_atual = _valores_grupo(_filtra(base[base["Referencia de Leitura"] == ctx.ref_atual], sup))
+    mes_atual = valores_grupo(ctx, ctx.ref_atual, sup)
     faturados = sorted(mes_atual)
-    por_mes = {r: _valores_grupo(_filtra(base[base["Referencia de Leitura"] == r], sup)) for r in refs_hist}
+    por_mes = {r: valores_grupo(ctx, r, sup) for r in refs_hist}
     # grupos que faltam: faturaram nos últimos 3 meses e ainda não no mês atual
     faltam = sorted({g for r in refs for g in por_mes[r]} - set(faturados))
 
@@ -140,7 +172,7 @@ def calcula_previsao(ctx, sup):
         falta[k] = proj["total"][k]
     # backtest: os meses do histórico simulados como se os últimos grupos ainda não tivessem faturado
     todos = _refs_base(ctx, MESES_HIST + 3)
-    por_mes_bt = {r: por_mes.get(r) or _valores_grupo(_filtra(base[base["Referencia de Leitura"] == r], sup)) for r in todos}
+    por_mes_bt = {r: por_mes.get(r) or valores_grupo(ctx, r, sup) for r in todos}
     n_grupos = len(set(faturados) | set(faltam))
     teste = backtest(por_mes_bt, todos, len(faltam) or max(1, round(n_grupos / 3)), n_hist=MESES_HIST)
     corte = getattr(ctx, "data_corte", None) or (dt.date.today() - dt.timedelta(days=1))   # a atualização é D-1

@@ -305,6 +305,9 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 body.relatorio-aberto { height: 100vh; overflow: hidden; }
 body.relatorio-aberto .conteudo { min-height: 0; }
 #quadroRelatorio { min-height: 0; }
+/* tempo estimado */
+.eta { margin-left: 14px; white-space: nowrap; font-weight: 700; color: #ffd166; font-variant-numeric: tabular-nums; }
+.eta[hidden] { display: none; }
 /* etapas da geração (gráficos, tabelas, KPIs) */
 .etapas { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: #C8D4EA; }
 .etapas[hidden] { display: none; }
@@ -321,7 +324,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v22</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v23</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -342,7 +345,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   </div>
   <div class="fonte-status" id="fonteStatus">Nenhuma pasta conectada.</div>
   <div class="progresso" id="progresso" hidden>
-    <div class="prog-linha"><div class="barra"><div class="barra-fill" id="barraFill"></div></div><b id="statusPct">0%</b><span id="statusTexto">Preparando…</span></div>
+    <div class="prog-linha"><div class="barra"><div class="barra-fill" id="barraFill"></div></div><b id="statusPct">0%</b><span id="statusTexto">Preparando…</span><span class="eta" id="statusEta" hidden></span></div>
     <p class="nota" id="statusNota"></p>
     <ol class="etapas" id="listaEtapas" hidden aria-live="polite"></ol>
     <div class="arquivos" id="listaArquivos" hidden></div>
@@ -406,7 +409,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v22-20261006"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v23-20261006"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -461,6 +464,73 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       `<li class="${e.ok ? "ok" : "atual"}"><span>${e.ok ? "✓" : "●"}</span>${escapa(e.texto)}</li>`).join("");
   }
 
+  // ===== Tempo estimado para terminar =====
+  // Fase 1: ler a pasta até a conferência do Top 20 (0–52%). Fase 2: gerar o relatório (52–100%).
+  // Usa o tempo da última execução neste navegador (quanto cada faixa da barra levou), ajustado ao ritmo de agora;
+  // na primeira vez, sem histórico, projeta pelo ritmo da própria barra. O valor conta os segundos entre as mensagens.
+  const ETA_LS = "faturamento_eta_v1";
+  let eta = { fase: null, t0: null, pontos: [], fim: null, timer: null };
+  const etaHistorico = () => { try { return JSON.parse(localStorage.getItem(ETA_LS) || "{}"); } catch (e) { return {}; } };
+  function iniciaEta(fase) {
+    paraEta();
+    eta = { fase, t0: null, pontos: [], fim: null, timer: setInterval(mostraEta, 1000) };
+  }
+  function paraEta() {
+    if (eta.timer) clearInterval(eta.timer);
+    eta.timer = null; eta.fim = null;
+    $("statusEta").hidden = true;
+  }
+  function salvaEta() {
+    if (eta.fase && eta.pontos.length > 2) {
+      const h = etaHistorico(); h[eta.fase] = eta.pontos.filter((_, i, a) => i % Math.ceil(a.length / 60) === 0 || i === a.length - 1);
+      try { localStorage.setItem(ETA_LS, JSON.stringify(h)); } catch (e) { /* sem armazenamento */ }
+    }
+    paraEta();
+  }
+  function tempoNoHistorico(pts, p) {           // segundos que a execução anterior levou até chegar em p%
+    if (!pts || pts.length < 2 || p < pts[0][0]) return null;
+    for (let i = 1; i < pts.length; i++) {
+      if (pts[i][0] >= p) {
+        const [p0, t0] = pts[i - 1], [p1, t1] = pts[i];
+        return p1 === p0 ? t1 : t0 + (t1 - t0) * (p - p0) / (p1 - p0);
+      }
+    }
+    return pts[pts.length - 1][1];
+  }
+  function atualizaEta(p) {
+    if (!eta.fase) return;
+    const agora = performance.now();
+    if (eta.t0 === null) eta.t0 = agora;
+    const decorrido = (agora - eta.t0) / 1000;
+    eta.pontos.push([p, Math.round(decorrido * 10) / 10]);
+    const [ini, fim] = eta.fase === "f1" ? [0, 52] : [52, 100];
+    let resta = null;
+    const h = etaHistorico()[eta.fase];
+    const tp = tempoNoHistorico(h, p);
+    if (h && tp !== null && tp > 2 && decorrido > 2) {
+      const total = h[h.length - 1][1], ritmo = Math.min(3, Math.max(0.33, decorrido / tp));
+      resta = Math.max(0, (total - tp) * ritmo);
+    } else {
+      const feito = (p - ini) / (fim - ini);
+      if (feito > 0.06 && decorrido > 3) resta = decorrido * (1 - feito) / feito;
+    }
+    if (resta === null) return;
+    const novoFim = agora + resta * 1000;
+    eta.fim = eta.fim === null ? novoFim : eta.fim * 0.6 + novoFim * 0.4;   // suaviza saltos entre mensagens
+    mostraEta();
+  }
+  function mostraEta() {
+    const el = $("statusEta");
+    if (!eta.fim) { el.hidden = true; return; }
+    const s = Math.max(0, Math.round((eta.fim - performance.now()) / 1000));
+    const alvo = eta.fase === "f1" ? " para a conferência" : " para o relatório";
+    if (s < 5) { el.textContent = "⏱ quase pronto"; el.hidden = false; return; }
+    const m = Math.floor(s / 60), r = Math.round((s % 60) / 5) * 5;
+    const txt = s < 60 ? `~${Math.ceil(s / 5) * 5} s` : r === 60 ? `~${m + 1} min` : `~${m} min ${String(r).padStart(2, "0")} s`;
+    el.textContent = `⏱ faltam ${txt}${alvo}`;
+    el.hidden = false;
+  }
+
   function setStatus(texto, pct) {
     registraEtapa(texto, texto === "Finalizado" || texto === "Relatório gerado");
     $("statusTexto").textContent = texto;
@@ -490,15 +560,15 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
   function trataMensagem(msg) {
     if (msg.tipo === "etapa") setStatus(msg.texto);
-    else if (msg.tipo === "progresso") setStatus(msg.texto, msg.pct);
+    else if (msg.tipo === "progresso") { setStatus(msg.texto, msg.pct); atualizaEta(msg.pct); }
     else if (msg.tipo === "log") {
       const log = $("logExecucao");
       log.textContent += msg.linha + "\n";
       log.scrollTop = log.scrollHeight;
     }
-    else if (msg.tipo === "erro") mostraErro(msg.resumo, msg.detalhe);
-    else if (msg.tipo === "top20") mostraTop20(msg.dados);
-    else if (msg.tipo === "concluido") abreRelatorio(msg);
+    else if (msg.tipo === "erro") { paraEta(); mostraErro(msg.resumo, msg.detalhe); }
+    else if (msg.tipo === "top20") { salvaEta(); mostraTop20(msg.dados); }
+    else if (msg.tipo === "concluido") { salvaEta(); abreRelatorio(msg); }
   }
 
   function abreRelatorio({ saidas, refAtual, refAnterior }) {
@@ -587,6 +657,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     $("logExecucao").textContent = "";
     $("listaArquivos").innerHTML = "";
     limpaEtapas();
+    iniciaEta("f1");
     $("statusNota").textContent = worker ? "Lendo os arquivos da pasta…" : "Carregando o Python no navegador. Na primeira vez pode levar cerca de 1 minuto.";
     setStatus("Lendo a pasta…", 0);
     bloqueia(true);
@@ -779,6 +850,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     progresso.classList.remove("erro");
     $("statusNota").textContent = ajustes.length ? `Usando ${ajustes.length} cliente(s) com valores alterados.` : "Usando os valores originais.";
     limpaEtapas();
+    iniciaEta("f2");
     setStatus("Processando…", 52);
     bloqueia(true);
     pegaWorker().postMessage({ fase: "continuar", ajustes });

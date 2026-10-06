@@ -25,14 +25,25 @@ NOMES_CRONOGRAMA = {"GRUPO": "Grupo", "DATADALEITURA": "Data da Leitura", "DATAL
 _CHAVES_CONHECIDAS = {chave_texto(c) for c in CABECALHOS_CONHECIDOS} | set(NOMES_CRONOGRAMA)
 
 
-def _texto_csv(caminho):
-    """Lê o CSV como texto (UTF-8 com BOM; se não der, Latin-1)."""
+def _texto_csv(caminho, limite=None):
+    """Lê o CSV como texto (UTF-8 com BOM; se não der, Latin-1). `limite`: só os primeiros bytes (detecção de cabeçalho/tipo)."""
     with open(caminho, "rb") as f_bytes:
-        raw = f_bytes.read()
+        raw = f_bytes.read(limite) if limite else f_bytes.read()
     try:
         return raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
+    except UnicodeDecodeError as erro:
+        if limite and erro.start >= len(raw) - 3:            # cortou um caractere no meio: descarta o pedaço final
+            return raw[:erro.start].decode("utf-8-sig", errors="ignore")
         return raw.decode("latin-1")
+
+
+BYTES_CABECALHO = 256 * 1024          # para achar o cabeçalho e o tipo do arquivo basta o começo
+
+
+def mapeia_unicos(serie, funcao):
+    """Aplica `funcao` uma vez por valor distinto (as colunas têm milhões de linhas e poucos valores diferentes)."""
+    unicos = serie.dropna().unique()
+    return serie.map(dict(zip(unicos, map(funcao, unicos))))
 
 
 def detecta_linha_cabecalho(caminho, sheet_name=0, max_linhas=30):
@@ -47,7 +58,7 @@ def detecta_linha_cabecalho(caminho, sheet_name=0, max_linhas=30):
         if ext in (".xlsx", ".xls"):
             df_raw = pd.read_excel(caminho, sheet_name=sheet_name, header=None, dtype=str, nrows=max_linhas)
         else:
-            linhas = _texto_csv(caminho).splitlines()[:max_linhas]
+            linhas = _texto_csv(caminho, BYTES_CABECALHO).splitlines()[:max_linhas]
             # linhas de título têm menos colunas que o cabeçalho: lê linha a linha para não quebrar o parser
             df_raw = pd.DataFrame([[c.strip().strip('"') for c in l.split(";")] for l in linhas])
     except ERROS_LEITURA:
@@ -65,7 +76,7 @@ def le_dataframe(caminho, nrows=None, sheet_name=0):
     if linha_header is None:
         linha_header = 0
     if ext == ".csv":
-        f = io.StringIO(_texto_csv(caminho))
+        f = io.StringIO(_texto_csv(caminho, BYTES_CABECALHO if nrows else None))
         primeira_linha = f.readline()
         skip = linha_header
         if primeira_linha.strip().lower().startswith("sep="):
@@ -73,7 +84,7 @@ def le_dataframe(caminho, nrows=None, sheet_name=0):
         f.seek(0)
         if primeira_linha.strip().lower().startswith("sep=") and linha_header:
             skip = linha_header                       # a detecção já contou a linha "sep=;"
-        df = pd.read_csv(f, sep=";", skiprows=skip, dtype=str)
+        df = pd.read_csv(f, sep=";", skiprows=skip, dtype=str, nrows=nrows)
     elif ext in (".xlsx", ".xls"):
         df = pd.read_excel(caminho, sheet_name=sheet_name, dtype=str, header=linha_header, nrows=nrows)
     else:
@@ -135,8 +146,14 @@ def referencia_mes(valor):
 
 
 def padroniza_referencia(serie):
-    """Qualquer formato comum de data/mês -> 'MM/AAAA' (dd/mm/aaaa, mm/aaaa, aaaa-mm-dd hh:mm:ss, 'out/26'...)."""
+    """Qualquer formato comum de data/mês -> 'MM/AAAA' (dd/mm/aaaa, mm/aaaa, aaaa-mm-dd hh:mm:ss, 'out/26'...).
+    Converte só os valores distintos (poucos) e devolve a série inteira mapeada."""
     serie = serie.astype(str).str.strip()
+    unicos = pd.Series(serie.unique())
+    return serie.map(dict(zip(unicos, _padroniza_referencia(unicos))))
+
+
+def _padroniza_referencia(serie):
     dt = pd.to_datetime(serie, format="%d/%m/%Y", errors="coerce")
     for formato in ("%m/%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%Y-%m", "%m-%Y"):
         faltam = dt.isna()
@@ -184,7 +201,7 @@ def processa_consumo(caminho):
 
     df["Total Economias"] = df[COLUNAS_ECONOMIA_TODAS].sum(axis=1)
     df["Qtd. Tipos de Economia"] = (df[COLUNAS_ECONOMIA_TODAS] > 0).sum(axis=1)
-    df["Economia Mista"] = df["Qtd. Tipos de Economia"].apply(lambda x: "Sim" if x > 1 else "Não")
+    df["Economia Mista"] = np.where(df["Qtd. Tipos de Economia"] > 1, "Sim", "Não")
     df["Referência"] = referencia_do_nome(os.path.basename(caminho))
 
     df["N. Ligação_consumo"] = df[col_ligacao].astype(str).str.strip()
@@ -221,8 +238,8 @@ def processa_fatura_completa(caminho):
     df_filter["Grupo"] = df_filter["Grupo"].astype(str).str.strip()
     df_filter["Referencia de Leitura"] = padroniza_referencia(df_filter["Referencia de Leitura"])
 
-    chaves = df["Rubrica"].map(chave_texto)
-    canc = df[chaves.map(lambda k: any(k.startswith(c) if c.startswith("COFINS") else k == c for c in CHAVES_CANCELAMENTO))].copy()
+    eh_canc = lambda r: (lambda k: any(k.startswith(c) if c.startswith("COFINS") else k == c for c in CHAVES_CANCELAMENTO))(chave_texto(r))
+    canc = df[mapeia_unicos(df["Rubrica"], eh_canc).fillna(False).astype(bool)].copy()
     canc["Referencia de Leitura"] = padroniza_referencia(canc["Referencia de Leitura"])
     return df_filter, canc
 
@@ -234,8 +251,8 @@ def processa_avulso(caminho):
     df = df.dropna(how="all")
     df = df[df["Rubrica"].notna()].copy()
     df["Valor Parcela"] = _valor_br(df["Valor Parcela"].astype(str).str.strip())
-    df["Referencia"] = df["Referencia de Leitura"].map(referencia_mes)
-    df["Classe"] = df["Rubrica"].map(lambda r: CLASSE_INDIRETA_POR_RUBRICA.get(chave_texto(r)))
+    df["Referencia"] = mapeia_unicos(df["Referencia de Leitura"], referencia_mes)
+    df["Classe"] = mapeia_unicos(df["Rubrica"], lambda r: CLASSE_INDIRETA_POR_RUBRICA.get(chave_texto(r)))
     return df
 
 

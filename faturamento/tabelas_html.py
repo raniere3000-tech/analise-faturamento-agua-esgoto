@@ -6,7 +6,7 @@ import io
 
 import pandas as pd
 
-from .analises import calcula_minimo_matricula
+from .analises import calcula_minimo_matricula, minimo_matricula_vetorizado
 from .config import DESTAQUE_QUEDA_PCT_TOP100, MINIMO_POR_TIPO_ECONOMIA
 from .formatacao import fmt_int_br, fmt_moeda_br, fmt_num
 
@@ -453,15 +453,15 @@ def gera_alerta_categorias_sem_minimo(ctx):
 
 def gera_tabela_acima_abaixo_minimo(ctx):
     print("📊 Montando tabela Acima x Abaixo do Consumo Mínimo...")
-    df = ctx.base_final.copy()
+    df = ctx.base_final
 
     if "Categoria" not in df.columns:
         html_vazio = "<div class='card'><h2>Economias Acima/Abaixo do Consumo Mínimo</h2><p>Coluna 'Categoria' não encontrada</p></div>"
         return html_vazio, pd.DataFrame(columns=["Grupo","Acima_Atual","Acima_Ant","Abaixo_Atual","Abaixo_Ant"])
 
     # Somente rubrica AGUA (evita duplicar economia com ESGOTO) e só os dois meses comparados
-    df = df[df["Rubrica"].str.contains("AGUA", case=False, na=False)]
-    df = df[df["Referencia de Leitura"].isin([ctx.ref_atual, ctx.ref_anterior])].copy()
+    df = df[df["Referencia de Leitura"].isin([ctx.ref_atual, ctx.ref_anterior])]
+    df = df[(df["__serv"] == "A") if "__serv" in df.columns else df["Rubrica"].str.contains("AGUA", case=False, na=False)].copy()
 
     df["Consumo Faturado"] = pd.to_numeric(df.get("Consumo Faturado", 0), errors="coerce").fillna(0)
     for c in MINIMO_POR_TIPO_ECONOMIA:
@@ -471,7 +471,7 @@ def gera_tabela_acima_abaixo_minimo(ctx):
     # Fora: sem consumo faturado ou sem economia
     df = df[(df["Consumo Faturado"] > 0) & (df["Economias_Totais"] > 0)].copy()
 
-    df["Minimo_Matricula"] = df.apply(calcula_minimo_matricula, axis=1)
+    df["Minimo_Matricula"] = minimo_matricula_vetorizado(df)
 
     sem_minimo = df[df["Minimo_Matricula"].isna()]
     ctx.categorias_sem_minimo.clear()

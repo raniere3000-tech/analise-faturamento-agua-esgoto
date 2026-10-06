@@ -168,6 +168,11 @@ def monta_base(ctx):
     base_final["Economias_Totais"] = base_final[COLUNAS_ECONOMIA_TOTAIS].sum(axis=1)
     print(f"✅ Coluna 'Economias_Totais' criada — soma de {len(COLUNAS_ECONOMIA_TOTAIS)} categorias")
 
+    # serviço da linha (A = água, E = esgoto), calculado uma vez por rubrica distinta: evita buscar texto a cada cálculo
+    rub = base_final["Rubrica"].astype(str)
+    unicas = rub.unique()
+    base_final["__serv"] = rub.map({r: "E" if "ESGOTO" in r.upper() else "A" if "AGUA" in r.upper() else "" for r in unicas})
+
     progresso.atualiza(52, "Base final pronta")
     ctx.fatura_total = fatura_total
     ctx.base_final = base_final
