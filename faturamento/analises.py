@@ -140,3 +140,15 @@ def exporta_top100(df_atual, df_anterior, ref_atual, ref_anterior, caminho_saida
 
     print(f"✅ Top 100 quedas exportado para: {caminho_saida}")
     return top_agua_df, top_esg_df
+
+
+def minimo_matricula_vetorizado(df):
+    """Mesma regra de `calcula_minimo_matricula`, para a tabela inteira de uma vez (NaN = categoria sem mínimo)."""
+    tipos = list(MINIMO_POR_TIPO_ECONOMIA)
+    qtds = df[tipos].astype(float)
+    mista = (qtds > 0).sum(axis=1) > 1
+    minimo_misto = sum(qtds[c] * MINIMO_POR_TIPO_ECONOMIA[c] for c in tipos)
+    cats = df["Categoria"].fillna("")
+    unicas = cats.unique()
+    minimo_cat = cats.map({c: CONSUMO_MINIMO_POR_CATEGORIA.get(normaliza_texto(c)) for c in unicas}).astype(float)
+    return minimo_misto.where(mista, minimo_cat * qtds.sum(axis=1))

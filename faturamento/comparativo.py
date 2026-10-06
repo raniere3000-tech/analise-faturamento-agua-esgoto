@@ -7,7 +7,10 @@ from .formatacao import nome_mes, nome_mes_curto, ref_mais_recente
 
 
 def agrega_por_grupo(df, rubrica):
-    filtro = df[df["Rubrica"].str.contains(rubrica, case=False, na=False)].copy()
+    if "__serv" in df.columns:
+        filtro = df[df["__serv"] == ("E" if "ESGOTO" in rubrica.upper() else "A")]
+    else:
+        filtro = df[df["Rubrica"].str.contains(rubrica, case=False, na=False)]
 
     # ------------------------------------------------------------------
     # Replica a regra do Excel: SOMASES(...; V; ">0")
@@ -68,7 +71,8 @@ def limita_ao_ultimo_grupo(ctx):
     ultimo = max(nums)
     largura = max(len(str(g)) for g in com_fat["Grupo"].unique() if _num_grupo(g) is not None)
     ctx.ultimo_grupo = str(ultimo).zfill(largura)
-    manter = base["Grupo"].map(lambda g: _num_grupo(g) is None or _num_grupo(g) <= ultimo)
+    grupos = base["Grupo"]
+    manter = grupos.map({g: _num_grupo(g) is None or _num_grupo(g) <= ultimo for g in grupos.unique()}).astype(bool)
     removidas = int((~manter).sum())
     ctx.base_final = base[manter].copy()
     print(f"🔎 Último grupo faturado em {ctx.ref_atual}: {ctx.ultimo_grupo} — análise limitada aos grupos até esse "

@@ -213,3 +213,16 @@ def test_delta_faturamento_sem_casas_decimais(analise):
     html = open(analise.caminho_html, encoding="utf-8").read()
     deltas = re.findall(r'<td data-field="delta-fat"[^>]*>([^<]+)</td>', html)
     assert deltas and all("," not in d for d in deltas)
+
+
+def test_minimo_vetorizado_igual_a_regra_linha_a_linha(analise):
+    import numpy as np
+    from faturamento.analises import calcula_minimo_matricula, minimo_matricula_vetorizado
+    from faturamento.config import MINIMO_POR_TIPO_ECONOMIA
+    df = analise.ctx.base_final.copy()
+    for c in MINIMO_POR_TIPO_ECONOMIA:
+        df[c] = pd.to_numeric(df.get(c, 0), errors="coerce").fillna(0)
+    df.loc[df.index[:5], list(MINIMO_POR_TIPO_ECONOMIA)[:2]] = 1           # algumas ligações mistas
+    linha = df.apply(calcula_minimo_matricula, axis=1).astype(float)
+    vetor = minimo_matricula_vetorizado(df)
+    assert np.allclose(linha.fillna(-1), vetor.fillna(-1))

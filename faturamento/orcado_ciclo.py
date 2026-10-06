@@ -9,12 +9,11 @@ Orçado do ciclo = peso da métrica × orçado da DRE (diretas água/esgoto, vol
 """
 import html
 
-import numpy as np
 import pandas as pd
 
 from .comparativo import agrega_por_grupo
 from .dre import TODAS, _fontes, orcado
-from .previsao import _refs_base
+from .previsao import _refs_base, valores_grupo
 from .tabelas_html import gera_tabela
 
 RUBRICAS = (("Água", "AGUA", "dA", "volA", "ecoA"), ("Esgoto", "ESGOTO", "dE", "volE", "ecoE"))
@@ -24,35 +23,48 @@ METRICAS = ("valor", "volume", "economias")
 
 
 def pesos_por_ciclo(ctx, rubrica_txt):
-    """{métrica: {grupo: peso}} pela participação média do grupo nos últimos meses (cada métrica soma 1)."""
-    base = ctx.base_completa
+    """{métrica: {grupo: peso}} pela participação média do grupo nos últimos meses (cada métrica soma 1). Com cache."""
+    cache = ctx.__dict__.setdefault("_cache_pesos", {})
+    chave = (id(ctx.base_completa), ctx.ref_atual, rubrica_txt.upper())
+    if chave not in cache:
+        cache[chave] = _pesos_por_ciclo(ctx, rubrica_txt)
+    return cache[chave]
+
+
+def _pesos_por_ciclo(ctx, rubrica_txt):
+    s = "E" if "ESGOTO" in rubrica_txt.upper() else "A"
+    colunas = {"valor": "d" + s, "volume": "vol" + s, "economias": "eco" + s}
     refs = _refs_base(ctx)
     acum = {m: {} for m in METRICAS}
     n = {m: 0 for m in METRICAS}
     for r in refs:
-        d = base[(base["Referencia de Leitura"] == r) & base["Rubrica"].str.contains(rubrica_txt, case=False, na=False)]
-        grupo = d["Grupo"].astype(str).str.strip()
-        pos = d["Consumo Faturado"] > 0
-        series = {"valor": d.groupby(grupo)["Valor (R$)"].sum(),
-                  "volume": d[pos].groupby(grupo[pos])["Consumo Faturado"].sum(),
-                  "economias": d[pos].groupby(grupo[pos])["Economias_Totais"].sum()}
-        for m, por_g in series.items():
-            total = por_g.sum()
+        por_g = valores_grupo(ctx, r, TODAS)
+        for m, col in colunas.items():
+            total = sum(v[col] for v in por_g.values())
             if not total:
                 continue
             n[m] += 1
             for g, v in por_g.items():
-                acum[m][g] = acum[m].get(g, 0.0) + v / total
+                acum[m][g] = acum[m].get(g, 0.0) + v[col] / total
     return {m: {g: v / n[m] for g, v in acum[m].items()} if n[m] else {} for m in METRICAS}
+
+
+def _realizado_por_grupo(ctx, rubrica_txt):
+    """Realizado do mês atual por grupo (todos os grupos), calculado uma vez por serviço."""
+    cache = ctx.__dict__.setdefault("_cache_real_ciclo", {})
+    chave = (id(ctx.base_completa), ctx.ref_atual, rubrica_txt.upper())
+    if chave not in cache:
+        base = ctx.base_completa
+        atual = base[base["Referencia de Leitura"] == ctx.ref_atual].copy()
+        atual["Grupo"] = atual["Grupo"].astype(str).str.strip()
+        cache[chave] = agrega_por_grupo(atual, rubrica_txt).set_index("Grupo") if len(atual) else pd.DataFrame()
+    return cache[chave]
 
 
 def comparativo_orcado(ctx, rotulo_rubrica, rubrica_txt, k_fat, k_vol, k_eco, orc):
     """DataFrame no formato do comparativo: *_atual = realizado do mês, *_anterior = orçado do ciclo."""
     pesos = pesos_por_ciclo(ctx, rubrica_txt)
-    base = ctx.base_completa
-    atual = base[base["Referencia de Leitura"] == ctx.ref_atual].copy()
-    atual["Grupo"] = atual["Grupo"].astype(str).str.strip()
-    real = agrega_por_grupo(atual, rubrica_txt).set_index("Grupo") if len(atual) else pd.DataFrame()
+    real = _realizado_por_grupo(ctx, rubrica_txt)
     grupos = sorted(set().union(*pesos.values()) | set(real.index))
     linhas = []
     for g in grupos:
