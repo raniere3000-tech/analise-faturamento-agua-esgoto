@@ -14,7 +14,7 @@ from .formatacao import fmt_int_br, fmt_moeda_br, fmt_num
 def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_ant=None, card_attrs=""):
     rot_atual = rot_atual or ctx.mes_atual_curto
     rot_ant = rot_ant or ctx.mes_anterior_curto
-    detalhe = {"dias-atual", "dias-anterior", "delta-eco", "delta-vol", "vm-atual", "vm-anterior", "delta-vm"}
+    detalhe = {"dias-atual", "dias-anterior", "vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm"}
     def cl(campo):
         return ' class="x-det"' if campo in detalhe else ""
     def td(campo, valor):
@@ -32,6 +32,11 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
         delta_vm = d["Volume_Medio_atual"] - d["Volume_Medio_anterior"]
         delta_tar = d["Tarifa_Media_atual"] - d["Tarifa_Media_anterior"]
         delta_tic = d["Ticket_Medio_atual"] - d["Ticket_Medio_anterior"]
+        pct = lambda dif, ant: (dif / ant) if ant else 0          # Δ % sobre o mês anterior (0 quando não havia base)
+        delta_pct_fat = pct(delta_fat, d["Faturamento_anterior"])
+        delta_pct_vm = pct(delta_vm, d["Volume_Medio_anterior"])
+        delta_pct_tar = pct(delta_tar, d["Tarifa_Media_anterior"])
+        delta_pct_tic = pct(delta_tic, d["Ticket_Medio_anterior"])
         g_attr = "" if is_media else html.escape(str(grupo), quote=True)
         classe = "linha-media" if is_media else ""
         attrs=""
@@ -49,23 +54,27 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
             {td("fat-atual", fmt_num(d["Faturamento_atual"]))}
             {td("fat-anterior", fmt_num(d["Faturamento_anterior"]))}
             {deltac("delta-fat", delta_fat, dec=0)}
+            {deltac("delta-pct-fat", delta_pct_fat, pct=True)}
             {td("eco-atual", fmt_num(d["Economias_atual"]))}
             {td("eco-anterior", fmt_num(d["Economias_anterior"]))}
+            {deltac("delta-eco", delta_eco, dec=0)}
             {deltac("delta-pct-eco", delta_pct_eco, pct=True)}
-            {deltac("delta-eco", delta_eco)}
             {td("vol-atual", fmt_num(d["Volume_Faturado_atual"]))}
             {td("vol-anterior", fmt_num(d["Volume_Faturado_anterior"]))}
+            {deltac("delta-vol", delta_vol, dec=0)}
             {deltac("delta-pct-vol", delta_pct_vol, pct=True)}
-            {deltac("delta-vol", delta_vol)}
             {td("vm-atual", fmt_num(d["Volume_Medio_atual"],2))}
             {td("vm-anterior", fmt_num(d["Volume_Medio_anterior"],2))}
             {deltac("delta-vm", delta_vm)}
+            {deltac("delta-pct-vm", delta_pct_vm, pct=True)}
             {td("tar-atual", fmt_num(d["Tarifa_Media_atual"],2))}
             {td("tar-anterior", fmt_num(d["Tarifa_Media_anterior"],2))}
             {deltac("delta-tar", delta_tar)}
+            {deltac("delta-pct-tar", delta_pct_tar, pct=True)}
             {td("tic-atual", fmt_num(d["Ticket_Medio_atual"],2))}
             {td("tic-anterior", fmt_num(d["Ticket_Medio_anterior"],2))}
             {deltac("delta-tic", delta_tic)}
+            {deltac("delta-pct-tic", delta_pct_tic, pct=True)}
         </tr>
         """
     linhas_html = ""
@@ -91,38 +100,40 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     sub = f'<th>{rot_atual}</th><th>{rot_ant}</th>'
     subd = f'<th class="x-det">{rot_atual}</th><th class="x-det">{rot_ant}</th>'
     th_dias = '<th colspan="2" class="x-det">Dias Leitura</th>' if com_dias else ""
+    dif = '<th>Abs</th><th>%</th>'                     # cada Δ: diferença absoluta e percentual (sobre o mês anterior)
+    difd = '<th class="x-det">Abs</th><th class="x-det">%</th>'
     sub_dias = subd if com_dias else ""
     cabecalho = f"""
     <tr class="header-grupo">
         <th rowspan="2">Grupo</th>
         {th_dias}
         <th colspan="2">Faturamento</th>
-        <th>Δ Fat.</th>
+        <th colspan="2">Δ Fat.</th>
         <th colspan="2">Economias</th>
-        <th colspan="2" data-full="2" data-comp="1">Δ Economias</th>
+        <th colspan="2">Δ Economias</th>
         <th colspan="2">Volume Faturado</th>
-        <th colspan="2" data-full="2" data-comp="1">Δ Volume</th>
+        <th colspan="2">Δ Volume</th>
         <th colspan="2" class="x-det">Volume Médio</th>
-        <th class="x-det">Δ Vol. Médio</th>
+        <th colspan="2" class="x-det">Δ Vol. Médio</th>
         <th colspan="2">Tarifa Média</th>
-        <th>Δ Tarifa</th>
+        <th colspan="2">Δ Tarifa</th>
         <th colspan="2">Ticket Médio</th>
-        <th>Δ Ticket</th>
+        <th colspan="2">Δ Ticket</th>
     </tr>
     <tr class="header-sub">
         {sub_dias}
         {sub}
-        <th></th>
+        {dif}
         {sub}
-        <th>%</th><th class="x-det">Abs</th>
+        {dif}
         {sub}
-        <th>%</th><th class="x-det">Abs</th>
+        {dif}
         {subd}
-        <th class="x-det"></th>
+        {difd}
         {sub}
-        <th></th>
+        {dif}
         {sub}
-        <th></th>
+        {dif}
     </tr>
     """
     return f"""
