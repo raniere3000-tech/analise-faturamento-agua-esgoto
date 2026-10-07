@@ -32,6 +32,12 @@ def _sup_da_linha(ctx):
     return sup
 
 
+def _numero(v):
+    """float sem NaN (o resultado vai em JSON para o site); vazio/inválido = 0."""
+    v = pd.to_numeric(v, errors="coerce")
+    return 0.0 if pd.isna(v) else float(v)
+
+
 def calcula_top20_maior_consumo(ctx, n=20):
     """Todas as ligações com Situacao Conta = EM ANALISE no mês atual (rubrica VALOR DE AGUA),
     ordenadas por Consumo Faturado. Sem a coluna Situacao Conta, devolve só o Top n.
@@ -58,6 +64,7 @@ def calcula_top20_maior_consumo(ctx, n=20):
             "categoria": "" if pd.isna(r.get("Categoria")) else str(r.get("Categoria")),
             "situacao": str(r[col_sit]) if col_sit else "",
             "sup": sup_da(r),
+            "economias": _numero(r.get("Economias_Totais")),          # economias da ligação no mês (do consumo)
             "consumo": float(r["Consumo Faturado"]),
             "valor": round(float(valor_total.get(r["N. Ligação"], 0)), 2),
         })

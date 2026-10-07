@@ -126,7 +126,7 @@ body.relatorio-aberto { overflow: hidden; }
 
 /* ===== Conferência do Top 20 ===== */
 .etapa-top20 { position: fixed; inset: 0; z-index: 9; background: linear-gradient(135deg, var(--preto) 0%, var(--marinho) 55%, var(--azul) 100%); overflow: hidden; padding: 12px 16px; display: flex; justify-content: center; align-items: stretch; }
-.painel-top20 { width: 100%; max-width: 1040px; min-height: 0; display: flex; flex-direction: column; background: #fff; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.25); padding: 12px 18px 10px; }
+.painel-top20 { width: 100%; max-width: 1120px; min-height: 0; display: flex; flex-direction: column; background: #fff; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.25); padding: 12px 18px 10px; }
 .painel-top20 h2 { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--marinho); }
 .painel-top20 .badge { margin: 0 8px 0 0; font-size: 11px; padding: 2px 9px; vertical-align: middle; }
 .painel-top20 .lead { margin: 2px 0 8px; font-size: .8rem; line-height: 1.35; }
@@ -328,7 +328,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v43</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v44</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -400,6 +400,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       <table class="tabela-top20">
         <thead><tr>
           <th>#</th><th>Ligação</th><th>Grupo</th><th>SUP</th><th>Cliente</th><th>Categoria</th><th>Situação conta</th>
+          <th class="num" title="Quantidade de economias da ligação no mês">Economias</th>
           <th class="num ordenavel" data-ordem="consumo" tabindex="0" title="Ordenar">Consumo Faturado (m³) <span class="seta"></span></th><th class="num ordenavel" data-ordem="valor" tabindex="0" title="Ordenar">Valor total (R$) <span class="seta"></span></th>
         </tr></thead>
         <tbody id="corpoTop20"></tbody>
@@ -416,7 +417,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v43-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v44-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -770,8 +771,10 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     linhas.forEach((l, i) => {
       const tr = document.createElement("tr");
       const cel = (txt, cls) => { const td = document.createElement("td"); td.textContent = txt; if (cls) td.className = cls; return td; };
-      tr.append(cel(i + 1), cel(l.ligacao), cel(l.grupo), cel(l.sup || "—"), cel(l.cliente, "cli"), cel(l.categoria), cel(l.situacao || "—"));
-      tr.lastChild.previousSibling.title = l.cliente;
+      const celCliente = cel(l.cliente, "cli");
+      celCliente.title = l.cliente;                            // nome inteiro ao passar o mouse (a célula corta nomes longos)
+      tr.append(cel(i + 1), cel(l.ligacao), cel(l.grupo), cel(l.sup || "—"), celCliente, cel(l.categoria), cel(l.situacao || "—"),
+        cel(l.economias == null ? "—" : fmtNum(l.economias, 0), "num"));
       [["consumo", 0], ["valor", 2]].forEach(([campo, dec]) => {
         const td = document.createElement("td");
         td.className = "num";
