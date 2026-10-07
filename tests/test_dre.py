@@ -371,4 +371,12 @@ def test_indiretas_tem_forecast_no_mes_mais_novo_do_avulso(tmp_path):
 
 def test_ocultar_forecast_nao_esconde_a_coluna_nas_indiretas():
     from faturamento.relatorio import carrega_asset
-    assert "#view-forecast table.tabela-previsao').forEach(t => t.classList.toggle('prev-sem-forecast'" in carrega_asset("relatorio.js")
+    js = carrega_asset("relatorio.js")
+    assert "['#view-forecast', prevOculta], ['#view-indiretas', prevOcultaInd]" in js   # um botão por aba
+
+
+def test_botao_executivo_e_ocultar_forecast_nas_indiretas(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert 'onclick="gerarExecutivo()"' in html and "function gerarExecutivo" in html
+    ind = html[html.index('id="view-indiretas"'):html.index('id="view-tabelas"')]
+    assert 'class="btn-just btn-prev-toggle" onclick="previsaoAlternar(this)"' in ind

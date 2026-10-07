@@ -324,7 +324,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v27</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v28</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -339,7 +339,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       <button type="button" class="btn-top" id="btnPasta">📁 Conectar pasta</button>
       <a class="btn-top" href="https://raniere3000-tech.github.io/bookcomercial/">🏠 Menu</a>
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
-      <button type="button" class="btn-top" id="btnPdf" hidden>🖨 Exportar PDF</button>
+      <button type="button" class="btn-top" id="btnPdf" hidden title="PDF executivo conforme os filtros da tela">📄 Executivo</button>
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
     </div>
   </div>
@@ -409,7 +409,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v27-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v28-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -958,7 +958,10 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     if (e.target.id === "chkTodosGrupos") document.querySelectorAll(".chk-grupo-top").forEach((c) => { c.checked = e.target.checked; });
     aplicaGrupos();
   });
-  $("btnPdf").addEventListener("click", () => { janela().focus(); janela().print(); });
+  $("btnPdf").addEventListener("click", () => {
+    const w = janela(); w.focus();
+    if (w.gerarExecutivo) w.gerarExecutivo(); else w.print();      // relatório antigo (sem executivo): imprime a tela
+  });
   quadro().addEventListener("load", () => { if (quadro().srcdoc) montaFiltros(); });
 
   btnPasta.addEventListener("click", escolhePasta);

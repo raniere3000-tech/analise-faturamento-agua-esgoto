@@ -101,7 +101,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
     <button id="btn-dados" onclick="mostrarView('dados')">Dados</button>
   </div>
   {filtros_dre_html}
-  <button class="btn-filtro btn-imprimir" type="button" onclick="window.print()" aria-label="Exportar o relatório em PDF">Exportar PDF</button>
+  <button class="btn-filtro btn-imprimir" type="button" onclick="gerarExecutivo()" aria-label="Gerar o relatório executivo em PDF" title="PDF com KPIs, gráfico, forecast, orçado por ciclo, comparativos, indiretas e justificativas, conforme os filtros da tela">Executivo (PDF)</button>
   {filtro_html}
 </div>
 
