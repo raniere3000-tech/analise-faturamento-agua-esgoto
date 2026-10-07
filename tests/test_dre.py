@@ -229,10 +229,10 @@ def test_dados_tem_validacao_dos_calculos(sessao):
     assert "validação dos cálculos" in dados and "btn-baixar" in dados
     # todos os tópicos recolhíveis e fechados ao abrir a aba
     for t in ("Avisos (", "Conferência dos KPIs", "Bases carregadas", "Orçado: linhas reconhecidas", "Bases para download",
-              "1. DRE", "2. Resumo", "3. Diretas", "4. Indiretas", "5. Forecast"):
+              "1. Resumo", "2. Diretas", "3. Indiretas", "4. Forecast", "5. DRE"):
         assert f'<details class="val-aba"><summary>{t}' in dados, t
     assert '<details class="val-aba" open' not in dados
-    pos = [dados.index(t) for t in ("1. DRE", "2. Resumo", "3. Diretas", "4. Indiretas", "5. Forecast")]
+    pos = [dados.index(t) for t in ("1. Resumo", "2. Diretas", "3. Indiretas", "4. Forecast", "5. DRE")]
     assert pos == sorted(pos)
 
 
@@ -290,7 +290,7 @@ def test_aba_dados_no_fim_e_forecast_explicado(sessao):
         assert trecho in dados
     # a explicação longa saiu da aba Forecast (fica só em Dados)
     fc = html[html.index('id="view-forecast"'):html.index('id="view-dados"')]
-    assert "Dados</b> › <b>5. Forecast" in fc and "pela média do mesmo grupo" not in fc
+    assert "Dados</b> › <b>4. Forecast" in fc and "pela média do mesmo grupo" not in fc
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert site.index('data-view="forecast"') < site.index('data-view="dados"')
 
@@ -380,3 +380,13 @@ def test_botao_executivo_e_ocultar_forecast_nas_indiretas(sessao):
     assert 'onclick="gerarExecutivo()"' in html and "function gerarExecutivo" in html
     ind = html[html.index('id="view-indiretas"'):html.index('id="view-tabelas"')]
     assert 'class="btn-just btn-prev-toggle" onclick="previsaoAlternar(this)"' in ind
+
+
+def test_ordem_das_abas(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    ordem = ["btn-resumo", "btn-tabelas", "btn-indiretas", "btn-forecast", "btn-dre", "btn-dados"]
+    assert [html.index(f'id="{b}"') for b in ordem] == sorted(html.index(f'id="{b}"') for b in ordem)
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    vistas = ["resumo", "tabelas", "indiretas", "forecast", "dre", "dados"]
+    pos = [site.index(f'data-view="{v}"') for v in vistas]
+    assert pos == sorted(pos) and 'class="tab active" data-view="resumo"' in site

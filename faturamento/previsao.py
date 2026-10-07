@@ -281,7 +281,7 @@ def previsao_html(ctx, sup):
     nota = ("<b>Fechamento = Realizado + Forecast.</b> Clique em um valor da coluna Forecast ✎ para editar; fechamento, totais e "
             "comparações com os orçados são refeitos na hora. "
             + (f"Fechamento provável (~80%) — {faixa}. " if faixa else "")
-            + "Como cada linha é calculada (com os números do mês): aba <b>Dados</b> › <b>5. Forecast</b>.")
+            + "Como cada linha é calculada (com os números do mês): aba <b>Dados</b> › <b>4. Forecast</b>.")
     return (f'<div class="card prev-card"><h2 class="prev-titulo">Forecast de fechamento — {nome} — {nome_mes(ctx.ref_atual)}'
             '<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" onclick="previsaoRestaurar(this)">↺ Restaurar automático</button>'
             '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar(this)">Ocultar forecast</button></span></h2>'
