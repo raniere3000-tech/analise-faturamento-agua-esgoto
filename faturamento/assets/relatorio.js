@@ -657,7 +657,8 @@ function previsaoRestaurar(botao) {
     prevSalvar(); prevRecalcularTodas();
 }
 function previsaoAplicarVisibilidade() {
-    document.querySelectorAll('table.tabela-previsao').forEach(t => t.classList.toggle('prev-sem-forecast', prevOculta));
+    // "Ocultar forecast" vale só para a aba Forecast: na aba Indiretas a coluna Forecast fica sempre visível
+    document.querySelectorAll('#view-forecast table.tabela-previsao').forEach(t => t.classList.toggle('prev-sem-forecast', prevOculta));
     document.querySelectorAll('.btn-prev-toggle').forEach(b => { b.textContent = prevOculta ? 'Mostrar forecast' : 'Ocultar forecast'; });
     document.querySelectorAll('.btn-prev-restaurar').forEach(b => { b.style.display = prevOculta ? 'none' : ''; });
 }

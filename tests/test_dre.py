@@ -341,3 +341,29 @@ def test_progresso_avisa_cada_grafico_tabela_e_kpi(tmp_path):
         assert t in textos, t
     pcts = [p for p, _ in msgs]
     assert pcts == sorted(pcts)                          # a barra só avança
+
+
+def test_indiretas_tem_forecast_no_mes_mais_novo_do_avulso(tmp_path):
+    import datetime as dt
+    gera_pasta(str(tmp_path), com_dre=True)
+    arq = tmp_path / "Servico avulso 09-2026.csv"
+    av = pd.read_csv(arq, sep=";", dtype=str, encoding="utf-8-sig")
+    out = av[av["Referencia de Leitura"] == "set/26"].copy()
+    out["Referencia de Leitura"] = "out/26"                       # avulso já tem outubro; a fatura vai até setembro
+    pd.concat([av, out]).to_csv(arq, sep=";", index=False, encoding="utf-8-sig")
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    s.ctx.data_corte = dt.date(2026, 10, 15)
+    s.preparar()
+    s.continuar()
+    html = open(s.caminho_html, encoding="utf-8").read()
+    ind = html[html.index('id="view-indiretas"'):html.index('id="view-tabelas"')]
+    out_bloco = ind[ind.index('data-sup="TODAS" data-mes="10/2026"'):]
+    out_bloco = out_bloco[:out_bloco.index('class="sup-bloco"')]
+    assert 'data-k="ri_CORTE" contenteditable="true"' in out_bloco and "Mês fechado" not in out_bloco
+    set_bloco = ind[ind.index('data-sup="TODAS" data-mes="09/2026"'):]
+    assert 'data-k="ri_CORTE" contenteditable="true"' in set_bloco[:set_bloco.index('class="sup-bloco"')]
+
+
+def test_ocultar_forecast_nao_esconde_a_coluna_nas_indiretas():
+    from faturamento.relatorio import carrega_asset
+    assert "#view-forecast table.tabela-previsao').forEach(t => t.classList.toggle('prev-sem-forecast'" in carrega_asset("relatorio.js")

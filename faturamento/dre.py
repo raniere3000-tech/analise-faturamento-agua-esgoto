@@ -436,8 +436,7 @@ def gera_aba_indiretas_html(ctx):
     for ref in lista_meses(ctx):
         for sup in lista_sups(ctx):
             nome = html.escape(_nome_sup(sup))
-            fin, eventos, ev = indiretas_previsao_html(ctx, sup, ref)
-            no_mes = ref == ctx.ref_atual
+            fin, eventos, ev, no_mes = indiretas_previsao_html(ctx, sup, ref)
             acoes = ('<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" '
                      'onclick="previsaoRestaurar(this)">↺ Restaurar automático</button></span>') if no_mes else ""
             fc = (" <b>Clique em um valor da coluna Forecast ✎ para editar.</b>" if no_mes

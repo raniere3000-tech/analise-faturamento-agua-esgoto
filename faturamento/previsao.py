@@ -151,6 +151,22 @@ def calcula_previsao(ctx, sup):
     return cache[chave]
 
 
+def data_corte(ctx):
+    """Data até onde os arquivos estão atualizados: ontem (D-1), ou a data fixada no contexto."""
+    return getattr(ctx, "data_corte", None) or (dt.date.today() - dt.timedelta(days=1))
+
+
+def falta_por_dia_util(atual, du, chaves, prefixo=""):
+    """Indiretas: realizado ÷ dias úteis decorridos × dias úteis que faltam (Cortes pelos dias de corte).
+    Usado igual no Forecast e na aba Indiretas (valores e eventos), para os números baterem."""
+    falta = {}
+    for k in chaves:
+        tipo = "corte" if k == "ri_CORTE" else "uteis"
+        dec, fal = du[tipo + "_decorridos"], du[tipo + "_faltam"]
+        falta[prefixo + k] = (atual.get(prefixo + k) or 0.0) / dec * fal if dec else 0.0
+    return falta
+
+
 def _calcula_previsao(ctx, sup):
     refs = _refs_base(ctx)
     if not refs:
@@ -175,13 +191,9 @@ def _calcula_previsao(ctx, sup):
     por_mes_bt = {r: por_mes.get(r) or valores_grupo(ctx, r, sup) for r in todos}
     n_grupos = len(set(faturados) | set(faltam))
     teste = backtest(por_mes_bt, todos, len(faltam) or max(1, round(n_grupos / 3)), n_hist=MESES_HIST)
-    corte = getattr(ctx, "data_corte", None) or (dt.date.today() - dt.timedelta(days=1))   # a atualização é D-1
+    corte = data_corte(ctx)
     du = dias_uteis_do_mes(ctx.ref_atual, corte)
-    for k in CLASSES_POR_DIA_UTIL:                 # indiretas: ticket por dia útil × dias úteis que faltam
-        real = atual.get(k) or 0.0
-        sufixo = "corte" if k == "ri_CORTE" else "uteis"
-        decorridos, faltam_dias = du[sufixo + "_decorridos"], du[sufixo + "_faltam"]
-        falta[k] = (real / decorridos) * faltam_dias if decorridos else 0.0
+    falta.update(falta_por_dia_util(atual, du, CLASSES_POR_DIA_UTIL))
     medias = {}
     for k in LINHAS_BASICAS:
         if k in LINHAS_POR_GRUPO or k in CLASSES_POR_DIA_UTIL:
@@ -314,31 +326,38 @@ def eventos_indiretas(ctx, sup, ref):
     orc_ev = {f: _soma_ev({"ev_" + k: (orc_r[f][k] / ticket[k]) if orc_r[f].get(k) is not None and ticket[k] else None
                            for k in CLASSE_DA_LINHA}) for f in fontes}
     falta = {}
-    if ref == ctx.ref_atual:
-        corte = getattr(ctx, "data_corte", None) or (dt.date.today() - dt.timedelta(days=1))   # D-1, como no Forecast
-        du = dias_uteis_do_mes(ref, corte)
-        for k in CLASSE_DA_LINHA:
-            tipo = "corte" if k == "ri_CORTE" else "uteis"
-            dec, fal = du[tipo + "_decorridos"], du[tipo + "_faltam"]
-            falta["ev_" + k] = real["ev_" + k] / dec * fal if dec else 0.0
+    if mes_com_forecast(ctx, ref):
+        falta = falta_por_dia_util(real, dias_uteis_do_mes(ref, data_corte(ctx)), CLASSE_DA_LINHA, "ev_")
     return {"real": real, "orcado": orc_ev, "falta": falta, "ticket": ticket, "meses_ticket": [_mes_deslocado(ref, n) for n in range(MESES_TICKET, 0, -1)]}
 
 
+def mes_com_forecast(ctx, ref):
+    """Mês em andamento: o mês da fatura (ref_atual) e, se o serviço avulso já tiver um mês mais novo, esse também."""
+    from .dre import lista_meses
+    meses = lista_meses(ctx)
+    return ref == ctx.ref_atual or (bool(meses) and ref == meses[-1])
+
+
 def indiretas_previsao_html(ctx, sup, ref):
-    """As duas tabelas da aba Indiretas (financeiro e eventos) para uma SUP × mês. No mês atual, o forecast é editável."""
+    """As duas tabelas da aba Indiretas (financeiro e eventos) para uma SUP × mês. No mês em andamento, o forecast é editável
+    e é o mesmo da aba Forecast (mesmo cálculo e mesma edição, guardada por mês × SUP × linha)."""
     from .dre import realizado
-    atual_mes = ref == ctx.ref_atual
-    dados = calcula_previsao(ctx, sup) if atual_mes and getattr(ctx, "base_completa", None) is not None else None
+    editavel = mes_com_forecast(ctx, ref)
+    dados = (calcula_previsao(ctx, sup) if ref == ctx.ref_atual and getattr(ctx, "base_completa", None) is not None else None)
     real = dados["atual"] if dados else realizado(ctx, sup, ref)
-    falta = dados["falta"] if dados else {}
-    editavel = bool(dados)
+    if dados:
+        falta = dados["falta"]
+    elif editavel:                                   # sem histórico das diretas, as indiretas ainda têm forecast
+        falta = falta_por_dia_util(real, dias_uteis_do_mes(ref, data_corte(ctx)), CLASSES_POR_DIA_UTIL)
+    else:
+        falta = {}
     ev = eventos_indiretas(ctx, sup, ref)
     tk = {"ev_" + k: ("R$ " + fmt_num(v, 2) if v else "-") for k, v in ev["ticket"].items()}
     fin = tabela_previsao_html(ctx, sup, ref, LINHAS_IND_FIN, real, falta, editavel, "Classe")
     eventos = tabela_previsao_html(ctx, sup, ref, LINHAS_IND_EV, ev["real"], ev["falta"] if editavel else {}, editavel,
                                    "Classe", orcados=ev["orcado"], colunas_extra=[("Ticket médio<br>3 meses (R$)", tk)],
                                    rotulo_delta="Δ eventos")
-    return fin, eventos, ev
+    return fin, eventos, ev, editavel
 
 
 def gera_aba_forecast_html(ctx):
