@@ -415,3 +415,52 @@ def test_destaques_um_quadro_por_superintendencia(sessao):
     resumo = html[html.index('id="view-resumo"'):html.index('id="view-dre"')]
     assert 'class="card sup-dest" data-sup="LAGOS"' in resumo and 'class="card sup-dest" data-sup="LESTE"' in resumo
     assert "Destaques do mês — Setembro/2026 — LAGOS" in resumo and "Destaques do mês — Setembro/2026 — LESTE" in resumo
+
+
+def test_downloads_seguem_o_filtro_de_superintendencia(sessao):
+    import base64
+    import io
+    import re
+    from faturamento import validacao
+    from faturamento.tabelas_html import filtra_sup
+    ctx = sessao.ctx
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    # um Excel por SUP em cada tabela da aba Dados; fora de Todas, começa escondido (o filtro mostra o da SUP escolhida)
+    for sup in ("LAGOS", "LESTE"):
+        assert f'<span class="sup-dl" data-sup="{sup}" style="display:none">' in html
+        assert f'data-arquivo="validacao_dre_{sup}.xlsx"' in html
+    assert '<span class="sup-dl" data-sup="TODAS"><button' in html
+    # o Excel da DRE de LAGOS traz o realizado de LAGOS
+    b64 = re.search(r'data-arquivo="validacao_dre_LAGOS.xlsx" data-b64="([^"]+)"', html).group(1)
+    dre_lagos = pd.read_excel(io.BytesIO(base64.b64decode(b64))).set_index("Rubrica")
+    assert dre_lagos.loc["Faturamento Bruto", "Realizado"] == pytest.approx(dre.realizado(ctx, "LAGOS", ctx.ref_atual)["bruto"])
+    # tabelas por grupo: só os grupos da SUP
+    resumo = filtra_sup(ctx, ctx.resultados["resumo"], "LESTE")
+    assert len(resumo) and all(ctx.grupo_sup[str(int(g))] == "LESTE" for g in resumo["Grupo"])
+    assert filtra_sup(ctx, ctx.resultados["resumo"], "TODAS") is ctx.resultados["resumo"]
+    # bases CSV: a coluna Superintendência (orçado padronizado: Interior → LAGOS) é a usada pelo filtro no navegador
+    validacao.monta_bases(ctx)                    # BASES é do último relatório gerado: refaz com esta sessão
+    assert "Superintendência" in validacao.BASES["orcado"]["df"].columns
+    assert "INTERIOR" not in set(validacao.BASES["orcado"]["df"]["Superintendência"])
+    assert "Superintendência" in validacao.BASES["fatura"]["df"].columns
+
+
+def test_filtro_do_csv_por_superintendencia_no_navegador(tmp_path):
+    import shutil
+    import subprocess
+    if not shutil.which("node"):
+        pytest.skip("node não instalado")
+    js = open(os.path.join(os.path.dirname(__file__), "..", "faturamento", "assets", "relatorio.js"), encoding="utf-8").read()
+    ini = js.index("function filtraCsvPorSup")
+    fim = js.index("\n}\n", ini) + 3
+    csv = '﻿A;Superintendência;B\n1;LAGOS;"x;y"\n2;LESTE;"linha\nquebrada"\n3;LAGOS;"aspas ""z"""\n'
+    prog = js[ini:fim] + "\nprocess.stdout.write(JSON.stringify([filtraCsvPorSup(require('fs').readFileSync(process.argv[2], 'utf8'), 'LAGOS'), filtraCsvPorSup('A;B\\n1;2\\n', 'LAGOS')]));"
+    arq = tmp_path / "t.js"
+    arq.write_text(prog, encoding="utf-8")
+    dados = tmp_path / "base.csv"
+    dados.write_bytes(csv.encode("utf-8"))
+    import json
+    saida = subprocess.run(["node", str(arq), str(dados)], capture_output=True, check=True).stdout.decode("utf-8")
+    lagos, sem_coluna = json.loads(saida)
+    assert lagos == '﻿A;Superintendência;B\n1;LAGOS;"x;y"\n3;LAGOS;"aspas ""z"""\n'
+    assert sem_coluna is None

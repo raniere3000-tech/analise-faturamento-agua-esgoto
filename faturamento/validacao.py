@@ -9,7 +9,7 @@ import pandas as pd
 from .config import COLUNAS_ECONOMIA_TODAS
 from .dre import LINHAS, TODAS, _fontes, orcado, realizado
 from .formatacao import fmt_num
-from .tabelas_html import botao_download_xlsx, xlsx_bytes
+from .tabelas_html import botao_download_xlsx, botoes_por_sup, filtra_sup, xlsx_bytes
 
 LIMITE_BASE = 300000         # linhas por base para download (o Excel aceita até ~1 milhão)
 COLUNAS_BASE = ["N. Ligação", "Grupo", "Rubrica", "Referencia de Leitura", "Valor (R$)", "Consumo Faturado", "Economias_Totais",
@@ -34,14 +34,22 @@ def _lista(itens):
     return "<ul>" + "".join(f"<li>{i}</li>" for i in itens) + "</ul>"
 
 
-def _bloco(titulo, descricao, formulas, colunas, abas, slug, bases=(), montagem=()):
+def _bloco(titulo, descricao, formulas, colunas, abas, slug, bases=(), montagem=(), ctx=None):
     """Um item (tabela ou gráfico) da validação.
     abas: {nome: DataFrame} — a primeira aparece como amostra; todas vão no Excel "Baixar tabela".
+      Ou função(sup) -> {nome: DataFrame} (com ctx): um Excel por superintendência, que segue o filtro Superintendência;
+      a amostra é a de Todas.
     bases: [(chave, filtro)] — bases para baixar (CSV) e o filtro a aplicar nelas para chegar ao resultado.
     montagem: como a tabela/gráfico é construído na tela (linhas, colunas, cores, totais)."""
+    if callable(abas):
+        botao = botoes_por_sup(ctx, "Baixar tabela (Excel)", f"validacao_{slug}.xlsx", abas)
+        abas = abas(TODAS) or {}
+    else:
+        botao = None
     abas = {k: v for k, v in abas.items() if v is not None and len(v)}
     primeira = next(iter(abas.values()), None)
-    botao = botao_download_xlsx("Baixar tabela (Excel)", f"validacao_{slug}.xlsx", xlsx_bytes(abas)) if abas else ""
+    if botao is None:
+        botao = botao_download_xlsx("Baixar tabela (Excel)", f"validacao_{slug}.xlsx", xlsx_bytes(abas)) if abas else ""
     itens_base = [f'{_botao_base(ch)} <span class="val-filtro">{filtro}</span>' for ch, filtro in bases if ch in BASES]
     secao_bases = (f'<p class="val-rot">Bases utilizadas (baixe e aplique o filtro indicado para chegar ao resultado)</p>'
                    f'<ul class="val-bases">{"".join(f"<li>{i}</li>" for i in itens_base)}</ul>') if itens_base else ""
@@ -56,10 +64,10 @@ def _aba(titulo, blocos, aberto=False):
     return f'<details class="val-aba"{" open" if aberto else ""}><summary>{html.escape(titulo)}</summary>{"".join(blocos)}</details>'
 
 
-def _dre_df(ctx):
+def _dre_df(ctx, sup=TODAS):
     fontes, _ = _fontes(ctx)
-    real = realizado(ctx, TODAS, ctx.ref_atual)
-    orc = {f: orcado(ctx, f, TODAS, ctx.ref_atual) for f in fontes}
+    real = realizado(ctx, sup, ctx.ref_atual)
+    orc = {f: orcado(ctx, f, sup, ctx.ref_atual) for f in fontes}
     linhas = []
     for chave, rotulo, formato, negrito in LINHAS:
         if chave is None:
@@ -195,6 +203,9 @@ def monta_bases(ctx):
         linhas.append(o)
     if linhas:
         orc = pd.concat(linhas, ignore_index=True)
+        if "Sup" in orc.columns:                       # SUP padronizada (Interior → LAGOS) para o filtro Superintendência
+            from .dre import _sup_orcado
+            orc["Superintendência"] = orc["Sup"].map(_sup_orcado)
         BASES["orcado"] = {"df": orc, "truncada": False, "total": len(orc)}
 
 
@@ -222,7 +233,8 @@ def _secao_bases(ctx):
                     for ch, i in BASES.items())
     return ('<p class="val-rot">Bases para download</p>'
             '<p>Arquivos CSV (separador ";" e vírgula decimal — abrem direto no Excel). Cada item abaixo indica qual base usar e o filtro '
-            f'que leva ao resultado da tela.</p><ul class="val-bases">{"".join(linhas)}</ul>{dados}')
+            'que leva ao resultado da tela. Todos os downloads (bases e tabelas) seguem o filtro <b>Superintendência</b> do cabeçalho: '
+            f'com LAGOS ou LESTE escolhida, só as linhas daquela superintendência vêm no arquivo.</p><ul class="val-bases">{"".join(linhas)}</ul>{dados}')
 
 
 DESCRICAO_BASES = {
@@ -525,20 +537,21 @@ def _dias_df(resumo):
     return d
 
 
-def _destaques_df(ctx):
+def _destaques_df(ctx, sup=TODAS):
     r = ctx.resultados
     linhas = []
-    ciclos = r.get("ciclos")
+    ciclos = filtra_sup(ctx, r.get("ciclos"), sup)
     if ciclos is not None and len(ciclos):
         for k, nome in (("Cortada", "Ligações cortadas"), ("Ativa", "Ligações ativas")):
             linhas.append({"Card": "Cortes", "Item": nome, "Mês atual": ciclos[k + "_Atual"].sum(), "Mês anterior": ciclos[k + "_Ant"].sum()})
     for serv, comp in (("Água", ctx.comp_agua), ("Esgoto", ctx.comp_esgoto)):
-        c = comp.assign(Delta=comp["Faturamento_atual"] - comp["Faturamento_anterior"])
+        c = filtra_sup(ctx, comp, sup).assign(Delta=comp["Faturamento_atual"] - comp["Faturamento_anterior"])
         for titulo, asc in (("Crescimento", False), ("Queda", True)):
             for _, x in c.sort_values("Delta", ascending=asc).head(3).iterrows():
                 linhas.append({"Card": f"{titulo} — {serv}", "Item": f"Grupo {x['Grupo']}", "Mês atual": x["Faturamento_atual"],
                                "Mês anterior": x["Faturamento_anterior"], "Diferença": x["Delta"]})
-    for serv, top in (("Água", r.get("top_agua")), ("Esgoto", r.get("top_esgoto"))):
+    tops = (r.get("top_sup") or {}).get(sup) or (r.get("top_agua"), r.get("top_esgoto"))
+    for serv, top in zip(("Água", "Esgoto"), tops[:2]):
         if top is not None and len(top):
             for _, x in top.head(2).iterrows():
                 linhas.append({"Card": f"Top 100 — {serv}", "Item": f"{x['Ranking']}ª maior queda: {x['N. Ligação']} (grupo {x['Grupo']})",
@@ -546,22 +559,22 @@ def _destaques_df(ctx):
     return pd.DataFrame(linhas) if linhas else None
 
 
-def _indiretas_forecast_df(ctx):
-    """Tabelas da aba Indiretas (Todas as superintendências, mês atual): financeiro e eventos, com forecast automático."""
+def _indiretas_forecast_df(ctx, sup=TODAS):
+    """Tabelas da aba Indiretas (uma superintendência, mês atual): financeiro e eventos, com forecast automático."""
     from .previsao import LINHAS_IND_EV, LINHAS_IND_FIN, CLASSE_DA_LINHA, _valor_linha, calcula_previsao, eventos_indiretas
     from .dre import _orcados_do_mes
-    d = calcula_previsao(ctx, TODAS) if getattr(ctx, "base_completa", None) is not None else None
-    real = d["atual"] if d else realizado(ctx, TODAS, ctx.ref_atual)
+    d = calcula_previsao(ctx, sup) if getattr(ctx, "base_completa", None) is not None else None
+    real = d["atual"] if d else realizado(ctx, sup, ctx.ref_atual)
     falta = dict(d["falta"]) if d else {}
     falta["iA"] = sum(falta.get(k, 0.0) for k in CLASSE_DA_LINHA if k != "iE")
     falta["tot"] = falta["iA"] + falta.get("iE", 0.0)
     fontes, _ = _fontes(ctx)
-    ev = eventos_indiretas(ctx, TODAS, ctx.ref_atual)
+    ev = eventos_indiretas(ctx, sup, ctx.ref_atual)
     fev = dict(ev["falta"])
     fev["ev_iA"] = sum(fev.get("ev_" + k, 0.0) for k in CLASSE_DA_LINHA if k != "iE")
     fev["ev_tot"] = fev["ev_iA"] + fev.get("ev_iE", 0.0)
     saida = {}
-    for nome, defs, r_, f_, orc in (("Financeiro", LINHAS_IND_FIN, real, falta, _orcados_do_mes(ctx, TODAS, ctx.ref_atual, fontes)),
+    for nome, defs, r_, f_, orc in (("Financeiro", LINHAS_IND_FIN, real, falta, _orcados_do_mes(ctx, sup, ctx.ref_atual, fontes)),
                                      ("Eventos", LINHAS_IND_EV, ev["real"], fev, ev["orcado"])):
         linhas = []
         for chave, rotulo, *_ in defs:
@@ -583,14 +596,14 @@ def _indiretas_forecast_df(ctx):
     return saida
 
 
-def _evolucao_df(ctx):
+def _evolucao_df(ctx, sup=TODAS):
     from .dre import CLASSES_ORDEM, NOME_CLASSE, _indiretas_mes, prepara
     from .formatacao import nome_mes
     prepara(ctx)
     if ctx.avulso is None or not len(ctx.avulso):
         return None
     meses = sorted(set(ctx.avulso["Referencia"].dropna()), key=lambda r: (r[3:], r[:2]))
-    por_mes = {m: _indiretas_mes(ctx, TODAS, m) for m in meses}
+    por_mes = {m: _indiretas_mes(ctx, sup, m) for m in meses}
     linhas = [{"Classe": NOME_CLASSE[cl], **{nome_mes(m): por_mes[m][cl][1] for m in meses}} for cl in CLASSES_ORDEM]
     linhas.append({"Classe": "Total", **{nome_mes(m): sum(v[1] for v in por_mes[m].values()) for m in meses}})
     return pd.DataFrame(linhas)
@@ -617,7 +630,8 @@ def gera_validacao_html(ctx):
     dre = _aba("5. DRE", [_bloco(
         f"Tabela DRE — Realizado × Orçado ({mes})",
         f"o realizado do mês, linha a linha da DRE, contra cada planilha de orçado ({fonte_txt}), com Δ % e Δ R$. "
-        "Os números da amostra são de Todas as superintendências; na tela, os filtros Superintendência e Mês escolhem o bloco.",
+        "Os números da amostra são de Todas as superintendências; na tela, os filtros Superintendência e Mês escolhem o bloco "
+        "(o Excel baixado é o da superintendência escolhida no filtro).",
         ["Diretas Água / Esgoto = soma de Valor (R$) das linhas cuja rubrica contém AGUA / ESGOTO",
          "Economias = soma de Economias_Totais e Volume = soma de Consumo Faturado, só onde Consumo Faturado &gt; 0",
          "Volume médio = volume ÷ economias; Tarifa média = valor ÷ volume; Ticket médio = valor ÷ economias",
@@ -627,7 +641,7 @@ def gera_validacao_html(ctx):
          "Superintendência: vem da cidade (Nome da Localidade) pela relação em regras.json; sem cidade → SEM SUP"],
         comum_fatura + ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b>",
                         "Planilhas de orçado: <b>Sup</b>, <b>Rubrica</b> e a coluna do mês"],
-        {"DRE": _dre_df(ctx)}, "dre",
+        lambda sup: {"DRE": _dre_df(ctx, sup)}, "dre", ctx=ctx,
         bases=[("fatura", f"{f_atual}; some Valor (R$) por Serviço; economias/volume só onde 'Entra em economias/volume' = Sim"),
                ("avulso", f"Referencia = {ra}; some Valor Parcela por Classe"),
                ("cancelamento", f"{f_atual}; some Valor Parcela"),
@@ -640,6 +654,7 @@ def gera_validacao_html(ctx):
 
     # ---------------- 2. Resumo ----------------
     passo(95.5, "Criando aba Dados: explicação do Resumo (KPIs, gráfico, tabelas)")
+    rs = lambda sup: filtra_sup(ctx, r.get("resumo"), sup)          # resumo por grupo só com os grupos da SUP
     base_resumo = [("fatura", f"{f_atual_ant}; some por mês (e por Grupo para a tabela e o gráfico)")]
     resumo = _aba("1. Resumo", [
         _bloco(f"KPIs (8 cards) — {mes} × {ant}",
@@ -649,14 +664,14 @@ def gera_validacao_html(ctx):
                 "Volume faturado = soma do Consumo Faturado da rubrica de água (só Consumo &gt; 0)",
                 "Tarifa, volume médio e ticket = razões das somas (não média das médias)",
                 "Variação % = (atual ÷ anterior) − 1; seta ▲/▼ e cor laranja quando cai"],
-               comum_fatura, {"KPIs": _kpis_df(r.get("resumo"))}, "kpis", bases=base_resumo,
+               comum_fatura, lambda sup: {"KPIs": _kpis_df(rs(sup))}, "kpis", bases=base_resumo, ctx=ctx,
                montagem=["8 cards lado a lado: valor do mês atual em destaque e a variação vs mês anterior embaixo",
                          "O filtro Grupo refaz os cards somando só os grupos marcados"]),
         _bloco(f"Gráfico — Faturamento total por grupo ({mes} × {ant})",
                "barras do faturamento (água + esgoto) de cada grupo nos dois meses.",
                ["Faturamento do grupo = Valor (R$) de água + Valor (R$) de esgoto do grupo no mês",
                 "Variação % = atual ÷ anterior − 1, usada só para a cor da barra"],
-               comum_fatura, {"Grafico": _grafico_df(r.get("resumo"))}, "grafico_faturamento", bases=base_resumo,
+               comum_fatura, lambda sup: {"Grafico": _grafico_df(rs(sup))}, "grafico_faturamento", bases=base_resumo, ctx=ctx,
                montagem=["Eixo X: grupos; duas barras por grupo — cinza = mês anterior, cor = mês atual",
                          "Cor da barra do mês atual: laranja se caiu mais de 40%, azul médio se subiu mais de 40%, azul marinho nos demais",
                          "Rótulo em cima da barra do mês atual (valor compacto: mil / mi); valor exato ao passar o mouse"]),
@@ -664,8 +679,8 @@ def gera_validacao_html(ctx):
                "a média de dias de leitura dos grupos nos dois meses e a diferença.",
                ["Dias de leitura do grupo = média de Qts. Dias (cronograma) das linhas de água e esgoto do grupo",
                 "Média = média simples entre os grupos; Δ = atual − anterior"],
-               comum_fatura + ["<b>Qts. Dias</b> (cronograma: cruzado por grupo e mês pela Data da Leitura; sem o mês, usa a última linha do grupo)"], {"Dias de leitura": _dias_df(r.get("resumo"))},
-               "dias_leitura", bases=[("fatura", f"{f_atual_ant}; média de Qts. Dias por Grupo")],
+               comum_fatura + ["<b>Qts. Dias</b> (cronograma: cruzado por grupo e mês pela Data da Leitura; sem o mês, usa a última linha do grupo)"], lambda sup: {"Dias de leitura": _dias_df(rs(sup))},
+               "dias_leitura", ctx=ctx, bases=[("fatura", f"{f_atual_ant}; média de Qts. Dias por Grupo")],
                montagem=["Faixa com os dois meses e o Δ em dias (laranja quando diminui)"]),
         _bloco(f"Destaques do mês — {mes}",
                "um quadro por superintendência (LAGOS, LESTE), cada um com os principais movimentos só daquela SUP: cortes, grupos que "
@@ -673,19 +688,20 @@ def gera_validacao_html(ctx):
                ["Cortes: total de ligações cortadas e ativas (tabela 'Economias faturadas por ciclo — ativas × cortadas') e a diferença vs mês anterior",
                 "Crescimento / Queda: os 3 grupos com maior diferença de faturamento (atual − anterior), por serviço",
                 "Top 100: as 2 maiores quedas de consumo e o total de clientes com queda"],
-               comum_fatura + ["<b>Situacao Ligacao</b>", "<b>N. Ligação</b>"], {"Destaques": _destaques_df(ctx)}, "destaques",
+               comum_fatura + ["<b>Situacao Ligacao</b>", "<b>N. Ligação</b>"], lambda sup: {"Destaques": _destaques_df(ctx, sup)}, "destaques", ctx=ctx,
                bases=base_resumo,
                montagem=["Um card por tema, com até 3 itens cada"]),
         _bloco("Tabela — Resumo consolidado por grupo",
                "por grupo, faturamento atual e anterior, economias e volume faturado do mês atual — é a base dos KPIs e do gráfico.",
                ["Faturamento = Água + Esgoto; Economias = maior entre água e esgoto; Volume = Consumo Faturado de água (Consumo &gt; 0)",
                 "Acima do mínimo vem da tabela de consumo mínimo (Diretas)"],
-               comum_fatura, {"Resumo por grupo": r.get("resumo")}, "resumo", bases=base_resumo,
+               comum_fatura, lambda sup: {"Resumo por grupo": rs(sup)}, "resumo", bases=base_resumo, ctx=ctx,
                montagem=["Uma linha por grupo; o filtro Grupo esconde as linhas desmarcadas"]),
     ])
 
     # ---------------- 3. Diretas ----------------
     passo(96, "Criando aba Dados: explicação das Diretas")
+    top = lambda sup: (r.get("top_sup") or {}).get(sup) or (r.get("top_agua"), r.get("top_esgoto"), r.get("aumento_agua"), r.get("aumento_esgoto"))
     base_dir = [("fatura", f"{f_atual_ant}; separe por Serviço e some por Grupo")]
     dir_blocos = [
         _bloco("Tabelas — Comparativo Água / Esgoto Mês a Mês",
@@ -694,7 +710,8 @@ def gera_validacao_html(ctx):
                 "Dias de leitura = média de Qts. Dias; Δ = atual − anterior (Δ % sobre o anterior)",
                 "Volume médio = volume ÷ economias; Tarifa = faturamento ÷ volume; Ticket = faturamento ÷ economias",
                 "Total / Média: somas e razões recalculadas no total (não é média das médias)"],
-               comum_fatura + ["<b>Qts. Dias</b>"], {"Agua": ctx.comp_agua, "Esgoto": ctx.comp_esgoto}, "comparativo_mes",
+               comum_fatura + ["<b>Qts. Dias</b>"], lambda sup: {"Agua": filtra_sup(ctx, ctx.comp_agua, sup), "Esgoto": filtra_sup(ctx, ctx.comp_esgoto, sup)},
+               "comparativo_mes", ctx=ctx,
                bases=base_dir,
                montagem=["Uma tabela para Água e outra para Esgoto; uma linha por grupo e a linha Total / Média (fundo marinho)",
                          "Pares de colunas mês atual / mês anterior e colunas de Δ; Δ Fat. sem casas decimais",
@@ -708,7 +725,7 @@ def gera_validacao_html(ctx):
                 "Peso das economias = economias do grupo ÷ economias totais (Consumo &gt; 0) → Orçado Economias do ciclo = peso × orçado Economias",
                 "Volume médio, tarifa e ticket orçados = razões dos orçados do ciclo"],
                comum_fatura + ["Planilhas de orçado (linhas Diretas Água/Esgoto, Volume e Economias faturadas)"],
-               _orcado_ciclo_dfs(ctx), "orcado_ciclo",
+               lambda sup, o=_orcado_ciclo_dfs(ctx): {k: filtra_sup(ctx, v, sup) for k, v in o.items()}, "orcado_ciclo", ctx=ctx,
                bases=[("fatura_mensal", "os 3 meses antes do atual: participação de cada Grupo no total do mês, por Serviço; média dos 3"),
                       ("fatura", f"{f_atual}: realizado por Grupo"),
                       ("orcado", f"Referencia = {ra}; Planilha escolhida; linhas DIRETAS, Volume e Economias")],
@@ -717,15 +734,16 @@ def gera_validacao_html(ctx):
         _bloco("Tabela — Economias faturadas por ciclo (ativas × cortadas)",
                "quantidade de economias de água por grupo, separadas pela situação da ligação.",
                ["Soma de Economias_Totais por grupo e Situacao Ligacao (ativa/cortada), só rubrica de água e Consumo Faturado &gt; 0"],
-               ["<b>Grupo</b>, <b>Situacao Ligacao</b>, <b>Economias_Totais</b>, <b>Rubrica</b>"], {"Ativas x cortadas": r.get("ciclos")},
-               "ativas_cortadas", bases=[("fatura", f"{f_atual_ant}; Serviço = Água; some economias por Grupo e Situacao Ligacao")],
+               ["<b>Grupo</b>, <b>Situacao Ligacao</b>, <b>Economias_Totais</b>, <b>Rubrica</b>"], lambda sup: {"Ativas x cortadas": filtra_sup(ctx, r.get("ciclos"), sup)},
+               "ativas_cortadas", ctx=ctx, bases=[("fatura", f"{f_atual_ant}; Serviço = Água; some economias por Grupo e Situacao Ligacao")],
                montagem=["Uma linha por grupo; colunas ativas e cortadas nos dois meses e a diferença; linha Total"]),
         _bloco("Tabela — Matriz de migração de grupos",
                f"para onde foram, em {mes}, as economias que faturaram em {ant}.",
                ["Cada ligação (N. Ligação) é comparada nos dois meses: grupo anterior × grupo atual; valor = economias",
                 "Quem faturou no mês anterior e não no atual entra em 'Sem Faturamento Atual' (lista para baixar na própria tela)"],
                ["<b>N. Ligação</b>, <b>Grupo</b>, <b>Economias_Totais</b>, <b>Consumo Faturado</b>, <b>Referencia de Leitura</b> (rubrica de água)"],
-               {"Matriz": r.get("matriz"), "Sem faturamento": r.get("sem_faturamento")}, "matriz",
+               lambda sup: {"Matriz": filtra_sup(ctx, r.get("matriz"), sup), "Sem faturamento": filtra_sup(ctx, r.get("sem_faturamento"), sup)},
+               "matriz", ctx=ctx,
                bases=[("fatura", f"{f_atual_ant}; Serviço = Água; cruze N. Ligação entre os dois meses")],
                montagem=["Linhas = grupo no mês anterior; colunas = grupo no mês atual; diagonal = permaneceu no grupo",
                          "Cores destacam desvios fora da diagonal; coluna e linha de totais"]),
@@ -734,7 +752,7 @@ def gera_validacao_html(ctx):
                ["Mínimo da matrícula = consumo mínimo da categoria × quantidade de economias (ligação mista soma cada tipo)",
                 "Acima = consumo faturado maior que o mínimo; Abaixo = igual ou menor", "Diferença = mês atual − mês anterior"],
                ["<b>Categoria</b>, <b>Consumo Faturado</b>, quantidades de economia por tipo (Qtd. Economia …), <b>Grupo</b>"],
-               {"Minimo": r.get("minimo")}, "minimo",
+               lambda sup: {"Minimo": filtra_sup(ctx, r.get("minimo"), sup)}, "minimo", ctx=ctx,
                bases=[("fatura", f"{f_atual_ant}; Serviço = Água; compare Consumo Faturado com o mínimo da Categoria (regras.json)")],
                montagem=["Uma linha por grupo: acima e abaixo nos dois meses e as diferenças; linha Total"]),
         _bloco("Tabelas — Top 100 clientes com maior queda de consumo (Água / Esgoto)",
@@ -742,7 +760,7 @@ def gera_validacao_html(ctx):
                ["Queda de consumo = consumo anterior − consumo atual (só quedas positivas); Queda % = queda ÷ anterior",
                 "Queda de valor = valor anterior − valor atual; ordenado pela maior queda de consumo, 100 primeiros"],
                ["<b>N. Ligação</b>, <b>Nome Cliente</b>, <b>Grupo</b>, <b>Categoria</b>, <b>Consumo Faturado</b>, <b>Valor (R$)</b>"],
-               {"Top100 Agua": r.get("top_agua"), "Top100 Esgoto": r.get("top_esgoto")}, "top100",
+               lambda sup: dict(zip(("Top100 Agua", "Top100 Esgoto"), top(sup)[:2])), "top100", ctx=ctx,
                bases=[("fatura", f"{f_atual_ant}; por Serviço, some Consumo Faturado e Valor por N. Ligação e compare os meses")],
                montagem=["Uma linha por ligação, do 1º ao 100º; Queda % em laranja quando ≥ o limite de destaque",
                          "Mostra 15 linhas e o botão 'Mostrar todos'; o Excel completo está no botão da tabela"]),
@@ -751,7 +769,7 @@ def gera_validacao_html(ctx):
                ["Aumento de consumo = consumo atual − consumo anterior (só aumentos positivos); Aumento % = aumento ÷ anterior (vazio se o anterior era 0)",
                 "Aumento de valor = valor atual − valor anterior; ordenado pelo maior aumento de consumo, 100 primeiros"],
                ["<b>N. Ligação</b>, <b>Nome Cliente</b>, <b>Grupo</b>, <b>Categoria</b>, <b>Consumo Faturado</b>, <b>Valor (R$)</b>"],
-               {"Top100 Aumento Agua": r.get("aumento_agua"), "Top100 Aumento Esgoto": r.get("aumento_esgoto")}, "top100_aumento",
+               lambda sup: dict(zip(("Top100 Aumento Agua", "Top100 Aumento Esgoto"), top(sup)[2:])), "top100_aumento", ctx=ctx,
                bases=[("fatura", f"{f_atual_ant}; por Serviço, some Consumo Faturado e Valor por N. Ligação e compare os meses")],
                montagem=["Uma linha por ligação; Aumento % em azul quando ≥ o limite de destaque; botão para baixar os dois rankings"]),
     ]
@@ -759,7 +777,8 @@ def gera_validacao_html(ctx):
     # ---------------- 4. Indiretas ----------------
     passo(96.5, "Criando aba Dados: explicação das Indiretas")
     base_av = ("avulso", "Referencia = mês; some Valor Parcela (e conte as linhas) por Classe")
-    ind_dfs = _indiretas_forecast_df(ctx)
+    ind_cache = {}
+    ind_dfs = lambda sup: ind_cache.get(sup) or ind_cache.setdefault(sup, _indiretas_forecast_df(ctx, sup))
     calc_comum = ["Forecast (mês atual) = o mesmo da aba Forecast: realizado até D-1 ÷ dias úteis decorridos × dias úteis que faltam; "
                   "Cortes pelos dias de corte (sem sextas e vésperas de feriado)",
                   "Fat. de água - Indireto = soma das aberturas RI; Total indiretas = água + esgoto (realizado, forecast e orçado)",
@@ -774,7 +793,7 @@ def gera_validacao_html(ctx):
                ["Realizado = soma do Valor Parcela do serviço avulso por classe no mês, até D-1",
                 "Orçado = linhas do RF pelos nomes CORTE, RELIGAÇÃO, LNA, SANÇÃO, OUTROS (ou RI Cortes/Recorte etc.)"] + calc_comum,
                ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b>", "Orçado: <b>Sup</b>, <b>Rubrica</b>, coluna do mês"],
-               {"Financeiro": ind_dfs["Financeiro"]}, "indiretas_financeiro",
+               lambda sup: {"Financeiro": ind_dfs(sup)["Financeiro"]}, "indiretas_financeiro", ctx=ctx,
                bases=[base_av, ("orcado", f"Referencia = {ra}; linhas RI / CORTE / RELIGAÇÃO / LNA / SANÇÃO / OUTROS")],
                montagem=["Colunas: Classe · Orçado de cada planilha · Realizado · Forecast ✎ · Realizado + Forecast · Δ % e Δ R$ contra cada planilha",
                          "A edição do forecast é a mesma da aba Forecast (mudou numa, muda na outra)"] + montagem_comum),
@@ -786,7 +805,7 @@ def gera_validacao_html(ctx):
                 "Orçado em eventos = orçado em R$ da classe ÷ ticket médio da classe (sem ticket no histórico → sem orçado)"] + calc_comum,
                ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b> (contagem de linhas)",
                 "Orçado: <b>Sup</b>, <b>Rubrica</b>, coluna do mês"],
-               {"Eventos": ind_dfs["Eventos"]}, "indiretas_eventos",
+               lambda sup: {"Eventos": ind_dfs(sup)["Eventos"]}, "indiretas_eventos", ctx=ctx,
                bases=[("avulso", "Referencia = mês: conte as linhas por Classe; 3 meses anteriores: some Valor Parcela ÷ linhas = ticket"),
                       ("orcado", f"Referencia = {ra}; orçado da classe ÷ ticket")],
                montagem=["Colunas: Classe · Ticket médio 3 meses · Orçado (eventos) de cada planilha · Realizado · Forecast ✎ · "
@@ -796,7 +815,7 @@ def gera_validacao_html(ctx):
                ["Para cada mês e classe: soma do Valor Parcela (rubricas marcadas para excluir ficam de fora)",
                 "Total = soma das classes no mês"],
                ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b>"],
-               {"Evolucao": _evolucao_df(ctx)}, "evolucao_indiretas", bases=[base_av],
+               lambda sup: {"Evolucao": _evolucao_df(ctx, sup)}, "evolucao_indiretas", bases=[base_av], ctx=ctx,
                montagem=["Barras empilhadas, largura inteira: uma barra por mês, uma cor por classe; valor de cada faixa dentro dela e total em cima"]),
     ])
 

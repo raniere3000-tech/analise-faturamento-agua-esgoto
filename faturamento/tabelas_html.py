@@ -263,6 +263,44 @@ def botao_download_xlsx(rotulo, nome_arquivo, conteudo):
             f'data-b64="{b64}">&#11015; {html.escape(rotulo)}</button>')
 
 
+def filtra_sup(ctx, df, sup):
+    """Linhas de df da superintendência `sup` (TODAS: df inteiro). Usa a coluna de SUP se houver; senão, o grupo
+    (coluna "Grupo…" → SUP do grupo pelo cronograma). Linhas sem grupo da SUP (ex.: Total) ficam de fora."""
+    from .dre import TODAS
+    from .leitura import chave_grupo
+    if df is None or not len(df) or sup == TODAS:
+        return df
+    for col in ("__sup", "Superintendência"):
+        if col in df.columns:
+            return df[df[col] == sup]
+    col = next((c for c in df.columns if str(c).startswith("Grupo")), None)
+    if col is None:
+        return df
+    mapa = getattr(ctx, "grupo_sup", None) or {}
+    return df[df[col].map(lambda g: mapa.get(chave_grupo(g)) == sup)]
+
+
+def botoes_por_sup(ctx, rotulo, nome_arquivo, abas_da_sup):
+    """Um botão de download por superintendência; o filtro Superintendência do relatório mostra só o da SUP escolhida.
+    abas_da_sup(sup) -> {nome_da_aba: DataFrame}. Abas vazias saem; SUP sem nenhuma aba não ganha botão.
+    rotulo: texto ou função(abas) -> texto."""
+    from .dre import TODAS, lista_sups, prepara
+    prepara(ctx)
+    base, ext = nome_arquivo.rsplit(".", 1)
+    partes = []
+    for sup in lista_sups(ctx):
+        abas = {k: v for k, v in (abas_da_sup(sup) or {}).items() if v is not None and len(v)}
+        if not abas:
+            continue
+        r = rotulo(abas) if callable(rotulo) else rotulo
+        r = r if sup == TODAS else f"{r} — {sup}"
+        n = nome_arquivo if sup == TODAS else f"{base}_{''.join(c for c in sup if c.isalnum())}.{ext}"
+        oculto = "" if sup == TODAS else ' style="display:none"'
+        partes.append(f'<span class="sup-dl" data-sup="{html.escape(sup, quote=True)}"{oculto}>'
+                      f'{botao_download_xlsx(r, n, xlsx_bytes(abas))}</span>')
+    return "".join(partes)
+
+
 def xlsx_bytes(abas):
     """abas: {nome_da_aba: DataFrame} -> bytes de um .xlsx."""
     buf = io.BytesIO()
@@ -413,10 +451,10 @@ def gera_matriz_migracao_grupos(ctx):
     """
 
     sem_fat = lista_sem_faturamento(ctx, merge)
-    botao_sem_fat = botao_download_xlsx(
-        f"Baixar matrículas sem faturamento ({len(sem_fat)})",
+    botao_sem_fat = botoes_por_sup(              # um botão por SUP (pelo grupo do mês anterior), com a contagem de cada uma
+        ctx, lambda abas: f"Baixar matrículas sem faturamento ({len(abas['Sem faturamento'])})",
         f"Matriculas_Sem_Faturamento_{ctx.mes_atual.replace('/', '-')}.xlsx",
-        xlsx_bytes({"Sem faturamento": sem_fat})) if len(sem_fat) else ""
+        lambda sup: {"Sem faturamento": filtra_sup(ctx, sem_fat, sup)})
 
     return f"""
     <div class="card">

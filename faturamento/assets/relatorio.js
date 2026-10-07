@@ -21,6 +21,14 @@ function definirFiltros(parcial) {
     document.querySelectorAll('.prev-bloco, .sup-top-bloco').forEach(b => { b.style.display = (b.dataset.sup === ESTADO.sup) ? 'block' : 'none'; });
     // Destaques do mês: um quadro por SUP; em "Todas" aparecem todos
     document.querySelectorAll('.sup-dest').forEach(b => { b.style.display = (ESTADO.sup === 'TODAS' || b.dataset.sup === ESTADO.sup) ? '' : 'none'; });
+    // Downloads (Excel) por superintendência: só o botão da SUP escolhida aparece
+    document.querySelectorAll('.sup-dl').forEach(b => { b.style.display = (b.dataset.sup === ESTADO.sup) ? '' : 'none'; });
+    // Aba Dados, memória do Forecast: acompanha a SUP do cabeçalho (o seletor próprio continua funcionando)
+    document.querySelectorAll('.fc-seletor select').forEach(sel => {
+        if (!Array.from(sel.options).some(o => o.value === ESTADO.sup)) return;
+        sel.value = ESTADO.sup;
+        sel.closest('.val-bloco').querySelectorAll('.fc-sup').forEach(b => { b.hidden = b.dataset.fcSup !== ESTADO.sup; });
+    });
     aplicarSupNosGrupos();
     aplicarFontes();
     [['selSup', ESTADO.sup], ['selMes', ESTADO.mes], ['selRef', ESTADO.ref]].forEach(([id, v]) => {
@@ -561,6 +569,36 @@ document.addEventListener('DOMContentLoaded', function () {
     carregarJustificativas();
 });
 
+// CSV (";", aspas no padrão do pandas) só com as linhas cuja coluna Superintendência é `sup`; null se não houver a coluna
+function filtraCsvPorSup(texto, sup) {
+    const bom = texto.charCodeAt(0) === 0xFEFF ? '\uFEFF' : '';
+    if (bom) texto = texto.slice(1);
+    const registros = [];                                   // quebra de linha dentro de aspas não separa registros
+    let ini = 0, aspas = false;
+    for (let i = 0; i < texto.length; i++) {
+        const c = texto.charCodeAt(i);
+        if (c === 34) aspas = !aspas;
+        else if (c === 10 && !aspas) { registros.push(texto.slice(ini, i)); ini = i + 1; }
+    }
+    if (ini < texto.length) registros.push(texto.slice(ini));
+    const campos = (r) => {                                 // campos do registro (sem as aspas)
+        const out = []; let atual = '', q = false;
+        for (let i = 0; i < r.length; i++) {
+            const c = r[i];
+            if (c === '"') { if (q && r[i + 1] === '"') { atual += '"'; i++; } else q = !q; }
+            else if (c === ';' && !q) { out.push(atual); atual = ''; }
+            else if (c !== '\r' || q) atual += c;
+        }
+        out.push(atual);
+        return out;
+    };
+    if (!registros.length) return null;
+    const col = campos(registros[0]).indexOf('Superintendência');
+    if (col < 0) return null;
+    const linhas = registros.slice(1).filter(r => r && (campos(r)[col] || '').trim() === sup);
+    return bom + [registros[0]].concat(linhas).join('\n') + '\n';
+}
+
 // Botões "Base: ... (CSV)": a base vem embutida uma vez (script#base-dl-<chave>) e vários botões a usam
 document.addEventListener('click', function (e) {
     const b = e.target.closest && e.target.closest('.btn-baixar-base');
@@ -569,9 +607,18 @@ document.addEventListener('click', function (e) {
     if (!el) return;
     const bin = atob(el.textContent.trim()), bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const url = URL.createObjectURL(new Blob([bytes], { type: 'text/csv;charset=utf-8' }));
+    let conteudo = bytes, nome = el.dataset.arquivo;
+    const sup = (typeof ESTADO !== 'undefined' && ESTADO.sup) || 'TODAS';
+    if (sup !== 'TODAS') {                                  // filtro Superintendência: só as linhas da SUP escolhida
+        const filtrado = filtraCsvPorSup(new TextDecoder('utf-8').decode(bytes), sup);
+        if (filtrado !== null) {
+            conteudo = filtrado;
+            nome = nome.replace(/\.csv$/i, '_' + sup.replace(/[^A-Za-z0-9]/g, '') + '.csv');
+        }
+    }
+    const url = URL.createObjectURL(new Blob([conteudo], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
-    a.href = url; a.download = el.dataset.arquivo; document.body.appendChild(a); a.click(); a.remove();
+    a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
 });
 
