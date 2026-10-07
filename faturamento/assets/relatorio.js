@@ -1,6 +1,6 @@
 const CHAVE_JUSTIFICATIVA = '__CHAVE_JUSTIFICATIVA__';
 
-const VIEWS = ['dre', 'resumo', 'tabelas', 'indiretas', 'forecast', 'dados'];
+const VIEWS = ['resumo', 'tabelas', 'indiretas', 'forecast', 'dre', 'dados'];
 function mostrarView(view) {
     VIEWS.forEach(v => {
         document.getElementById('view-' + v).classList.toggle('ativo', v === view);
@@ -715,11 +715,11 @@ function gerarExecutivo() {
     const itens = [
         q('#view-resumo .kpis-grid'),
         (q('#graficoFaturamento') || { closest: () => null }).closest('.card'),
-        q(`#view-forecast .prev-bloco[data-sup="${sup}"] .prev-card`),
         ...qa('#view-tabelas .orc-ciclo-bloco:not([hidden]) > .card'),
         (q('#tabela-agua') || { closest: () => null }).closest('.card'),
         (q('#tabela-esgoto') || { closest: () => null }).closest('.card'),
         ...qa(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .prev-card`),
+        q(`#view-forecast .prev-bloco[data-sup="${sup}"] .prev-card`),
         q('#card-justificativa'),
     ];
     itens.forEach(el => { const c = clona(el); if (c) { c.classList.add('exec-item'); cont.appendChild(c); } });

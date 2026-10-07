@@ -324,7 +324,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v28</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v29</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -358,11 +358,11 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 </header>
 
 <nav class="nav" id="nav" aria-label="Páginas do relatório">
-  <button class="tab active" data-view="dre" type="button">DRE</button>
-  <button class="tab" data-view="resumo" type="button">Resumo</button>
+  <button class="tab active" data-view="resumo" type="button">Resumo</button>
   <button class="tab" data-view="tabelas" type="button">Diretas</button>
   <button class="tab" data-view="indiretas" type="button">Indiretas</button>
   <button class="tab" data-view="forecast" type="button">Forecast</button>
+  <button class="tab" data-view="dre" type="button">DRE</button>
   <button class="tab" data-view="dados" type="button">Dados</button>
 </nav>
 
@@ -409,7 +409,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v28-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v29-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -871,7 +871,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 
   // ===== Navegação e filtros (listas suspensas, presentes em todas as abas) =====
-  const filtrosEstado = { view: "dre", sup: "TODAS", mes: null, ref: "" };
+  const filtrosEstado = { view: "resumo", sup: "TODAS", mes: null, ref: "" };
   let infoFiltros = null;
   const quadro = () => $("quadroRelatorio");
   const janela = () => quadro().contentWindow;
@@ -927,7 +927,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       grupos.map((g) => `<label><input type="checkbox" class="chk-grupo-top" value="${escapa(g.value)}" checked> ${escapa(g.value)}</label>`).join("");
     $("btnGrupo").textContent = "Todos ▾"; $("btnGrupo").disabled = false;
     $("btnPdf").hidden = false;
-    filtrosEstado.view = "dre";
+    filtrosEstado.view = "resumo";
     aplicaFiltros();
   }
 
