@@ -19,6 +19,8 @@ function definirFiltros(parcial) {
         b.style.display = (b.dataset.sup === ESTADO.sup && b.dataset.mes === ESTADO.mes) ? 'block' : 'none';
     });
     document.querySelectorAll('.prev-bloco, .sup-top-bloco').forEach(b => { b.style.display = (b.dataset.sup === ESTADO.sup) ? 'block' : 'none'; });
+    // Destaques do mês: um quadro por SUP; em "Todas" aparecem todos
+    document.querySelectorAll('.sup-dest').forEach(b => { b.style.display = (ESTADO.sup === 'TODAS' || b.dataset.sup === ESTADO.sup) ? '' : 'none'; });
     aplicarSupNosGrupos();
     aplicarFontes();
     [['selSup', ESTADO.sup], ['selMes', ESTADO.mes], ['selRef', ESTADO.ref]].forEach(([id, v]) => {

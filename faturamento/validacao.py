@@ -668,7 +668,8 @@ def gera_validacao_html(ctx):
                "dias_leitura", bases=[("fatura", f"{f_atual_ant}; média de Qts. Dias por Grupo")],
                montagem=["Faixa com os dois meses e o Δ em dias (laranja quando diminui)"]),
         _bloco(f"Destaques do mês — {mes}",
-               "cards com os principais movimentos: cortes, grupos que mais cresceram e mais caíram (água e esgoto) e o Top 100.",
+               "um quadro por superintendência (LAGOS, LESTE), cada um com os principais movimentos só daquela SUP: cortes, grupos que "
+               "mais cresceram e mais caíram (água e esgoto) e o Top 100. O filtro Superintendência mostra o quadro escolhido.",
                ["Cortes: total de ligações cortadas e ativas (tabela 'Economias faturadas por ciclo — ativas × cortadas') e a diferença vs mês anterior",
                 "Crescimento / Queda: os 3 grupos com maior diferença de faturamento (atual − anterior), por serviço",
                 "Top 100: as 2 maiores quedas de consumo e o total de clientes com queda"],

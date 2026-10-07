@@ -19,7 +19,7 @@ from .dre import gera_aba_dre_html, gera_aba_indiretas_html, gera_filtros_dre_ht
 from .config import NOME_RELATORIO_HTML, NOME_TOP100_AUMENTO_XLSX, NOME_TOP100_XLSX, TEXTO_JUSTIFICATIVA_PADRAO
 from .contexto import Contexto
 from .orcado_ciclo import gera_tabelas_orcado_ciclo_html
-from .painel_html import (gera_card_leitura_html, gera_cards_insights_html, gera_cards_kpis_html,
+from .painel_html import (gera_card_leitura_html, gera_cards_insights_html, gera_cards_kpis_html, gera_destaques_html,
                           gera_grafico_faturamento_html)
 from .progresso import Progresso
 from .relatorio import gera_filtro_html, gera_justificativa_html, monta_html
@@ -95,6 +95,7 @@ class Sessao:
                                             xlsx_bytes({"Top100_Aumento_Agua": aum_agua_df, "Top100_Aumento_Esgoto": aum_esg_df}))
         # um conjunto de rankings por superintendência (o filtro Superintendência mostra o da SUP escolhida)
         blocos_queda, blocos_aumento = [], []
+        top_por_sup = {}                               # para os Destaques do mês de cada superintendência
         for sup in lista_sups(ctx):
             if sup == "TODAS":
                 qa, qe, aa, ae, bq, ba, suf = top_agua_df, top_esg_df, aum_agua_df, aum_esg_df, botao_top100, botao_aumento, ""
@@ -109,6 +110,7 @@ class Sessao:
                 ba = botao_download_xlsx(f"Baixar Top 100 aumentos {sup} (Excel)", f"Top100_Aumentos_{slug_sup}.xlsx",
                                          xlsx_bytes({"Top100_Aumento_Agua": aa, "Top100_Aumento_Esgoto": ae}))
                 suf = f" ({_nome_sup(sup)})"
+            top_por_sup[sup] = (qa, qe)
             sl = "".join(c for c in sup.lower() if c.isalnum())
             ds = html.escape(sup, quote=True)
             blocos_queda.append(f'<div class="sup-top-bloco" data-sup="{ds}">'
@@ -134,8 +136,7 @@ class Sessao:
         passo(84.5, "Criando quadro: Dias de leitura (média)")
         card_leitura_html = gera_card_leitura_html(ctx, df_resumo_grupo)
         passo(85, "Criando cards: Destaques do mês")
-        cards_insights_html = gera_cards_insights_html(ctx, ctx.comp_agua, ctx.comp_esgoto, df_ciclos_por_grupo,
-                                                       top_agua_df, top_esg_df)
+        cards_insights_html = gera_destaques_html(ctx, df_ciclos_por_grupo, top_agua_df, top_esg_df, top_por_sup)
         passo(85.5, "Criando tabela: Resumo consolidado por grupo")
         tabela_dados_resumo_html = gera_tabela_dados_resumo_html(df_resumo_grupo)
 
