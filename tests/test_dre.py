@@ -243,24 +243,38 @@ def test_diretas_tem_so_duas_tabelas_de_orcado_com_seletor(sessao):
     assert 'data-src=' not in tab.split("Economias faturadas por ciclo")[0]      # não depende do filtro Comparar do cabeçalho
 
 
-def test_indiretas_duas_tabelas_com_forecast_editavel_e_grafico_embaixo(sessao):
+def test_indiretas_financeiro_e_eventos_com_forecast_e_grafico_no_fim(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     ind = html[html.index('id="view-indiretas"'):html.index('id="view-tabelas"')]
     bloco = ind[ind.index('data-sup="TODAS" data-mes="09/2026"'):]
     bloco = bloco[:bloco.index('class="sup-bloco"')] if 'class="sup-bloco"' in bloco else bloco
-    pos = [bloco.index(t) for t in ("Fat. de água - Indireto", "RI Cortes/Recorte", "RI Religações", "RI Ligações - Água",
-                                     "RI Outros - Água", "Fat. de esgoto - Indireto", "Total indiretas", "Evolução mensal por classe")]
-    assert pos == sorted(pos)                                     # gráfico abaixo das duas tabelas
+    pos = [bloco.index(t) for t in ("Indiretas — financeiro (R$)", "Indiretas — eventos faturados", "Evolução mensal por classe")]
+    assert pos == sorted(pos)                                     # gráfico no fim
     assert bloco.count('class="tabela-dre tabela-previsao"') == 2
     for col in ("Orçado<br>RF01T26", "Orçado<br>RF SUP", "Realizado", "Forecast ✎", "Realizado<br>+ Forecast", "Δ %<br>vs RF01T26",
-                "Δ R$<br>vs RF SUP"):
+                "Ticket médio<br>3 meses"):
         assert col in bloco, col
-    assert 'data-k="ri_CORTE" contenteditable="true"' in bloco and 'data-k="iE" contenteditable="true"' in bloco
-    assert "Quantidade e ticket médio" not in ind and "<th>Lançamentos</th>" not in ind
-    # mês fechado: sem forecast editável
+    for k in ("ri_CORTE", "iE", "ev_ri_CORTE", "ev_iE"):
+        assert f'data-k="{k}" contenteditable="true"' in bloco, k
+    assert "Quantidade e ticket médio" not in ind
     ago = ind[ind.index('data-sup="TODAS" data-mes="08/2026"'):]
     ago = ago[:ago.index('class="sup-bloco"')]
     assert "contenteditable" not in ago and "Mês fechado" in ago
+
+
+def test_eventos_orcado_pelo_ticket_de_3_meses(tmp_path):
+    from faturamento.previsao import eventos_indiretas
+    gera_pasta(str(tmp_path), com_dre=True)
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    s.preparar()
+    s.continuar()
+    ctx = s.ctx
+    ev = eventos_indiretas(ctx, dre.TODAS, ctx.ref_atual)
+    ago = dre._indiretas_mes(ctx, dre.TODAS, "08/2026")["CORTE"]           # único mês fechado no arquivo
+    assert ev["ticket"]["ri_CORTE"] == pytest.approx(ago[1] / ago[0])
+    orc = dre.orcado(ctx, "RF01T26", dre.TODAS, ctx.ref_atual)["ri_CORTE"]
+    assert ev["orcado"]["RF01T26"]["ev_ri_CORTE"] == pytest.approx(orc / ev["ticket"]["ri_CORTE"])
+    assert ev["real"]["ev_ri_CORTE"] == dre._indiretas_mes(ctx, dre.TODAS, ctx.ref_atual)["CORTE"][0]
 
 def test_aba_dados_no_fim_e_forecast_explicado(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
@@ -301,9 +315,9 @@ def test_dados_explica_cada_tabela_e_grafico_com_bases_para_baixar(sessao):
     for titulo in ("Tabela DRE", "KPIs (8 cards)", "Gráfico — Faturamento total por grupo", "Dias de leitura (média)",
                    "Destaques do mês", "Resumo consolidado por grupo", "Comparativo Água / Esgoto", "Orçado por ciclo",
                    "ativas × cortadas", "Matriz de migração", "consumo mínimo", "maior queda de consumo", "maior aumento de consumo",
-                   "Indiretas: orçado × realizado × forecast", "Gráfico — Evolução mensal por classe", "Forecast de fechamento"):
+                   "Indiretas: financeiro em R$", "Indiretas: eventos faturados", "Gráfico — Evolução mensal por classe", "Forecast de fechamento"):
         assert titulo in dados, titulo
-    assert dados.count("Como a tabela / o gráfico é montado") >= 14
+    assert dados.count("Como a tabela / o gráfico é montado") >= 15
     # cada base aparece embutida uma vez e é referenciada por vários botões
     for ch in ("fatura", "fatura_mensal", "avulso", "cancelamento", "orcado"):
         assert dados.count(f'id="base-dl-{ch}"') == 1

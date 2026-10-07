@@ -558,6 +558,8 @@ document.addEventListener('click', function (e) {
 // ===== Previsão de fechamento (aba DRE): células editáveis, totais refeitos aqui no navegador =====
 const PREV_BASICAS = ['dA', 'dE', 'iE', 'ri_CORTE', 'ri_RELIGAÇÃO', 'ri_LNA', 'ri_SANÇÃO', 'ri_OUTROS', 'ecoA', 'ecoE', 'volA', 'volE', 'canc'];
 const PREV_CLASSES_RI = ['ri_CORTE', 'ri_RELIGAÇÃO', 'ri_LNA', 'ri_SANÇÃO', 'ri_OUTROS'];
+const PREV_EV_RI = PREV_CLASSES_RI.map(k => 'ev_' + k);          // aba Indiretas: eventos faturados
+PREV_BASICAS.push(...PREV_EV_RI, 'ev_iE');
 const PREV_CHAVE_LS = 'faturamento_previsao_v2';
 let prevEdicoes = {}, prevOculta = false;
 try { const salvo = JSON.parse(localStorage.getItem(PREV_CHAVE_LS) || '{}'); prevEdicoes = salvo.edicoes || {}; prevOculta = !!salvo.oculta; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
@@ -597,6 +599,8 @@ function prevRecalcular(tab) {
     C.dTot = soma(C, ['dA', 'dE']); C.iA = soma(C, PREV_CLASSES_RI); C.bruto = soma(C, ['dTot', 'iA', 'iE']);
     FC.dTot = soma(FC, ['dA', 'dE']); FC.iA = soma(FC, PREV_CLASSES_RI); FC.bruto = soma(FC, ['dTot', 'iA', 'iE']);
     C.tot = soma(C, ['iA', 'iE']); FC.tot = soma(FC, ['iA', 'iE']);            // Total indiretas (aba Indiretas)
+    C.ev_iA = soma(C, PREV_EV_RI); FC.ev_iA = soma(FC, PREV_EV_RI);
+    C.ev_tot = soma(C, ['ev_iA', 'ev_iE']); FC.ev_tot = soma(FC, ['ev_iA', 'ev_iE']);
     C.vmA = div(C.volA, C.ecoA); C.vmE = div(C.volE, C.ecoE);
     C.tarA = div(C.dA, C.volA); C.tarE = div(C.dE, C.volE);
     C.tickA = div(C.dA, C.ecoA); C.tickE = div(C.dE, C.ecoE);
