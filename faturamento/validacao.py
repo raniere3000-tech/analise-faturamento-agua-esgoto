@@ -626,7 +626,7 @@ def gera_validacao_html(ctx):
                   "Colunas: Orçado de cada planilha · Realizado · Δ % e Δ R$ contra cada planilha",
                   "Células de Δ em vermelho quando o realizado está abaixo do orçado (no cancelamento, o sinal é invertido)",
                   "Um bloco pronto por superintendência × mês; os filtros do cabeçalho só mostram o bloco escolhido"])],
-        aberto=True)
+        aberto=False)
 
     # ---------------- 2. Resumo ----------------
     passo(95.5, "Criando aba Dados: explicação do Resumo (KPIs, gráfico, tabelas)")
@@ -792,8 +792,6 @@ def gera_validacao_html(ctx):
     passo(97, "Criando aba Dados: memória de cálculo do Forecast")
     forecast = _aba("5. Forecast", [_bloco_forecast(ctx)])
 
-    return ('<div class="card val-card"><h2>Validação dos cálculos</h2>'
-            '<p class="nota-secao">Cada tabela e cada gráfico do relatório, aba por aba: o que mostra, quais bases e colunas entram, '
-            'o cálculo passo a passo, como foi montado, uma amostra e botões para baixar a tabela (Excel) e a base usada (CSV).</p>'
-            + _secao_bases(ctx) + dre + resumo
-            + _aba("3. Diretas", dir_blocos) + indiretas + forecast + '</div>')
+    # cada tópico é recolhível (fechado ao abrir a aba); quem monta o cartão da aba Dados é dados.py
+    return (_aba("Bases para download", [f'<div class="val-bloco">{_secao_bases(ctx)}</div>'])
+            + dre + resumo + _aba("3. Diretas", dir_blocos) + indiretas + forecast)

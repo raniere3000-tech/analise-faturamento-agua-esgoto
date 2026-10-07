@@ -68,7 +68,6 @@ def _mapeamento_orcado(ctx):
 
 def _conferencia_kpis(ctx):
     """De onde vêm os valores dos KPIs: soma de 'Valor (R$)' das rubricas de água e esgoto da última referência, por grupo."""
-    import pandas as pd
     from .formatacao import fmt_num
 
     def soma(df, rub):
@@ -90,10 +89,9 @@ def _conferencia_kpis(ctx):
         extra = soma(cm, "AGUA") + soma(cm, "ESGOTO") - (ta + te)
         if abs(extra) > 0.005:
             fora = f' Grupos acima do {ctx.ultimo_grupo} (fora da análise): R$ {fmt_num(extra, 2)}.'
-    return (f'<div class="card"><h2>Conferência dos KPIs — {html.escape(ctx.mes_atual)}</h2>'
-            '<p class="nota-secao">Os KPIs somam o campo "Valor (R$)" da fatura, só das rubricas de água e esgoto, nos grupos até o '
+    return ('<p class="nota-secao">Os KPIs somam o campo "Valor (R$)" da fatura, só das rubricas de água e esgoto, nos grupos até o '
             f'{html.escape(str(ctx.ultimo_grupo or "—"))}. Rubricas presentes: {html.escape(rubs)}.{fora}</p>'
-            + _tabela(["Grupo", "Linhas", "Valor de água", "Valor de esgoto", "Total"], linhas) + '</div>')
+            + _tabela(["Grupo", "Linhas", "Valor de água", "Valor de esgoto", "Total"], linhas))
 
 
 def gera_aba_dados_html(ctx):
@@ -103,11 +101,17 @@ def gera_aba_dados_html(ctx):
         else '<p class="nota-secao">Nenhum aviso.</p>'
     linhas = [[html.escape(i["tipo"]), html.escape(i["arquivo"]), f"{i['linhas']:,}".replace(",", "."),
                html.escape(i["periodo"] or "—"), html.escape(i.get("extra", ""))] for i in ctx.bases_info]
-    return (f'<div class="card"><h2>Avisos</h2>{lista}</div>'
-            + _conferencia_kpis(ctx) + gera_validacao_html(ctx) +
-            f'<div class="card"><h2>Bases carregadas</h2>'
-            + _tabela(["Tipo", "Arquivo", "Linhas", "Meses", "Observação"], linhas) + '</div>'
-            f'<div class="card"><h2>Orçado: linhas reconhecidas</h2>'
-            '<p class="nota-secao">Como cada linha da planilha de orçado entra na DRE (ex.: "Fat. Bruto de água - Direto" = DIRETAS ÁGUA). '
-            'O orçado das linhas "RI" só existe se a planilha tiver linhas com esses nomes.</p>'
-            + (_mapeamento_orcado(ctx) or '<p class="nota-secao">Nenhuma planilha de orçado carregada.</p>') + '</div>')
+    def topico(titulo, conteudo):
+        return f'<details class="val-aba"><summary>{titulo}</summary><div class="val-bloco">{conteudo}</div></details>'
+    orcado = ('<p class="nota-secao">Como cada linha da planilha de orçado entra na DRE (ex.: "Fat. Bruto de água - Direto" = DIRETAS ÁGUA). '
+              'O orçado das linhas "RI" só existe se a planilha tiver linhas com esses nomes.</p>'
+              + (_mapeamento_orcado(ctx) or '<p class="nota-secao">Nenhuma planilha de orçado carregada.</p>'))
+    return ('<div class="card val-card"><h2>Dados e validação dos cálculos</h2>'
+            '<p class="nota-secao">Clique em um tópico para abrir. Em 1 a 5, cada tabela e gráfico do relatório, aba por aba: o que mostra, '
+            'quais bases e colunas entram, o cálculo passo a passo, como foi montado, uma amostra e botões para baixar a tabela (Excel) '
+            'e a base usada (CSV).</p>'
+            + topico(f"Avisos ({len(avisos)})", lista)
+            + topico(f"Conferência dos KPIs — {html.escape(ctx.mes_atual)}", _conferencia_kpis(ctx))
+            + topico("Bases carregadas", _tabela(["Tipo", "Arquivo", "Linhas", "Meses", "Observação"], linhas))
+            + topico("Orçado: linhas reconhecidas", orcado)
+            + gera_validacao_html(ctx) + '</div>')
