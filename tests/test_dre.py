@@ -557,3 +557,12 @@ def test_dados_para_o_filtro_de_grupos_nos_downloads(sessao):
     for tipo in ("top", "sitl", "semfat"):
         assert f'data-csv-filtrado="{tipo}"' in html
     assert 'id="semfat-dados"' in html and 'data-top="aumento-esgoto"' in html
+
+
+def test_executivo_imprime_documento_leve(sessao):
+    """O PDF sai de um documento só com o Executivo (sem as bases embutidas), senão a impressão falhava."""
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    ini = html.index("function gerarExecutivo")
+    trecho = html[ini:html.index("function imprimirDocumentoLeve")]
+    assert "imprimirDocumentoLeve(cont)" in trecho and "window.print()" not in trecho
+    assert "querySelectorAll('script').forEach(x => x.remove())" in trecho
