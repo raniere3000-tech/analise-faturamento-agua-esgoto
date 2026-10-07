@@ -87,10 +87,44 @@ def _por_ligacao(df):
     lig = pd.DataFrame({"N. Ligação": agua["N. Ligação"].values, "Situação": sit.values,
                         "Economias": pd.to_numeric(agua["Economias_Totais"], errors="coerce").fillna(0).where(pos > 0, 0).values,
                         "Volume": pos.where(pos > 0, 0).values})
-    lig = lig.groupby("N. Ligação").agg(Situação=("Situação", "first"), Economias=("Economias", "sum"), Volume=("Volume", "sum"))
+    extras = {c: c for c in ("Nome Cliente", "Grupo", "Categoria", "__sup") if c in agua.columns}
+    for c in extras:
+        lig[c] = agua[c].values
+    lig = lig.groupby("N. Ligação").agg(Situação=("Situação", "first"), Economias=("Economias", "sum"), Volume=("Volume", "sum"),
+                                        **{c: (c, "first") for c in extras})
     valor = pd.to_numeric(d["Valor (R$)"], errors="coerce").fillna(0).groupby(d["N. Ligação"].values).sum()
     lig["Valor"] = valor.reindex(lig.index).fillna(0)
     return lig.reset_index()
+
+
+def detalhe_ligacoes(df_at, df_ant, mes, mes_ant):
+    """Uma linha por ligação do mês atual (rubrica de água): a lista que a seta de cada card baixa."""
+    at, ant = _por_ligacao(df_at), _por_ligacao(df_ant)
+    if not len(at):
+        return pd.DataFrame()
+    ant = ant.set_index("N. Ligação")
+    d = pd.DataFrame({"N. Ligação": at["N. Ligação"]})
+    for c, nome in (("Nome Cliente", "Nome Cliente"), ("Grupo", "Grupo"), ("Categoria", "Categoria"), ("__sup", "Superintendência")):
+        if c in at.columns:
+            d[nome] = at[c].values
+    d[f"Situação Lançamento {mes}"] = at["Situação"].values
+    d[f"Situação Lançamento {mes_ant}"] = at["N. Ligação"].map(ant["Situação"]).fillna("").values if len(ant) else ""
+    d[f"Economias {mes}"] = at["Economias"].values
+    d[f"Volume {mes}"] = at["Volume"].values
+    d[f"Volume {mes_ant}"] = at["N. Ligação"].map(ant["Volume"]).values if len(ant) else None
+    d[f"Valor água + esgoto {mes}"] = at["Valor"].values
+    d[f"Valor água + esgoto {mes_ant}"] = at["N. Ligação"].map(ant["Valor"]).values if len(ant) else None
+    num = d.select_dtypes("number").columns
+    d[num] = d[num].round(2)                           # sem resto de ponto flutuante no CSV (322,67 e não 322,66999…)
+    return d.sort_values([f"Situação Lançamento {mes}", "N. Ligação"]).reset_index(drop=True)
+
+
+def _csv_gz_b64(df):
+    """CSV (";" e vírgula decimal, como as bases) comprimido em gzip e em base64 — o navegador descompacta na hora de baixar."""
+    import base64
+    import gzip
+    texto = "\ufeff" + df.to_csv(sep=";", decimal=",", index=False)
+    return base64.b64encode(gzip.compress(texto.encode("utf-8"), 6)).decode("ascii")
 
 
 def resumo_situacoes(df_at, df_ant):
@@ -117,14 +151,14 @@ def resumo_situacoes(df_at, df_ant):
     return r
 
 
-def _card(linha, mes, ant):
+def _card(linha, mes, ant, sup="TODAS"):
     def var(v, dec=0, suf=""):
         cor = "#C2560C" if v < 0 else "#176b9c" if v > 0 else "#49668C"
         sinal = "+" if v > 0 else ""
         return f'<span style="color:{cor};font-weight:600">{sinal}{fmt_num(v, dec)}{suf}</span>'
     return f"""
     <div class="sitl-card">
-      <div class="sitl-topo"><b>{html.escape(str(linha['Situação']))}</b><span>{html.escape(linha['Leitura da situação'])}</span></div>
+      <div class="sitl-topo"><b>{html.escape(str(linha['Situação']))}{_seta(linha, sup)}</b><span>{html.escape(linha['Leitura da situação'])}</span></div>
       <div class="sitl-num"><span>Ligações {html.escape(mes)}</span><b>{fmt_num(linha['Ligações atual'])}</b>
         <small>{fmt_num(linha['% ligações atual'], 1)}% do total · {var(linha['Δ p.p. participação'], 1, ' p.p.')} vs {html.escape(ant)}</small></div>
       <ul class="sitl-lista">
@@ -136,6 +170,15 @@ def _card(linha, mes, ant):
       </ul>
       <p class="sitl-porque"><b>Por que analisar:</b> {html.escape(linha['Por que analisar'])}</p>
     </div>"""
+
+
+def _seta(linha, sup):
+    """Seta que baixa as ligações desta situação (só quando há ligações no mês atual)."""
+    if not linha["Ligações atual"]:
+        return ""
+    e = lambda v: html.escape(str(v), quote=True)
+    return (f' <button type="button" class="btn-sitl-dl" data-sit="{e(linha["Situação"])}" data-sup="{e(sup)}" '
+            f'title="Baixar as ligações desta situação (CSV)" aria-label="Baixar as ligações de {e(linha["Situação"])}">&#11015;</button>')
 
 
 def gera_cards_situacao_html(ctx):
@@ -157,7 +200,7 @@ def gera_cards_situacao_html(ctx):
         slug = "".join(c for c in sup if c.isalnum())
         botao = botao_download_xlsx(f"Baixar situações{'' if sup == TODAS else ' ' + sup} (Excel)",
                                     f"Situacao_Lancamento_{slug}.xlsx", xlsx_bytes({"Situacao Lancamento": r})) if len(r) else ""
-        cards = "".join(_card(l, ctx.mes_atual, ctx.mes_anterior) for _, l in r.iterrows()) or "<p>Sem dados</p>"
+        cards = "".join(_card(l, ctx.mes_atual, ctx.mes_anterior, sup) for _, l in r.iterrows()) or "<p>Sem dados</p>"
         blocos.append(f"""<div class="sup-top-bloco" data-sup="{html.escape(sup, quote=True)}">
     <div class="card">
     <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Situação de lançamento — {html.escape(ctx.mes_atual)} × {html.escape(ctx.mes_anterior)}{html.escape(suf)} {botao}</h2>
@@ -166,4 +209,9 @@ def gera_cards_situacao_html(ctx):
     valor = água + esgoto da ligação. Variações contra o mês anterior; p.p. = pontos percentuais na participação das ligações.</p>
     <div class="sitl-grid">{cards}</div>
     </div></div>""")
-    return "".join(blocos)
+    # lista por ligação embutida uma vez (comprimida); a seta de cada card filtra a situação e a SUP na hora de baixar
+    det = detalhe_ligacoes(ctx.df_atual, ctx.df_anterior, ctx.mes_atual, ctx.mes_anterior)
+    ctx.resultados["situacao_detalhe"] = det
+    dados = (f'<script type="application/octet-stream" id="sitl-detalhe" data-col-sit="Situação Lançamento {html.escape(ctx.mes_atual, quote=True)}" '
+             f'data-arquivo="Situacao_Lancamento_{ctx.mes_atual.replace("/", "-")}">{_csv_gz_b64(det)}</script>') if len(det) else ""
+    return "".join(blocos) + dados

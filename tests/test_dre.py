@@ -519,3 +519,23 @@ def test_situacao_lancamento_no_top100_e_nos_cards(sessao):
     assert classifica("LEITURA NAO REALIZADA")[0] == "Leitura não realizada"
     assert classifica("01-LEITURA NORMAL")[0] == "Leitura real"
     assert classifica("XPTO")[0] == "Situação sem regra cadastrada"
+
+
+def test_seta_de_cada_situacao_baixa_as_ligacoes(sessao):
+    import base64
+    import gzip
+    import io
+    import re
+    ctx = sessao.ctx
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert html.count('class="btn-sitl-dl"') >= 4 and 'data-sit="02-MEDIA" data-sup="LAGOS"' in html
+    m = re.search(r'<script type="application/octet-stream" id="sitl-detalhe" data-col-sit="([^"]+)"[^>]*>([^<]+)</script>', html)
+    det = pd.read_csv(io.BytesIO(gzip.decompress(base64.b64decode(m.group(2)))), sep=";", decimal=",", dtype={"N. Ligação": str},
+                      encoding="utf-8-sig")
+    col = m.group(1)
+    assert col == "Situação Lançamento Setembro/2026" and "Superintendência" in det.columns
+    r = ctx.resultados["situacao_lancamento"]
+    for sup in ("TODAS", "LAGOS"):
+        d = det if sup == "TODAS" else det[det["Superintendência"] == sup]
+        esperado = r[sup].set_index("Situação")["Ligações atual"]
+        assert d[col].value_counts().sort_index().to_dict() == esperado[esperado > 0].sort_index().astype(int).to_dict()
