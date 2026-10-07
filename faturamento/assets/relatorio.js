@@ -1020,7 +1020,7 @@ document.querySelectorAll('#view-tabelas th[data-full]').forEach(th => { th.colS
 
 
 // ===== Relatório executivo (PDF): copia o que está na tela agora — filtros, orçado escolhido e botões de ocultar valem =====
-function gerarExecutivo() {
+function gerarExecutivo(libs) {
     const antigo = document.getElementById('view-executivo'); if (antigo) antigo.remove();
     const cont = document.createElement('div'); cont.id = 'view-executivo';
     if (document.getElementById('view-tabelas').classList.contains('compacto')) cont.classList.add('compacto');
@@ -1050,29 +1050,145 @@ function gerarExecutivo() {
     cab.querySelector('p').textContent = `Superintendência: ${nomeSup} · Mês: ${nomeMes} · Orçado comparado: ${refs} · Grupos: ` +
         (marcados === grupos ? `todos (${grupos})` : `${marcados} de ${grupos}`) + ` · Gerado em ${new Date().toLocaleString('pt-BR')}`;
     cont.appendChild(cab);
-    const itens = [
-        q('#view-resumo .kpis-grid'),
-        (q('#graficoFaturamento') || { closest: () => null }).closest('.card'),
-        q(`#view-forecast .prev-bloco[data-sup="${sup}"] .prev-card`),
-        ...qa('#view-tabelas .orc-ciclo-bloco:not([hidden]) > .card'),
-        (q('#tabela-agua') || { closest: () => null }).closest('.card'),
-        (q('#tabela-esgoto') || { closest: () => null }).closest('.card'),
-        ...qa(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .prev-card`),
-        q('#card-justificativa'),
+    const card = (sel) => (q(sel) || { closest: () => null }).closest('.card');
+    // seções do PDF: título (começa página nova) + os quadros daquela seção; seção sem quadro não entra
+    const secoes = [
+        [null, [q('#view-resumo .kpis-grid'), card('#graficoFaturamento')]],
+        ['DRE - Forecast', [q(`#view-forecast .prev-bloco[data-sup="${sup}"] .prev-card`)]],
+        ['Orçado x Realizado', qa('#view-tabelas .orc-ciclo-bloco:not([hidden]) > .card')],
+        ['Faturamento Mês a Mês', [card('#tabela-agua'), card('#tabela-esgoto')]],
+        ['Indiretas', qa(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .prev-card`)],
+        [null, [q('#card-justificativa')]],
     ];
-    itens.forEach(el => { const c = clona(el); if (c) { c.classList.add('exec-item'); cont.appendChild(c); } });
-    imprimirDocumentoLeve(cont);
+    secoes.forEach(([nome, els]) => {
+        const copias = els.map(clona).filter(Boolean);
+        if (!copias.length) return;
+        if (nome) {
+            const t = document.createElement('div'); t.className = 'exec-secao';
+            const h = document.createElement('h2'); h.textContent = nome; t.appendChild(h);
+            cont.appendChild(t);
+        }
+        copias.forEach(c => { c.classList.add('exec-item'); cont.appendChild(c); });
+    });
+    // PDF gerado direto (arquivo .pdf baixado, sem a janela de impressão); sem as bibliotecas, cai na impressão
+    obterLibsPdf(libs).then(l => (l ? gerarPdfDireto(cont, l, `Executivo_${sup}_${nomeMes}`) : Promise.reject(new Error('sem bibliotecas'))))
+        .catch(erro => { console.warn('PDF direto indisponível, usando a impressão:', erro); imprimirDocumentoLeve(cont); });
+}
+
+// jsPDF + html2canvas: o código das bibliotecas vem do site (pasta lib/, passado pelo botão do site como texto);
+// no relatório salvo como arquivo, vêm do CDN. Elas rodam DENTRO do documento do PDF (o html2canvas só desenha bem
+// elementos do próprio documento). Devolve [{codigo} ou {src}] ou null.
+function obterLibsPdf(libs) {
+    if (libs && libs.codigo && libs.codigo.length === 2) return Promise.resolve(libs.codigo.map(c => ({ codigo: c })));
+    const base = 'https://cdnjs.cloudflare.com/ajax/libs/';
+    return Promise.resolve([{ src: base + 'jspdf/2.5.2/jspdf.umd.min.js' }, { src: base + 'html2canvas/1.4.1/html2canvas.min.js' }]);
+}
+
+function injetaLibs(doc, libs) {
+    return Promise.all(libs.map(l => new Promise((ok, erro) => {
+        const sc = doc.createElement('script');
+        if (l.codigo) { sc.textContent = l.codigo; doc.head.appendChild(sc); ok(); return; }
+        sc.src = l.src; sc.onload = ok; sc.onerror = () => erro(new Error('não carregou ' + l.src));
+        doc.head.appendChild(sc);
+    })));
+}
+
+// Gera o PDF do Executivo e baixa o arquivo: cada quadro vira imagem (html2canvas) e é paginado em A4 paisagem (jsPDF).
+// Cada título de seção começa uma página; quadro maior que a página é dividido em partes.
+async function gerarPdfDireto(cont, libs, nome) {
+    const aviso = document.createElement('div');
+    aviso.textContent = 'Gerando o PDF executivo…';
+    aviso.style.cssText = 'position:fixed; right:16px; bottom:16px; z-index:99999; background:#1A2740; color:#fff; padding:10px 16px; border-radius:8px; font:600 13px sans-serif; box-shadow:0 6px 20px rgba(0,0,0,.25);';
+    document.body.appendChild(aviso);
+    const fr = document.createElement('iframe');
+    fr.setAttribute('aria-hidden', 'true'); fr.title = 'Executivo';
+    // largura de uma folha A4 paisagem (281 mm úteis a 96 dpi): as letras saem do mesmo tamanho da impressão
+    // dentro da tela (transparente e atrás de tudo): fora dela o html2canvas desenha a página em branco
+    fr.style.cssText = 'position:fixed; left:0; top:0; width:1062px; height:800px; border:0; opacity:0; pointer-events:none; z-index:-1;';
+    document.body.appendChild(fr);
+    try {
+        const doc = fr.contentDocument;
+        doc.open(); doc.write(montaDocumentoExecutivo(cont, true)); doc.close();
+        const imgs = Array.from(doc.images);
+        await Promise.race([Promise.all([...imgs.map(i => i.complete ? null : new Promise(r => { i.onload = i.onerror = r; })),
+            doc.fonts && doc.fonts.ready ? doc.fonts.ready.catch(() => null) : null]), new Promise(r => setTimeout(r, 4000))]);
+        // tabela mais larga que a folha (ex.: orçado por ciclo com Abs e %): alarga o documento para caber inteira;
+        // a imagem depois é reduzida para a largura da página
+        let largura = 1062;
+        doc.querySelectorAll('#view-executivo table').forEach(t => { largura = Math.max(largura, Math.ceil(t.scrollWidth) + 48); });
+        if (largura > 1062) { fr.style.width = largura + 'px'; await new Promise(r => setTimeout(r, 50)); }
+        await Promise.race([injetaLibs(doc, libs), new Promise((_, r) => setTimeout(() => r(new Error('bibliotecas do PDF demoraram')), 15000))]);
+        const w = fr.contentWindow;
+        if (!w.jspdf || !w.html2canvas) throw new Error('bibliotecas do PDF indisponíveis');
+        const pdf = new w.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+        const W = 297, H = 210, M = 8, LW = W - 2 * M, LH = H - 2 * M - 6;       // 6 mm do rodapé
+        let y = M, primeira = true;
+        const novaPagina = () => { pdf.addPage(); y = M; };
+        const raiz = doc.getElementById('view-executivo') || doc.body.firstElementChild;
+        // uma única "foto" do Executivo inteiro (rápido); depois cada quadro é recortado dela pela posição na tela
+        const ESC = 2;
+        const foto = await w.html2canvas(raiz, { scale: ESC, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 3000,
+            windowWidth: largura, width: raiz.scrollWidth, height: raiz.scrollHeight });
+        const r0 = raiz.getBoundingClientRect();
+        const recorte = (topoPx, altPx) => {
+            const c = document.createElement('canvas'); c.width = foto.width; c.height = Math.max(1, Math.round(altPx));
+            c.getContext('2d').drawImage(foto, 0, Math.round(topoPx), foto.width, c.height, 0, 0, foto.width, c.height);
+            return c.toDataURL('image/jpeg', 0.92);
+        };
+        const mmPorPx = LW / foto.width;
+        for (const el of Array.from(raiz.children)) {
+            const r = el.getBoundingClientRect();
+            if (!r.height) continue;
+            const topo = (r.top - r0.top) * ESC, altPx = r.height * ESC, alt = altPx * mmPorPx;
+            if (el.classList.contains('exec-secao') && !primeira && y > M) novaPagina();
+            if (alt <= LH) {
+                if (y + alt > M + LH) novaPagina();
+                pdf.addImage(recorte(topo, altPx), 'JPEG', M, y, LW, alt);
+                y += alt + 3;
+            } else {                                                  // quadro mais alto que a página: fatias de uma página
+                if (y > M) novaPagina();
+                const fatiaPx = Math.floor(LH / mmPorPx);
+                for (let d = 0; d < altPx; d += fatiaPx) {
+                    const h = Math.min(fatiaPx, altPx - d);
+                    if (d > 0) novaPagina();
+                    pdf.addImage(recorte(topo + d, h), 'JPEG', M, y, LW, h * mmPorPx);
+                    y += h * mmPorPx + 3;
+                }
+            }
+            primeira = false;
+        }
+        const total = pdf.getNumberOfPages();
+        for (let i = 1; i <= total; i++) {                            // rodapé: página X de N
+            pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(73, 102, 140);
+            pdf.text(`Águas do Rio · Relatório Executivo · página ${i} de ${total}`, W - M, H - 5, { align: 'right' });
+        }
+        // baixa pelo documento do relatório (o iframe do PDF é removido logo depois; um clique dentro dele cancelaria o download)
+        const blob = pdf.output('blob');
+        const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = String(nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_') + '.pdf';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } finally {
+        fr.remove(); aviso.remove();
+    }
 }
 
 // Imprime só o conteúdo do Executivo num documento à parte (iframe escondido), com os estilos do relatório.
 // Imprimir o relatório inteiro (vários MB com as bases embutidas) fazia a visualização de impressão falhar e o PDF
 // salvo sair corrompido ("Não é possível abrir este arquivo").
-function montaDocumentoExecutivo(cont) {
-    const estilos = Array.from(document.querySelectorAll('style')).map(s => s.textContent).join('\n');
-    const fontes = Array.from(document.querySelectorAll('link[rel="stylesheet"], link[rel="preconnect"]')).map(l => l.outerHTML).join('');
+function montaDocumentoExecutivo(cont, telaComoImpressao) {
+    let estilos = Array.from(document.querySelectorAll('style')).map(s => s.textContent).join('\n');
+    // PDF direto: o documento é desenhado na tela, então as regras de impressão do Executivo passam a valer na tela também
+    if (telaComoImpressao) estilos = estilos.replace(/@media\s+print/g, '@media all') +
+        '\n#view-executivo .card, #view-executivo .tabela-wrap { overflow: visible !important; }';   // nada cortado na foto
+    const fontes = telaComoImpressao ? '' : Array.from(document.querySelectorAll('link[rel="stylesheet"], link[rel="preconnect"]')).map(l => l.outerHTML).join('');
     return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>' +
         (document.title || 'Relatório Executivo').replace(/</g, '&lt;') + ' — Executivo</title>' + fontes +
-        '<style>' + estilos + '\n#view-executivo{display:block !important}</style></head><body class="modo-executivo">' +
+        '<style>' + estilos + '\n#view-executivo{display:block !important}</style></head>' +
+        // PDF direto: sem a classe modo-executivo — a regra dela esconde todo filho do <body>, inclusive o quadro de
+        // trabalho que o html2canvas coloca ali (a página saía em branco)
+        (telaComoImpressao ? '<body>' : '<body class="modo-executivo">') +
         cont.outerHTML + '</body></html>';
 }
 

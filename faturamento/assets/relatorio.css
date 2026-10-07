@@ -335,6 +335,9 @@ td.num { text-align:right; }
     #view-executivo .exec-cabecalho h1 { font-size:15px; margin:2px 0; color:#fff; }
     #view-executivo .exec-cabecalho p { font-size:9.5px; margin:0; color:#D5E0F2; }
     #view-executivo .exec-marca { font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; color:#9fd8e6; font-weight:700; }
+    #view-executivo .exec-secao { break-before:page; margin:0 0 6px; padding:6px 12px; border-left:5px solid var(--azul-claro, #3d7cc9);
+                                  background:#EEF3F9; border-radius:6px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #view-executivo .exec-secao h2 { margin:0; font-size:14px; color:var(--marinho); letter-spacing:.01em; }
     #view-executivo .exec-item { break-inside:avoid; margin:6px 0 !important; padding:8px 10px !important; box-shadow:none; border:1px solid #c9d3df; max-width:none; }
     #view-executivo .kpis-grid { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); }
     #view-executivo .exec-grafico { width:100%; max-height:300px; object-fit:contain; }

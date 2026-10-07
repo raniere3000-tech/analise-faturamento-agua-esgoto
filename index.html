@@ -328,7 +328,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v45</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v46</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -418,7 +418,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v45-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v46-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -992,9 +992,21 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     if (e.target.id === "chkTodosGrupos") document.querySelectorAll(".chk-grupo-top").forEach((c) => { c.checked = e.target.checked; });
     aplicaGrupos();
   });
-  $("btnPdf").addEventListener("click", () => {
+  // PDF executivo: o arquivo .pdf é gerado direto (jsPDF + html2canvas, da pasta lib/ do site) — sem a janela de impressão
+  // o código das bibliotecas é passado como texto: o relatório o coloca no documento do PDF (é lá que elas desenham)
+  let codigoLibsPdf = null;
+  async function libsPdf() {
+    if (!codigoLibsPdf) {
+      codigoLibsPdf = Promise.all(["lib/jspdf.umd.min.js", "lib/html2canvas.min.js"].map(async (u) => {
+        const r = await fetch(u); if (!r.ok) throw new Error(`não carregou ${u} (HTTP ${r.status})`); return r.text();
+      }));
+    }
+    try { return { codigo: await codigoLibsPdf }; } catch (e) { codigoLibsPdf = null; console.warn(e); return null; }
+  }
+  $("btnPdf").addEventListener("click", async () => {
     const w = janela(); w.focus();
-    if (w.gerarExecutivo) w.gerarExecutivo(); else w.print();      // relatório antigo (sem executivo): imprime a tela
+    if (!w.gerarExecutivo) { w.print(); return; }                 // relatório antigo (sem executivo): imprime a tela
+    w.gerarExecutivo(await libsPdf());                             // sem as bibliotecas, o relatório tenta o CDN e depois a impressão
   });
   quadro().addEventListener("load", () => { if (quadro().srcdoc) montaFiltros(); });
 
