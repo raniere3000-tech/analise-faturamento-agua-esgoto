@@ -561,9 +561,9 @@ const PREV_CLASSES_RI = ['ri_CORTE', 'ri_RELIGAÇÃO', 'ri_LNA', 'ri_SANÇÃO', 
 const PREV_EV_RI = PREV_CLASSES_RI.map(k => 'ev_' + k);          // aba Indiretas: eventos faturados
 PREV_BASICAS.push(...PREV_EV_RI, 'ev_iE');
 const PREV_CHAVE_LS = 'faturamento_previsao_v2';
-let prevEdicoes = {}, prevOculta = false;
-try { const salvo = JSON.parse(localStorage.getItem(PREV_CHAVE_LS) || '{}'); prevEdicoes = salvo.edicoes || {}; prevOculta = !!salvo.oculta; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
-function prevSalvar() { try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta })); } catch (e) { /* ignora */ } }
+let prevEdicoes = {}, prevOculta = false, prevOcultaInd = false;     // "Ocultar forecast": um para a aba Forecast, outro para a Indiretas
+try { const salvo = JSON.parse(localStorage.getItem(PREV_CHAVE_LS) || '{}'); prevEdicoes = salvo.edicoes || {}; prevOculta = !!salvo.oculta; prevOcultaInd = !!salvo.ocultaInd; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
+function prevSalvar() { try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta, ocultaInd: prevOcultaInd })); } catch (e) { /* ignora */ } }
 
 const prevN = (v, d) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
 function prevFmt(v, formato) {
@@ -657,12 +657,18 @@ function previsaoRestaurar(botao) {
     prevSalvar(); prevRecalcularTodas();
 }
 function previsaoAplicarVisibilidade() {
-    // "Ocultar forecast" vale só para a aba Forecast: na aba Indiretas a coluna Forecast fica sempre visível
-    document.querySelectorAll('#view-forecast table.tabela-previsao').forEach(t => t.classList.toggle('prev-sem-forecast', prevOculta));
-    document.querySelectorAll('.btn-prev-toggle').forEach(b => { b.textContent = prevOculta ? 'Mostrar forecast' : 'Ocultar forecast'; });
-    document.querySelectorAll('.btn-prev-restaurar').forEach(b => { b.style.display = prevOculta ? 'none' : ''; });
+    // cada aba tem o seu botão: o da aba Forecast não esconde a coluna nas Indiretas, e vice-versa
+    [['#view-forecast', prevOculta], ['#view-indiretas', prevOcultaInd]].forEach(([vista, oculta]) => {
+        document.querySelectorAll(`${vista} table.tabela-previsao`).forEach(t => t.classList.toggle('prev-sem-forecast', oculta));
+        document.querySelectorAll(`${vista} .btn-prev-toggle`).forEach(b => { b.textContent = oculta ? 'Mostrar forecast' : 'Ocultar forecast'; });
+        document.querySelectorAll(`${vista} .btn-prev-restaurar`).forEach(b => { b.style.display = oculta ? 'none' : ''; });
+    });
 }
-function previsaoAlternar() { prevOculta = !prevOculta; prevSalvar(); previsaoAplicarVisibilidade(); }
+function previsaoAlternar(botao) {
+    if (botao && botao.closest && botao.closest('#view-indiretas')) prevOcultaInd = !prevOcultaInd;
+    else prevOculta = !prevOculta;
+    prevSalvar(); previsaoAplicarVisibilidade();
+}
 prevRecalcularTodas(); previsaoAplicarVisibilidade();
 
 
@@ -674,3 +680,52 @@ function alternarColunas() {
     v.querySelectorAll('th[data-full]').forEach(th => { if (compacto) th.colSpan = parseInt(th.dataset.comp, 10); });
 }
 document.querySelectorAll('#view-tabelas th[data-full]').forEach(th => { th.colSpan = parseInt(th.dataset.comp, 10); });
+
+
+// ===== Relatório executivo (PDF): copia o que está na tela agora — filtros, orçado escolhido e botões de ocultar valem =====
+function gerarExecutivo() {
+    const antigo = document.getElementById('view-executivo'); if (antigo) antigo.remove();
+    const cont = document.createElement('div'); cont.id = 'view-executivo';
+    if (document.getElementById('view-tabelas').classList.contains('compacto')) cont.classList.add('compacto');
+    const clona = (el) => {
+        if (!el) return null;
+        const c = el.cloneNode(true), origs = el.querySelectorAll('canvas'), copias = c.querySelectorAll('canvas');
+        origs.forEach((cv, i) => {                                    // gráfico: vira imagem do que está desenhado
+            try { const img = new Image(); img.src = cv.toDataURL('image/png'); img.className = 'exec-grafico'; copias[i].replaceWith(img); }
+            catch (e) { copias[i].remove(); }
+        });
+        c.querySelectorAll('[contenteditable]').forEach(x => x.removeAttribute('contenteditable'));
+        c.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
+        c.removeAttribute('id');
+        return c;
+    };
+    const q = (sel) => document.querySelector(sel), qa = (sel) => Array.from(document.querySelectorAll(sel));
+    const sup = ESTADO.sup, mes = ESTADO.mes;
+    const nomeSup = (q('#selSup option[value="' + sup + '"]') || {}).textContent || sup;
+    const nomeMes = (q('#selMes option[value="' + mes + '"]') || {}).textContent || mes;
+    const marcados = qa('.chk-grupo:checked').length, grupos = qa('.chk-grupo').length;
+    const refs = (ESTADO.ref || '').replace(/^cmp:/, '').split('|').filter(Boolean).join(' e ') || 'todas';
+    const titulo = (q('.header-exec h1') || {}).textContent || '';
+    const cab = document.createElement('div'); cab.className = 'exec-cabecalho';
+    cab.innerHTML = `<div class="exec-marca">Águas do Rio · Relatório Executivo</div><h1></h1><p></p>`;
+    cab.querySelector('h1').textContent = titulo;
+    cab.querySelector('p').textContent = `Superintendência: ${nomeSup} · Mês: ${nomeMes} · Orçado comparado: ${refs} · Grupos: ` +
+        (marcados === grupos ? `todos (${grupos})` : `${marcados} de ${grupos}`) + ` · Gerado em ${new Date().toLocaleString('pt-BR')}`;
+    cont.appendChild(cab);
+    const itens = [
+        q('#view-resumo .kpis-grid'),
+        (q('#graficoFaturamento') || { closest: () => null }).closest('.card'),
+        q(`#view-forecast .prev-bloco[data-sup="${sup}"] .prev-card`),
+        ...qa('#view-tabelas .orc-ciclo-bloco:not([hidden]) > .card'),
+        (q('#tabela-agua') || { closest: () => null }).closest('.card'),
+        (q('#tabela-esgoto') || { closest: () => null }).closest('.card'),
+        ...qa(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .prev-card`),
+        q('#card-justificativa'),
+    ];
+    itens.forEach(el => { const c = clona(el); if (c) { c.classList.add('exec-item'); cont.appendChild(c); } });
+    document.body.appendChild(cont);
+    document.body.classList.add('modo-executivo');
+    const limpa = () => { document.body.classList.remove('modo-executivo'); cont.remove(); window.removeEventListener('afterprint', limpa); };
+    window.addEventListener('afterprint', limpa);
+    setTimeout(() => window.print(), 150);                            // dá tempo das imagens dos gráficos carregarem
+}

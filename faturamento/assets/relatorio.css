@@ -296,3 +296,39 @@ td.num { text-align:right; }
 .grafico-largo { height:360px; }
 .ind-tabelas table { table-layout:fixed; width:100%; }
 .ind-tabelas th:first-child { width:22%; }
+
+/* ===== Relatório executivo (botão Executivo): só aparece na impressão / PDF ===== */
+#view-executivo { display:none; }
+@media print {
+    body.modo-executivo > *:not(#view-executivo) { display:none !important; }
+    body.modo-executivo #view-executivo { display:block !important; }
+    #view-executivo { font-size:9.5px; color:#1A2740; }
+    #view-executivo .exec-cabecalho { background:var(--marinho); color:#fff; padding:10px 14px; border-radius:8px; margin-bottom:8px;
+        -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #view-executivo .exec-cabecalho h1 { font-size:15px; margin:2px 0; color:#fff; }
+    #view-executivo .exec-cabecalho p { font-size:9.5px; margin:0; color:#D5E0F2; }
+    #view-executivo .exec-marca { font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; color:#9fd8e6; font-weight:700; }
+    #view-executivo .exec-item { break-inside:avoid; margin:6px 0 !important; padding:8px 10px !important; box-shadow:none; border:1px solid #c9d3df; max-width:none; }
+    #view-executivo .kpis-grid { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); }
+    #view-executivo .exec-grafico { width:100%; max-height:300px; object-fit:contain; }
+    #view-executivo .grafico-area { height:auto !important; }
+    #view-executivo table { width:100%; border-collapse:collapse; font-size:8.5px; }
+    #view-executivo th, #view-executivo td { padding:2px 4px; border-bottom:1px solid #e3e8ef; }
+    #view-executivo th { background:var(--marinho) !important; color:#fff !important; font-weight:600; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #view-executivo .header-sub th { background:var(--azul) !important; }
+    #view-executivo th.prev-col-prev { background:#8a6a12 !important; }
+    #view-executivo tr.linha-media td, #view-executivo tr.linha-total td { background:var(--marinho) !important; color:#fff !important; font-weight:700;
+        -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #view-executivo .tabela-previsao td.neg, #view-executivo .tabela-dre td.neg { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #view-executivo.compacto .x-det { display:none; }
+    #view-executivo .prev-acoes, #view-executivo .btn-just, #view-executivo button, #view-executivo .barra-orcado-ciclo { display:none !important; }
+    #view-executivo .tabela-wrap { overflow:visible; }
+    #view-executivo h2 { font-size:11.5px; margin:0 0 4px; }
+    #view-executivo .nota-secao { font-size:8.5px; }
+    #view-executivo .prev-nota, #view-executivo .exec-item > .nota-secao { display:none; }          /* instruções de tela não vão para o PDF */
+    #view-executivo .prev-edit { border:0 !important; outline:0 !important; background:transparent !important; }
+    #view-executivo .kpi-card { padding:5px 7px; }
+    #view-executivo .kpi-card h3 { font-size:8px; }
+    #view-executivo .kpi-valor { font-size:12px; }
+    #view-executivo .kpi-delta { font-size:7.5px; white-space:normal; }
+}

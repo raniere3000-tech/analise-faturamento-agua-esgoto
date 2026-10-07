@@ -284,7 +284,7 @@ def previsao_html(ctx, sup):
             + "Como cada linha é calculada (com os números do mês): aba <b>Dados</b> › <b>5. Forecast</b>.")
     return (f'<div class="card prev-card"><h2 class="prev-titulo">Forecast de fechamento — {nome} — {nome_mes(ctx.ref_atual)}'
             '<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" onclick="previsaoRestaurar(this)">↺ Restaurar automático</button>'
-            '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar()">Ocultar forecast</button></span></h2>'
+            '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar(this)">Ocultar forecast</button></span></h2>'
             f'<p class="nota-secao prev-nota">{nota}</p>'
             + tabela_previsao_html(ctx, sup, ctx.ref_atual, linhas_def, atual, dados["falta"]) + "</div>")
 
