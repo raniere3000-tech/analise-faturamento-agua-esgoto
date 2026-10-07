@@ -207,6 +207,8 @@ function filtrarPorGrupo() {
     recalcularMatrizGrupos();
     recalcularTabelaMinimo();
     recalcularKPIsResumo();
+    refazTops();                                            // Top 100 refeito só com os grupos marcados
+    sitlRecalcular();                                       // cards da Situação de lançamento
 }
 
 function recalcularTotais() {
@@ -612,14 +614,180 @@ function filtraCsv(texto, filtros) {
     };
     if (!registros.length) return null;
     const cab = campos(registros[0]);
-    const conds = Object.keys(filtros).map(nome => [cab.indexOf(nome), String(filtros[nome])]);
+    const conds = Object.keys(filtros).map(nome => [cab.indexOf(nome), filtros[nome] instanceof Set ? filtros[nome] : String(filtros[nome])]);
     if (conds.some(([col]) => col < 0)) return null;
     const linhas = registros.slice(1).filter(r => {
         if (!r) return false;
         const f = campos(r);
-        return conds.every(([col, v]) => (f[col] || '').trim() === v);
+        return conds.every(([col, v]) => v instanceof Set ? v.has(normGrupo(f[col] || '')) : (f[col] || '').trim() === v);
     });
     return bom + [registros[0]].concat(linhas).join('\n') + '\n';
+}
+
+// ===== Filtro de grupos nas tabelas e downloads de Top 100, Situação de lançamento e Sem faturamento =====
+function normGrupo(v) {                                     // '514', '514.0', ' 05 ' → '514', '5' (como chave_grupo no Python)
+    const t = String(v == null ? '' : v).trim();
+    return /^\d+(\.0+)?$/.test(t) ? String(parseInt(t, 10)) : t;
+}
+
+// Set dos grupos marcados, ou null quando nenhum grupo visível (da SUP escolhida) está desmarcado
+function gruposFiltro() {
+    const caixas = Array.from(document.querySelectorAll('.chk-grupo'));
+    if (!caixas.length) return null;
+    const visiveis = caixas.filter(c => { const l = c.closest('label'); return !l || l.style.display !== 'none'; });
+    if (!visiveis.some(c => !c.checked)) return null;
+    return new Set(caixas.filter(c => c.checked).map(c => normGrupo(c.value)));
+}
+
+function lerJson(id) {
+    if (!lerJson.cache) lerJson.cache = {};
+    if (!(id in lerJson.cache)) {
+        const el = document.getElementById(id);
+        try { lerJson.cache[id] = el ? JSON.parse(el.textContent) : null; } catch (e) { lerJson.cache[id] = null; }
+    }
+    return lerJson.cache[id];
+}
+
+const fmtBR = (v, dec) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: dec || 0, maximumFractionDigits: dec || 0 });
+
+function csvDe(colunas, linhas) {                           // CSV ";" com vírgula decimal (abre direto no Excel)
+    const cel = v => {
+        if (v === null || v === undefined) return '';
+        if (typeof v === 'number') return String(v).replace('.', ',');
+        const t = String(v);
+        return /[;"\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+    };
+    return '\uFEFF' + [colunas.map(cel).join(';')].concat(linhas.map(l => l.map(cel).join(';'))).join('\n') + '\n';
+}
+
+function baixarTexto(texto, nome) {
+    const url = URL.createObjectURL(new Blob([texto], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// Top 100: as linhas de uma lista para a SUP e os grupos marcados (a ordem já é a do ranking geral)
+function topLinhas(chave, sup) {
+    const d = lerJson('top100-dados');
+    if (!d || !d[chave]) return null;
+    const cols = d[chave].columns, iSup = cols.indexOf('Superintendência'), iG = cols.indexOf('Grupo'), grupos = gruposFiltro();
+    const linhas = d[chave].data.filter(l => (sup === 'TODAS' || iSup < 0 || l[iSup] === sup) && (!grupos || grupos.has(normGrupo(l[iG]))))
+        .slice(0, 100).map(l => l.slice());              // cópia: o Ranking é renumerado sem mexer nos dados embutidos
+    const iR = cols.indexOf('Ranking');
+    linhas.forEach((l, i) => { if (iR >= 0) l[iR] = i + 1; });
+    return { colunas: cols.filter((c, i) => i !== iSup), linhas: linhas.map(l => l.filter((v, i) => i !== iSup)) };
+}
+
+function refazTops() {
+    const d = lerJson('top100-dados');
+    if (!d) return;
+    const grupos = gruposFiltro();
+    document.querySelectorAll('table[data-top]').forEach(tabela => {
+        if (!grupos && !tabela.dataset.refeita) return;     // sem filtro de grupo: fica a tabela original
+        const bloco = tabela.closest('[data-sup]'), sup = bloco ? bloco.dataset.sup : 'TODAS';
+        const r = topLinhas(tabela.dataset.top, sup);
+        if (!r) return;
+        tabela.dataset.refeita = grupos ? '1' : '';
+        const aumento = tabela.dataset.top.startsWith('aumento'), pre = aumento ? 'Aumento' : 'Queda', cor = aumento ? '#176b9c' : '#C2560C';
+        const corpo = tabela.querySelector('tbody');
+        corpo.innerHTML = '';
+        r.linhas.forEach(l => {
+            const tr = document.createElement('tr');
+            r.colunas.forEach((c, i) => {
+                const td = document.createElement('td'), v = l[i];
+                let texto;
+                if (c.startsWith('Valor R$') || c === pre + '_Valor_R$') texto = 'R$ ' + fmtBR(v, 2);
+                else if (c === pre + '_%') texto = v === null ? '—' : fmtBR(v, 1) + '%';
+                else if (c.startsWith('Consumo ') || c === pre + '_Consumo') texto = fmtBR(v, 2);
+                else texto = v === null ? '' : String(v);
+                td.textContent = texto;
+                td.style.textAlign = (['Nome_Cliente', 'Grupo', 'Categoria'].includes(c) || c.startsWith('Situação Lançamento')) ? 'left' : 'center';
+                if (c === pre + '_%' && typeof v === 'number' && v >= d.destaque) { td.style.color = cor; td.style.fontWeight = '700'; }
+                tr.appendChild(td);
+            });
+            corpo.appendChild(tr);
+        });
+        // "Mostrar todos": refaz o botão com as linhas novas
+        const ancora = tabela.closest('.tabela-wrap') || tabela, prox = ancora.nextElementSibling;
+        if (prox && prox.classList.contains('btn-ver-todos')) prox.remove();
+        delete tabela.dataset.recolhido;
+    });
+    recolherTabelasLongas();
+}
+
+// Situação de lançamento: refaz os números dos cards com os grupos marcados
+function sitlSomas(sup) {
+    const d = lerJson('sitl-agregados');
+    if (!d) return null;
+    const grupos = gruposFiltro(), soma = {};
+    [['at', 0], ['ant', 1]].forEach(([k, m]) => d[k].forEach(([s, g, sit, n, eco, vol, val]) => {
+        if ((sup !== 'TODAS' && s !== sup) || (grupos && !grupos.has(normGrupo(g)))) return;
+        const x = soma[sit] || (soma[sit] = [[0, 0, 0, 0], [0, 0, 0, 0]]);
+        x[m][0] += n; x[m][1] += eco; x[m][2] += vol; x[m][3] += val;
+    }));
+    const tot = [0, 1].map(m => Object.values(soma).reduce((a, x) => a + x[m][0], 0));
+    return { soma, tot, porque: d.porque || {} };
+}
+
+function sitlRecalcular() {
+    if (!lerJson('sitl-agregados')) return;
+    document.querySelectorAll('.sup-top-bloco').forEach(bloco => {
+        const cards = bloco.querySelectorAll('.sitl-card');
+        if (!cards.length) return;
+        const r = sitlSomas(bloco.dataset.sup);
+        cards.forEach(card => {
+            const x = r.soma[card.dataset.sit] || [[0, 0, 0, 0], [0, 0, 0, 0]], [at, ant] = x;
+            card.style.display = (at[0] || ant[0]) ? '' : 'none';
+            const pct = r.tot[0] ? at[0] / r.tot[0] * 100 : 0, pctAnt = r.tot[1] ? ant[0] / r.tot[1] * 100 : 0;
+            const pos = (f, txt) => { const el = card.querySelector('[data-f="' + f + '"]'); if (el) el.textContent = txt; };
+            const varia = (f, v, dec, suf) => {
+                const el = card.querySelector('[data-f="' + f + '"]'); if (!el) return;
+                el.textContent = (v > 0 ? '+' : '') + fmtBR(v, dec) + (suf || '');
+                el.style.color = v < 0 ? '#C2560C' : v > 0 ? '#176b9c' : '#49668C';
+            };
+            pos('lig', fmtBR(at[0])); pos('pct', fmtBR(pct, 1)); varia('pp', pct - pctAnt, 1, ' p.p.');
+            varia('dlig', at[0] - ant[0], 0); pos('vol', fmtBR(at[2]));
+            pos('vme', fmtBR(at[1] ? at[2] / at[1] : 0, 2)); pos('vmeant', fmtBR(ant[1] ? ant[2] / ant[1] : 0, 2));
+            pos('val', 'R$ ' + fmtBR(at[3], 2)); varia('dval', at[3] - ant[3], 2);
+            const seta = card.querySelector('.btn-sitl-dl'); if (seta) seta.style.display = at[0] ? '' : 'none';
+        });
+    });
+}
+
+// Botões Excel com alternativa: com grupos desmarcados, baixa o CSV refeito só com os grupos marcados
+async function baixarCsvFiltrado(alt) {
+    const tipo = alt.dataset.csvFiltrado, sufixo = '_grupos_filtrados.csv';
+    if (tipo === 'top') {
+        let colunas = null; const linhas = [];
+        alt.dataset.tops.split(',').forEach(k => {
+            const r = topLinhas(k, alt.dataset.sup || 'TODAS'); if (!r) return;
+            colunas = ['Lista'].concat(r.colunas);
+            r.linhas.forEach(l => linhas.push([k.endsWith('agua') ? 'Água' : 'Esgoto'].concat(l)));
+        });
+        if (colunas) baixarTexto(csvDe(colunas, linhas), alt.dataset.nome + sufixo);
+    } else if (tipo === 'sitl') {
+        const r = sitlSomas(alt.dataset.sup || 'TODAS'); if (!r) return;
+        const colunas = ['Situação', 'Leitura da situação', 'Ligações atual', 'Economias atual', 'Volume atual', 'Valor atual',
+            'Ligações anterior', 'Economias anterior', 'Volume anterior', 'Valor anterior', '% ligações atual', '% ligações anterior',
+            'Vol./economia atual', 'Vol./economia anterior', 'Δ ligações', 'Δ p.p. participação', 'Δ valor', 'Por que analisar'];
+        const linhas = Object.entries(r.soma).filter(([, x]) => x[0][0] || x[1][0])
+            .sort((a, b) => b[1][0][0] - a[1][0][0] || b[1][1][0] - a[1][1][0]).map(([sit, [at, ant]]) => {
+                const p = r.tot[0] ? at[0] / r.tot[0] * 100 : 0, pa = r.tot[1] ? ant[0] / r.tot[1] * 100 : 0, q = r.porque[sit] || ['', ''];
+                const red = v => Math.round(v * 100) / 100;
+                return [sit, q[0], at[0], red(at[1]), red(at[2]), red(at[3]), ant[0], red(ant[1]), red(ant[2]), red(ant[3]), red(p), red(pa),
+                    red(at[1] ? at[2] / at[1] : 0), red(ant[1] ? ant[2] / ant[1] : 0), at[0] - ant[0], red(p - pa), red(at[3] - ant[3]), q[1]];
+            });
+        baixarTexto(csvDe(colunas, linhas), alt.dataset.nome + sufixo);
+    } else if (tipo === 'semfat') {
+        const el = document.getElementById('semfat-dados'); if (!el) return;
+        const bin = atob(el.textContent.trim()), bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const texto = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+        const filtros = {}; filtros[el.dataset.colGrupo] = gruposFiltro();
+        const csv = filtraCsv(texto, filtros);
+        if (csv !== null) baixarTexto(csv, alt.dataset.nome + sufixo);
+    }
 }
 
 // Situação de lançamento: a seta de cada card baixa as ligações daquela situação (e da SUP do quadro).
@@ -636,6 +804,8 @@ document.addEventListener('click', async function (e) {
         const texto = await new Response(fluxo).text();
         const filtros = {}; filtros[el.dataset.colSit] = b.dataset.sit;
         if (b.dataset.sup && b.dataset.sup !== 'TODAS') filtros['Superintendência'] = b.dataset.sup;
+        const grupos = gruposFiltro();
+        if (grupos) filtros['Grupo'] = grupos;
         const csv = filtraCsv(texto, filtros);
         if (csv === null) return;
         const nome = el.dataset.arquivo + '_' + (b.dataset.sit + (b.dataset.sup && b.dataset.sup !== 'TODAS' ? '_' + b.dataset.sup : ''))
@@ -659,12 +829,18 @@ document.addEventListener('click', function (e) {
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     let conteudo = bytes, nome = el.dataset.arquivo;
     const sup = (typeof ESTADO !== 'undefined' && ESTADO.sup) || 'TODAS';
-    if (sup !== 'TODAS') {                                  // filtro Superintendência: só as linhas da SUP escolhida
-        const filtrado = filtraCsvPorSup(new TextDecoder('utf-8').decode(bytes), sup);
-        if (filtrado !== null) {
-            conteudo = filtrado;
-            nome = nome.replace(/\.csv$/i, '_' + sup.replace(/[^A-Za-z0-9]/g, '') + '.csv');
+    const grupos = gruposFiltro();
+    if (sup !== 'TODAS' || grupos) {                        // filtros Superintendência e Grupo: só as linhas escolhidas
+        let texto = new TextDecoder('utf-8').decode(bytes);
+        if (sup !== 'TODAS') {
+            const f = filtraCsvPorSup(texto, sup);
+            if (f !== null) { texto = f; nome = nome.replace(/\.csv$/i, '_' + sup.replace(/[^A-Za-z0-9]/g, '') + '.csv'); }
         }
+        if (grupos) {                                       // base sem coluna Grupo (orçado) vem sem esse filtro
+            const f = filtraCsv(texto, { 'Grupo': grupos });
+            if (f !== null) { texto = f; nome = nome.replace(/\.csv$/i, '_grupos_filtrados.csv'); }
+        }
+        conteudo = texto;
     }
     const url = URL.createObjectURL(new Blob([conteudo], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
@@ -676,6 +852,8 @@ document.addEventListener('click', function (e) {
 document.addEventListener('click', function (e) {
     const b = e.target.closest && e.target.closest('.btn-baixar');
     if (!b) return;
+    const alt = b.closest('[data-csv-filtrado]');
+    if (alt && gruposFiltro()) { baixarCsvFiltrado(alt); return; }
     const bin = atob(b.dataset.b64), bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));

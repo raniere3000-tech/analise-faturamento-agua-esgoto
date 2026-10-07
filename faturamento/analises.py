@@ -9,8 +9,10 @@ from .config import CONSUMO_MINIMO_POR_CATEGORIA, MINIMO_POR_TIPO_ECONOMIA
 from .formatacao import normaliza_texto
 
 
-def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False):
-    """Top 100 ligações com maior queda de consumo (ou maior aumento, com `aumento=True`) entre os dois meses."""
+def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False, por_grupo=False):
+    """Top 100 ligações com maior queda de consumo (ou maior aumento, com `aumento=True`) entre os dois meses.
+    por_grupo=True: as 100 maiores de CADA grupo, na ordem geral (+ coluna Superintendência) — o Top 100 de qualquer
+    conjunto de grupos sai dessa lista, e é isso que o filtro de grupos usa no navegador."""
     def prepara(df):
         df = df.copy()
         df["N. Ligação"] = df["N. Ligação"].astype(str).str.strip()
@@ -19,6 +21,7 @@ def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False):
         df["Categoria"] = df.get("Categoria", pd.Series(dtype=str)).astype(str).str.strip()
         df["Consumo_Num"] = pd.to_numeric(df.get("Consumo Faturado", 0), errors="coerce").fillna(0)
         df["Valor_Num"] = pd.to_numeric(df.get("Valor (R$)", 0), errors="coerce").fillna(0)
+        df["Sup"] = df["__sup"].astype(str) if "__sup" in df.columns else ""
         df["Sit_Lanc"] = (df["Situacao Lancamento"].astype(object).where(df["Situacao Lancamento"].notna(), "").astype(str).str.strip()
                           if com_sit else "")
         return df
@@ -34,6 +37,7 @@ def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False):
             "Grupo": ("Grupo", "first"),
             "Categoria": ("Categoria", "first"),
             "Sit_Atual": ("Sit_Lanc", "first"),
+            "Superintendência": ("Sup", "first"),
             "Consumo_Atual": ("Consumo_Num", "sum"),
             "Valor_Atual": ("Valor_Num", "sum"),
         }
@@ -56,7 +60,8 @@ def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False):
                               np.nan if aumento else 0)
     comp[f"{p}_Valor_R$"] = sinal * (comp["Valor_Anterior"] - comp["Valor_Atual"])
     comp = comp[comp[f"{p}_Consumo"] > 0]
-    comp = comp.sort_values(f"{p}_Consumo", ascending=False).head(100)
+    comp = comp.sort_values(f"{p}_Consumo", ascending=False, kind="stable")
+    comp = comp.groupby("Grupo", sort=False).head(100) if por_grupo else comp.head(100)
     comp["Ranking"] = range(1, len(comp) + 1)
 
     col_nome_at = f"Consumo {ref_at}"
@@ -77,7 +82,7 @@ def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False):
     return comp[["Ranking", "N. Ligação", "Nome_Cliente", "Grupo", "Categoria"]
         + ([col_sit_at, col_sit_ant] if com_sit else []) + [
         col_nome_at, col_nome_ant, f"{p}_Consumo", f"{p}_%",
-        col_valor_at, col_valor_ant, f"{p}_Valor_R$"]]
+        col_valor_at, col_valor_ant, f"{p}_Valor_R$"] + (["Superintendência"] if por_grupo else [])]
 
 
 def gera_top100_aumentos(df_at, df_ant, ref_at, ref_ant):
