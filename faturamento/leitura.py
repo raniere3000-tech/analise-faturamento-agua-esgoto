@@ -375,7 +375,7 @@ def processa_cronograma(caminho):
             frames.append(df)
     if not frames:
         print(f"   ⚠️ {nome}: nenhuma aba com as colunas Grupo, Data da Leitura e Qts. Dias.")
-        return pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma"])
+        return pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma", "Localidade"])
     df_final = pd.concat(frames, ignore_index=True)
     df_final["Grupo"] = df_final["Grupo"].astype(str).str.strip()
     df_final = df_final[df_final["Grupo"] != ""]
@@ -384,9 +384,12 @@ def processa_cronograma(caminho):
     df_final = df_final[df_final["Grupo"].str.fullmatch(r"\d+") | df_final["Qts. Dias"].notna()]   # tira linhas de título/total
     # mês da leitura: permite cruzar o cronograma com a fatura por grupo E mês (dias de leitura de cada mês)
     df_final["Referencia Cronograma"] = padroniza_referencia(df_final["Data da Leitura"])
+    # cidade do grupo (coluna Localidade): define a superintendência de cada grupo (Lagos, Leste...)
+    col_loc = next((c for c in df_final.columns if chave_texto(c) in ("LOCALIDADE", "NOMEDALOCALIDADE", "CIDADE", "MUNICIPIO")), None)
+    df_final["Localidade"] = df_final[col_loc].astype(str).str.strip() if col_loc else np.nan
     print(f"   ✅ Cronograma {nome}: {df_final['Grupo'].nunique()} grupos, meses: "
           f"{', '.join(sorted(df_final['Referencia Cronograma'].dropna().unique(), key=lambda r: (r[3:], r[:2]))) or 'sem data'}")
-    return df_final[["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma"]].drop_duplicates(
+    return df_final[["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma", "Localidade"]].drop_duplicates(
         subset=["Grupo", "Referencia Cronograma", "Aba/Mês Cronograma"])
 
 

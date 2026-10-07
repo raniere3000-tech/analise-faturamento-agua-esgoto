@@ -17,6 +17,21 @@ def _coluna_situacao_conta(ctx):
     return None
 
 
+def _sup_da_linha(ctx):
+    """Superintendência de uma linha: pela cidade da ligação; senão pela cidade do grupo no cronograma (Localidade)."""
+    from .config import SUP_POR_CIDADE, chave_texto
+    from .leitura import chave_grupo
+    grupo_cidade = {chave_grupo(g): c for g, c in (getattr(ctx, "grupo_localidade", None) or {}).items()}
+
+    def sup(r):
+        cidade = r.get("Nome da Localidade")
+        if cidade is not None and not pd.isna(cidade) and SUP_POR_CIDADE.get(chave_texto(cidade)):
+            return SUP_POR_CIDADE[chave_texto(cidade)]
+        cidade = grupo_cidade.get(chave_grupo(r.get("Grupo", "")))
+        return SUP_POR_CIDADE.get(chave_texto(cidade), "SEM SUP") if cidade else "SEM SUP"
+    return sup
+
+
 def calcula_top20_maior_consumo(ctx, n=20):
     """Todas as ligações com Situacao Conta = EM ANALISE no mês atual (rubrica VALOR DE AGUA),
     ordenadas por Consumo Faturado. Sem a coluna Situacao Conta, devolve só o Top n.
@@ -33,6 +48,7 @@ def calcula_top20_maior_consumo(ctx, n=20):
     agua = agua.sort_values("Consumo Faturado", ascending=False).drop_duplicates("N. Ligação")
     if not col_sit:            # sem a coluna Situacao Conta, limita ao Top n para não listar a base toda
         agua = agua.head(n)
+    sup_da = _sup_da_linha(ctx)
     linhas = []
     for _, r in agua.iterrows():
         linhas.append({
@@ -41,6 +57,7 @@ def calcula_top20_maior_consumo(ctx, n=20):
             "cliente": "" if pd.isna(r.get("Nome Cliente")) else str(r.get("Nome Cliente")),
             "categoria": "" if pd.isna(r.get("Categoria")) else str(r.get("Categoria")),
             "situacao": str(r[col_sit]) if col_sit else "",
+            "sup": sup_da(r),
             "consumo": float(r["Consumo Faturado"]),
             "valor": round(float(valor_total.get(r["N. Ligação"], 0)), 2),
         })
