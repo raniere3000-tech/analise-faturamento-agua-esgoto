@@ -74,3 +74,16 @@ CLASSE_INDIRETA_POR_RUBRICA = {chave_texto(r): cl for r, cl in REGRAS["rubricas_
 LINHAS_INDIRETAS_DRE = REGRAS["linhas_indiretas_dre"]
 CHAVES_CANCELAMENTO = [chave_texto(r) for r in REGRAS["rubricas_cancelamento"]]
 SUP_POR_CIDADE = {chave_texto(cidade): sup for sup, cidades in REGRAS["superintendencias"].items() for cidade in cidades}
+ALIAS_SUP = {"INTERIOR": "LAGOS"}      # no orçado, "Interior" é a superintendência LAGOS
+
+
+def sup_da_localidade(texto):
+    """SUP de uma Localidade: nome da cidade (relação em regras.json) ou o próprio nome da superintendência
+    ("Lagos", "Leste", "Interior" — o cronograma traz assim). None se não reconhecer."""
+    if texto is None or (isinstance(texto, float) and texto != texto):
+        return None
+    k = chave_texto(texto)
+    if k in SUP_POR_CIDADE:
+        return SUP_POR_CIDADE[k]
+    k = ALIAS_SUP.get(k, k)
+    return k if k in REGRAS["superintendencias"] else None

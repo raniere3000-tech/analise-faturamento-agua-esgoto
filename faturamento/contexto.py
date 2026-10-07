@@ -22,7 +22,8 @@ class Contexto:
     # Meses comparados (preenchidos em `define_referencias`)
     ref_atual: str = ""
     ref_anterior: str = ""
-    ultimo_grupo: str = ""      # último grupo com faturamento na última referência
+    ultimo_grupo: str = ""      # último grupo com faturamento na última referência (um por SUP: "503 (LAGOS), 404 (LESTE)")
+    ultimo_por_sup: dict = field(default_factory=dict)     # {SUP ou None: último grupo faturado}
     mes_atual: str = ""
     mes_anterior: str = ""
     mes_atual_curto: str = ""

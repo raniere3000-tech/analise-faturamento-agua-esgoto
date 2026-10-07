@@ -19,7 +19,7 @@ def _coluna_situacao_conta(ctx):
 
 def _sup_da_linha(ctx):
     """Superintendência de uma linha: pela cidade da ligação; senão pela cidade do grupo no cronograma (Localidade)."""
-    from .config import SUP_POR_CIDADE, chave_texto
+    from .config import SUP_POR_CIDADE, chave_texto, sup_da_localidade
     from .leitura import chave_grupo
     grupo_cidade = {chave_grupo(g): c for g, c in (getattr(ctx, "grupo_localidade", None) or {}).items()}
 
@@ -28,7 +28,7 @@ def _sup_da_linha(ctx):
         if cidade is not None and not pd.isna(cidade) and SUP_POR_CIDADE.get(chave_texto(cidade)):
             return SUP_POR_CIDADE[chave_texto(cidade)]
         cidade = grupo_cidade.get(chave_grupo(r.get("Grupo", "")))
-        return SUP_POR_CIDADE.get(chave_texto(cidade), "SEM SUP") if cidade else "SEM SUP"
+        return (sup_da_localidade(cidade) or "SEM SUP") if cidade else "SEM SUP"
     return sup
 
 

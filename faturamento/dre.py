@@ -13,7 +13,7 @@ import json
 
 import pandas as pd
 
-from .config import LINHAS_INDIRETAS_DRE, SUP_POR_CIDADE, chave_texto
+from .config import ALIAS_SUP, LINHAS_INDIRETAS_DRE, SUP_POR_CIDADE, chave_texto, sup_da_localidade
 from .formatacao import fmt_num, nome_mes
 
 TODAS = "TODAS"
@@ -159,7 +159,7 @@ def sup_por_grupo(ctx):
     from .leitura import chave_grupo
     mapa = {}
     for g, cidade in (getattr(ctx, "grupo_localidade", None) or {}).items():
-        sup = SUP_POR_CIDADE.get(chave_texto(cidade))
+        sup = sup_da_localidade(cidade)               # cidade ou o próprio nome da SUP ("Lagos", "Leste")
         if sup:
             mapa[chave_grupo(g)] = sup
     base = getattr(ctx, "base_completa", None)
@@ -283,7 +283,6 @@ def completa(r):
     return r
 
 
-ALIAS_SUP = {"INTERIOR": "LAGOS"}      # no orçado, "Interior" é a superintendência LAGOS
 
 
 def fontes_rf(ctx):

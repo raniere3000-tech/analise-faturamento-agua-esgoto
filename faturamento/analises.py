@@ -103,8 +103,10 @@ def monta_dados_resumo_grupo(ctx):
         resumo["Acima_Atual"] = 0
         resumo["Acima_Ant"] = 0
 
-    resumo["Dias_Leitura_Atual"] = resumo[["Dias_Leitura_atual_agua", "Dias_Leitura_atual_esgoto"]].mean(axis=1)
-    resumo["Dias_Leitura_Anterior"] = resumo[["Dias_Leitura_anterior_agua", "Dias_Leitura_anterior_esgoto"]].mean(axis=1)
+    # dias 0 = grupo sem leitura no mês (ou sem esgoto): não entra na média, senão puxa os dias para baixo
+    for sufixo in ("atual", "anterior"):
+        cols = [f"Dias_Leitura_{sufixo}_agua", f"Dias_Leitura_{sufixo}_esgoto"]
+        resumo[f"Dias_Leitura_{sufixo.capitalize()}"] = resumo[cols].where(resumo[cols] > 0).mean(axis=1).fillna(0)
 
     colunas_finais = [
         "Grupo", "FatAgua_Atual", "FatAgua_Anterior", "FatEsgoto_Atual", "FatEsgoto_Anterior",
