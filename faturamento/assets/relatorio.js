@@ -731,7 +731,13 @@ function sitlSomas(sup) {
         x[m][0] += n; x[m][1] += eco; x[m][2] += vol; x[m][3] += val;
     }));
     const tot = [0, 1].map(m => Object.values(soma).reduce((a, x) => a + x[m][0], 0));
-    return { soma, tot, porque: d.porque || {} };
+    // visão sintética: soma dos códigos de cada leitura da situação (grupo)
+    const somaGrupo = {};
+    Object.entries(soma).forEach(([sit, x]) => {
+        const g = (d.grupo || {})[sit] || 'Outros', y = somaGrupo[g] || (somaGrupo[g] = [[0, 0, 0, 0], [0, 0, 0, 0]]);
+        for (let m = 0; m < 2; m++) for (let k = 0; k < 4; k++) y[m][k] += x[m][k];
+    });
+    return { soma, somaGrupo, tot };
 }
 
 function sitlRecalcular() {
@@ -741,7 +747,8 @@ function sitlRecalcular() {
         if (!cards.length) return;
         const r = sitlSomas(bloco.dataset.sup);
         cards.forEach(card => {
-            const x = r.soma[card.dataset.sit] || [[0, 0, 0, 0], [0, 0, 0, 0]], [at, ant] = x;
+            const fonte = card.dataset.gsit !== undefined ? r.somaGrupo[card.dataset.gsit] : r.soma[card.dataset.sit];
+            const [at, ant] = fonte || [[0, 0, 0, 0], [0, 0, 0, 0]];
             card.style.display = (at[0] || ant[0]) ? '' : 'none';
             const pct = r.tot[0] ? at[0] / r.tot[0] * 100 : 0, pctAnt = r.tot[1] ? ant[0] / r.tot[1] * 100 : 0;
             const pos = (f, txt) => { const el = card.querySelector('[data-f="' + f + '"]'); if (el) el.textContent = txt; };
@@ -770,19 +777,6 @@ async function baixarCsvFiltrado(alt) {
             r.linhas.forEach(l => linhas.push([k.endsWith('agua') ? 'Água' : 'Esgoto'].concat(l)));
         });
         if (colunas) baixarTexto(csvDe(colunas, linhas), alt.dataset.nome + sufixo);
-    } else if (tipo === 'sitl') {
-        const r = sitlSomas(alt.dataset.sup || 'TODAS'); if (!r) return;
-        const colunas = ['Situação', 'Leitura da situação', 'Ligações atual', 'Economias atual', 'Volume atual', 'Valor atual',
-            'Ligações anterior', 'Economias anterior', 'Volume anterior', 'Valor anterior', '% ligações atual', '% ligações anterior',
-            'Vol./economia atual', 'Vol./economia anterior', 'Δ ligações', 'Δ p.p. participação', 'Δ valor', 'Por que analisar'];
-        const linhas = Object.entries(r.soma).filter(([, x]) => x[0][0] || x[1][0])
-            .sort((a, b) => b[1][0][0] - a[1][0][0] || b[1][1][0] - a[1][1][0]).map(([sit, [at, ant]]) => {
-                const p = r.tot[0] ? at[0] / r.tot[0] * 100 : 0, pa = r.tot[1] ? ant[0] / r.tot[1] * 100 : 0, q = r.porque[sit] || ['', ''];
-                const red = v => Math.round(v * 100) / 100;
-                return [sit, q[0], at[0], red(at[1]), red(at[2]), red(at[3]), ant[0], red(ant[1]), red(ant[2]), red(ant[3]), red(p), red(pa),
-                    red(at[1] ? at[2] / at[1] : 0), red(ant[1] ? ant[2] / ant[1] : 0), at[0] - ant[0], red(p - pa), red(at[3] - ant[3]), q[1]];
-            });
-        baixarTexto(csvDe(colunas, linhas), alt.dataset.nome + sufixo);
     } else if (tipo === 'semfat') {
         const el = document.getElementById('semfat-dados'); if (!el) return;
         const bin = atob(el.textContent.trim()), bytes = new Uint8Array(bin.length);
@@ -794,7 +788,25 @@ async function baixarCsvFiltrado(alt) {
     }
 }
 
-// Situação de lançamento: a seta de cada card baixa as ligações daquela situação (e da SUP do quadro).
+// Situação de lançamento: botão Analítica / Sintética (vale para os quadros de todas as SUPs; lembra a última escolha)
+function sitlVisao(visao) {
+    document.querySelectorAll('.sitl-grid[data-visao]').forEach(g => { g.hidden = g.dataset.visao !== visao; });
+    document.querySelectorAll('.sitl-visao button').forEach(b => {
+        const ativo = b.dataset.visao === visao; b.classList.toggle('ativo', ativo); b.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+    });
+    try { localStorage.setItem('faturamento_sitl_visao', visao); } catch (e) { /* sem armazenamento */ }
+}
+document.addEventListener('click', function (e) {
+    const b = e.target.closest && e.target.closest('.sitl-visao button');
+    if (b) sitlVisao(b.dataset.visao);
+});
+document.addEventListener('DOMContentLoaded', function () {
+    let v = null; try { v = localStorage.getItem('faturamento_sitl_visao'); } catch (e) { /* sem armazenamento */ }
+    if (v === 'sintetica') sitlVisao(v);
+});
+
+// Setas da Situação de lançamento: a do título baixa todas as matrículas; a de cada card, as daquela situação (analítica)
+// ou de todos os códigos do grupo (sintética) — sempre da SUP do quadro e dos grupos marcados.
 // A lista vem embutida uma vez, em gzip (script#sitl-detalhe); o navegador descompacta na hora.
 document.addEventListener('click', async function (e) {
     const b = e.target.closest && e.target.closest('.btn-sitl-dl');
@@ -806,14 +818,18 @@ document.addEventListener('click', async function (e) {
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
         const fluxo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
         const texto = await new Response(fluxo).text();
-        const filtros = {}; filtros[el.dataset.colSit] = b.dataset.sit;
+        const filtros = {};
+        if (b.dataset.sit !== undefined) filtros[el.dataset.colSit] = b.dataset.sit;
+        else if (b.dataset.gsit !== undefined) filtros[el.dataset.colGsit] = b.dataset.gsit;
         if (b.dataset.sup && b.dataset.sup !== 'TODAS') filtros['Superintendência'] = b.dataset.sup;
         const grupos = gruposFiltro();
         if (grupos) filtros['Grupo'] = grupos;
         const csv = filtraCsv(texto, filtros);
         if (csv === null) return;
-        const nome = el.dataset.arquivo + '_' + (b.dataset.sit + (b.dataset.sup && b.dataset.sup !== 'TODAS' ? '_' + b.dataset.sup : ''))
-            .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') + '.csv';
+        const partes = [b.dataset.sit || b.dataset.gsit || 'todas', b.dataset.sup && b.dataset.sup !== 'TODAS' ? b.dataset.sup : '']
+            .filter(Boolean).join('_');
+        const nome = el.dataset.arquivo + '_' + partes.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') + (grupos ? '_grupos_filtrados' : '') + '.csv';
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
         const a = document.createElement('a');
         a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();

@@ -183,5 +183,24 @@
       "TANGUA"
     ]
   },
-  "feriados_extras": []
+  "feriados_extras": [],
+  "situacao_lancamento_grupos": {
+    "_comentario": "Situacao Lancamento da fatura de ciclo -> grupo da visão sintética (Leitura da situação). Código fora da lista vai para 'Outros'.",
+    "04-7FIXADA AO PORTAO": "Entregue",
+    "02-1CAIXA CORREIO": "Entregue",
+    "50-EMITIDO - RETIDA": "Retida",
+    "01-3EM MAOS": "Entregue",
+    "61-RETIDA - CONSOLIDADO": "Público",
+    "05-2EMBX DO PORTAO": "Entregue",
+    "73-RETIDA - MED > 2X MED FATUR": "Aumento de Consumo",
+    "81-RETIDA - NFAG": "Retida",
+    "00-7NAO ENTREGUE": "Não Entregue",
+    "71-RETIDA - QUEDA DE CONSUMO F": "Queda de Consumo",
+    "56-RETIDA - LIGACAO BLOQUEADA": "Retida",
+    "03-4VIZINHO": "Entregue",
+    "06-5NA CAIXA DE LUZ": "Entregue",
+    "55-RETIDA - MED > 2X MED MEDID": "Aumento de Consumo",
+    "07-6NO HD": "Entregue",
+    "07 - RECALCULADA": "Retida"
+  }
 }

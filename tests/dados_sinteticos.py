@@ -27,6 +27,11 @@ def _br(valor):
 NOME_MALICIOSO = '<img src=x onerror=alert("xss")> & CIA'
 
 
+# códigos reais da fatura de ciclo (o último não está na relação de regras.json: cai em "Outros")
+SITUACOES_LANCAMENTO = ["01-3EM MAOS", "02-1CAIXA CORREIO", "50-EMITIDO - RETIDA", "71-RETIDA - QUEDA DE CONSUMO F",
+                        "73-RETIDA - MED > 2X MED FATUR", "00-7NAO ENTREGUE", "99-CODIGO NOVO"]
+
+
 def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 2026),
                categoria_sem_minimo=True, formato_fatura="xlsx", injeta_cliente_html=False, com_dre=False,
                n_meses=2, grupos_faltando=0, tendencia_atual=1.0):
@@ -83,7 +88,7 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
             extras = [(r, -20.0) for r in CANCELAMENTOS] if com_dre and rnd.random() < 0.1 else []
             # grupo que ainda não faturou no mês atual (os sorteios acontecem igual, para comparar com o mês completo)
             falta_no_mes = (mm, aa) == (m, a) and grupos_faltando and l["grupo"] in grupos[-grupos_faltando:]
-            sit_lanc = rnd_sit.choices(["01-LEITURA NORMAL", "02-MEDIA", "03-MINIMO", "04-ESTIMADO"], [70, 15, 10, 5])[0]
+            sit_lanc = rnd_sit.choices(SITUACOES_LANCAMENTO, [40, 25, 10, 8, 7, 6, 4])[0]
             for rub, val in (("VALOR DE AGUA", valor_agua), ("VALOR DE ESGOTO", valor_esg), ("VALOR DE OUTRO", 3.5), *extras):
                 if falta_no_mes:
                     continue

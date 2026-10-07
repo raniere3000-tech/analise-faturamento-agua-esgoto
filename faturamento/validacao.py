@@ -218,8 +218,9 @@ def _csv_b64(df):
 
 
 def _botao_base(chave):
-    return (f'<button type="button" class="btn-just btn-baixar-base" data-ref="{chave}">&#11015; Base: '
-            f'{html.escape(NOMES_BASES[chave])} (CSV)</button>')
+    nome = html.escape(NOMES_BASES[chave], quote=True)
+    return (f'<button type="button" class="btn-just btn-baixar-base" data-ref="{chave}" title="Baixar a base: {nome} (CSV)" '
+            f'aria-label="Baixar a base: {nome} (CSV)">&#11015;</button><span class="nome-base">{nome}</span>')
 
 
 def _secao_bases(ctx):
@@ -761,20 +762,22 @@ def gera_validacao_html(ctx):
                bases=[("fatura", f"{f_atual_ant}; Serviço = Água; compare Consumo Faturado com o mínimo da Categoria (regras.json)")],
                montagem=["Uma linha por grupo: acima e abaixo nos dois meses e as diferenças; linha Total"]),
         _bloco("Cards — Situação de lançamento",
-               "um card por código da coluna Situacao Lancamento da fatura de ciclo (como o consumo da conta foi apurado: leitura real, "
-               "média, mínimo, estimado...), com ligações, participação, volume, valor e o motivo para analisar cada situação.",
+               "o que aconteceu com a conta depois de emitida (coluna Situacao Lancamento da fatura de ciclo: entregue, retida, "
+               "consolidada, não entregue...). Visão analítica: um card por código; visão sintética: um card por leitura da situação "
+               "(Entregue, Retida, Público, Aumento de Consumo, Queda de Consumo, Não Entregue, Outros).",
                ["Uma ligação por linha da rubrica de água; a situação é a da conta no mês (a primeira, se houver mais de uma)",
                 "Ligações = quantidade de ligações na situação; % = ligações da situação ÷ total de ligações do mês; Δ p.p. = % atual − % anterior",
                 "Volume e economias = soma de Consumo Faturado e Economias_Totais só onde Consumo Faturado &gt; 0; Vol./economia = volume ÷ economias",
                 "Valor = Valor (R$) de água + esgoto da ligação; Δ valor = atual − anterior",
-                "Leitura da situação e 'Por que analisar' vêm de palavras-chave no código (MEDIA, MINIMO, ESTIMADO, NORMAL, CANCEL...); "
-                "código sem palavra conhecida recebe a explicação genérica"],
+                "Leitura da situação = grupo do código na relação de regras.json (situacao_lancamento_grupos); código fora da relação vai "
+                "para Outros. A sintética soma os códigos de cada grupo; 'Por que analisar' é o texto do grupo"],
                comum_fatura + ["<b>Situacao Lancamento</b> (fatura de ciclo; se só o consumo tiver, usa a do consumo)", "<b>N. Ligação</b>"],
-               lambda sup: {"Situacao Lancamento": (r.get("situacao_lancamento") or {}).get(sup)}, "situacao_lancamento", ctx=ctx,
+               lambda sup: {"Analitica": (r.get("situacao_lancamento") or {}).get(sup),
+                            "Sintetica": (r.get("situacao_lancamento_sintetica") or {}).get(sup)}, "situacao_lancamento", ctx=ctx,
                bases=[("fatura", f"{f_atual_ant}; Serviço = Água: conte N. Ligação por Situacao Lancamento; some volume/valor")],
-               montagem=["Um card por situação, da mais frequente para a menos frequente",
-                         "A seta ⬇ ao lado do código baixa (CSV) as ligações do mês atual nessa situação — da SUP do quadro —, "
-                         "com a situação do mês anterior, volume e valor dos dois meses",
+               montagem=["Botão Analítica / Sintética no título troca a visão; cards da mais frequente para a menos frequente",
+                         "A seta ⬇ ao lado do título baixa (CSV) todas as matrículas do mês com situação e leitura da situação; "
+                         "a de cada card, só as daquela situação (ou do grupo, na sintética) — sempre da SUP do quadro e dos grupos marcados",
                          "Variações em azul quando sobem e em laranja quando caem; o filtro Superintendência mostra o quadro da SUP"]),
         _bloco("Tabelas — Top 100 clientes com maior queda de consumo (Água / Esgoto)",
                "as ligações que consumiam no mês anterior e consumiram menos no atual.",
