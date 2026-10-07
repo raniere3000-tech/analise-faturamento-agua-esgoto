@@ -199,7 +199,7 @@ def test_top100_aumento_de_consumo_com_download(analise):
     i = tab.index("Top 100 clientes com maior aumento de consumo — Água")
     assert tab.index("Top 100 clientes com maior queda de consumo — Esgoto") < i
     assert i < tab.index("Top 100 clientes com maior aumento de consumo — Esgoto")
-    b64 = re.search(r'data-arquivo="Top100_Aumentos_Consumo.xlsx" data-b64="([^"]+)"', tab).group(1)
+    b64 = re.search(r'data-arquivo="Top100_Aumentos_Consumo.xlsx" [^>]*data-b64="([^"]+)"', tab).group(1)
     xls = pd.ExcelFile(io.BytesIO(base64.b64decode(b64)))
     assert xls.sheet_names == ["Top100_Aumento_Agua", "Top100_Aumento_Esgoto"]
     for aba in xls.sheet_names:

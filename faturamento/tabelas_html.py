@@ -272,8 +272,10 @@ def botao_download_xlsx(rotulo, nome_arquivo, conteudo):
     if not conteudo:
         return ""
     b64 = base64.b64encode(conteudo).decode("ascii")
+    # só a seta; o que o botão baixa aparece ao passar o mouse (title) e para leitores de tela (aria-label)
+    r = html.escape(rotulo, quote=True)
     return (f'<button type="button" class="btn-just btn-baixar" data-arquivo="{html.escape(nome_arquivo)}" '
-            f'data-b64="{b64}">&#11015; {html.escape(rotulo)}</button>')
+            f'title="{r}" aria-label="{r}" data-b64="{b64}">&#11015;</button>')
 
 
 def media_dias(serie):

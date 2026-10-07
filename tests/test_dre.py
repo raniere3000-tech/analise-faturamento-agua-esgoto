@@ -432,7 +432,7 @@ def test_downloads_seguem_o_filtro_de_superintendencia(sessao):
         assert f'data-arquivo="validacao_dre_{sup}.xlsx"' in html
     assert '<span class="sup-dl" data-sup="TODAS"><button' in html
     # o Excel da DRE de LAGOS traz o realizado de LAGOS
-    b64 = re.search(r'data-arquivo="validacao_dre_LAGOS.xlsx" data-b64="([^"]+)"', html).group(1)
+    b64 = re.search(r'data-arquivo="validacao_dre_LAGOS.xlsx" [^>]*data-b64="([^"]+)"', html).group(1)
     dre_lagos = pd.read_excel(io.BytesIO(base64.b64decode(b64))).set_index("Rubrica")
     assert dre_lagos.loc["Faturamento Bruto", "Realizado"] == pytest.approx(dre.realizado(ctx, "LAGOS", ctx.ref_atual)["bruto"])
     # tabelas por grupo: só os grupos da SUP
@@ -504,22 +504,31 @@ def test_situacao_lancamento_no_top100_e_nos_cards(sessao):
     ctx = sessao.ctx
     top = ctx.resultados["top_agua"]
     assert "Situação Lançamento 09/2026" in top.columns and "Situação Lançamento 08/2026" in top.columns
-    assert set(top["Situação Lançamento 09/2026"]) <= {"01-LEITURA NORMAL", "02-MEDIA", "03-MINIMO", "04-ESTIMADO"}
+    from dados_sinteticos import SITUACOES_LANCAMENTO
+    assert set(top["Situação Lançamento 09/2026"]) <= set(SITUACOES_LANCAMENTO)
     r = ctx.resultados["situacao_lancamento"]["TODAS"]
     at = ctx.df_atual[ctx.df_atual["__serv"] == "A"]
     assert r["Ligações atual"].sum() == at["N. Ligação"].nunique()
     assert r["% ligações atual"].sum() == pytest.approx(100)
-    assert r.iloc[0]["Situação"] == "01-LEITURA NORMAL"            # a mais frequente primeiro
+    assert r.iloc[0]["Situação"] == "01-3EM MAOS"                  # a mais frequente primeiro
     lagos = ctx.resultados["situacao_lancamento"]["LAGOS"]
     assert 0 < lagos["Ligações atual"].sum() < r["Ligações atual"].sum()
     html = open(sessao.caminho_html, encoding="utf-8").read()
     diretas = html[html.index('id="view-tabelas"'):]
     assert "Situação de lançamento —" in diretas and diretas.count('class="sitl-card"') >= 4
     assert "Por que analisar:" in diretas and "Situação Lançamento 09/2026" in diretas
-    assert classifica("02-MEDIA")[0] == "Consumo pela média"
-    assert classifica("LEITURA NAO REALIZADA")[0] == "Leitura não realizada"
-    assert classifica("01-LEITURA NORMAL")[0] == "Leitura real"
-    assert classifica("XPTO")[0] == "Situação sem regra cadastrada"
+    assert classifica("04-7FIXADA AO PORTAO")[0] == "Entregue" and classifica("61-RETIDA - CONSOLIDADO")[0] == "Público"
+    assert classifica("07 - RECALCULADA")[0] == "Retida" and classifica("07-6NO HD")[0] == "Entregue"
+    assert classifica("73-RETIDA - MED > 2X MED FATUR")[0] == "Aumento de Consumo"
+    assert classifica("71-RETIDA - QUEDA DE CONSUMO F")[0] == "Queda de Consumo"
+    assert classifica("00-7NAO ENTREGUE")[0] == "Não Entregue" and classifica("99-CODIGO NOVO")[0] == "Outros"
+    # visão sintética: um card por leitura da situação, somando os códigos do grupo
+    rs = ctx.resultados["situacao_lancamento_sintetica"]["TODAS"].set_index("Situação")
+    an = r.set_index("Situação")
+    assert rs.loc["Entregue", "Ligações atual"] == an.loc[["01-3EM MAOS", "02-1CAIXA CORREIO"], "Ligações atual"].sum()
+    assert rs["Ligações atual"].sum() == r["Ligações atual"].sum() and "Outros" in rs.index
+    assert diretas.count('data-gsit="Entregue"') >= 3 and 'class="sitl-visao"' in diretas
+    assert 'data-visao="sintetica" hidden' in diretas
 
 
 def test_seta_de_cada_situacao_baixa_as_ligacoes(sessao):
@@ -529,7 +538,8 @@ def test_seta_de_cada_situacao_baixa_as_ligacoes(sessao):
     import re
     ctx = sessao.ctx
     html = open(sessao.caminho_html, encoding="utf-8").read()
-    assert html.count('class="btn-sitl-dl"') >= 4 and 'data-sit="02-MEDIA" data-sup="LAGOS"' in html
+    assert html.count('class="btn-sitl-dl"') >= 4 and 'data-sit="50-EMITIDO - RETIDA" data-sup="LAGOS"' in html
+    assert 'class="btn-sitl-dl" data-sup="LAGOS" title="Baixar a base analítica com as matrículas (CSV)"' in html
     m = re.search(r'<script type="application/octet-stream" id="sitl-detalhe" data-col-sit="([^"]+)"[^>]*>([^<]+)</script>', html)
     det = pd.read_csv(io.BytesIO(gzip.decompress(base64.b64decode(m.group(2)))), sep=";", decimal=",", dtype={"N. Ligação": str},
                       encoding="utf-8-sig")
@@ -554,7 +564,7 @@ def test_dados_para_o_filtro_de_grupos_nos_downloads(sessao):
     sit = json.loads(re.search(r'<script type="application/json" id="sitl-agregados">(.*?)</script>', html, re.S).group(1))
     total = sum(l[3] for l in sit["at"])
     assert total == sessao.ctx.resultados["situacao_lancamento"]["TODAS"]["Ligações atual"].sum()
-    for tipo in ("top", "sitl", "semfat"):
+    for tipo in ("top", "semfat"):
         assert f'data-csv-filtrado="{tipo}"' in html
     assert 'id="semfat-dados"' in html and 'data-top="aumento-esgoto"' in html
 
