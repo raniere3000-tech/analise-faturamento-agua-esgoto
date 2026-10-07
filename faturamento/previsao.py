@@ -19,7 +19,7 @@ import pandas as pd
 
 from .config import REGRAS
 from .dre import LINHAS, TODAS, _fmt, _fontes, _nome_sup, _orcados_do_mes, realizado
-from .formatacao import nome_mes
+from .formatacao import fmt_num, nome_mes
 from .projecao_grupos import backtest, projeta
 
 MESES_BASE = 3
@@ -206,21 +206,22 @@ def _valor_linha(d, chave):
     return d.get(chave)
 
 
-def tabela_previsao_html(ctx, sup, ref, linhas_def, atual, falta, editavel=True, primeira="Rubrica", ocultas=()):
+def tabela_previsao_html(ctx, sup, ref, linhas_def, atual, falta, editavel=True, primeira="Rubrica", ocultas=(),
+                         orcados=None, colunas_extra=(), rotulo_delta="Δ R$"):
     """Tabela Orçados | Realizado | Forecast ✎ | Realizado + Forecast | Δ % e Δ R$ por orçado.
     linhas_def: [(chave, rótulo, formato, negrito, classe)] (chave None = linha em branco).
     As edições ficam guardadas por mês × SUP × linha (relatorio.js): editar aqui muda todas as tabelas iguais (Forecast e Indiretas)."""
     e = lambda v: html.escape(v, quote=True)
     fontes, _ = _fontes(ctx)
     fontes = [f for f in fontes if not f.upper().count("SUP")] + [f for f in fontes if f.upper().count("SUP")]   # RF primeiro, SUP depois
-    orc = _orcados_do_mes(ctx, sup, ref, fontes)
-    cab = [f"<th>{primeira}</th>"]
+    orc = orcados if orcados is not None else _orcados_do_mes(ctx, sup, ref, fontes)
+    cab = [f"<th>{primeira}</th>"] + [f"<th>{t}</th>" for t, _ in colunas_extra]
     cab += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{html.escape(f)}</th>' for f in fontes]
     cab += ["<th>Realizado</th>", '<th class="prev-col-prev p-col-forecast">Forecast' + (" ✎" if editavel else "") + "</th>",
             "<th>Realizado<br>+ Forecast</th>"]
     for f in fontes:
         cab += [f'<th data-src="{e(f)}" data-tipo="dreal">Δ %<br>vs {html.escape(f)}</th>',
-                f'<th data-src="{e(f)}" data-tipo="dreal">Δ R$<br>vs {html.escape(f)}</th>']
+                f'<th data-src="{e(f)}" data-tipo="dreal">{rotulo_delta}<br>vs {html.escape(f)}</th>']
     linhas = []
     # linhas ocultas: entram no recálculo do navegador (ex.: aberturas RI para o Total indiretas) mas não aparecem
     extra = [(k, k, "moeda", False, "prev-oculta") for k in ocultas]
@@ -228,10 +229,11 @@ def tabela_previsao_html(ctx, sup, ref, linhas_def, atual, falta, editavel=True,
         if chave is None:
             linhas.append(f'<tr class="dre-vazia"><td colspan="{len(cab)}"></td></tr>')
             continue
-        basica = chave in LINHAS_BASICAS and editavel
+        basica = (chave in LINHAS_BASICAS or chave in EV_BASICAS) and editavel
         real = _valor_linha(atual, chave)
         auto = falta.get(chave) if basica and real is not None else None     # forecast = o que ainda vai ser faturado
         tds = [f'<td class="dre-rotulo">{html.escape(rotulo)}</td>']
+        tds += [f'<td class="num">{valores.get(chave, "")}</td>' for _, valores in colunas_extra]
         tds += [f'<td class="num" data-src="{e(f)}" data-tipo="orc">{_fmt(_valor_linha(orc[f], chave), formato)}</td>' for f in fontes]
         tds.append(f'<td class="num p-real">{_fmt(real, formato)}</td>')
         cls = "num p-prev p-col-forecast" + (" prev-edit" if basica else "")
@@ -275,28 +277,68 @@ def previsao_html(ctx, sup):
             + tabela_previsao_html(ctx, sup, ctx.ref_atual, linhas_def, atual, dados["falta"]) + "</div>")
 
 
-# Aba Indiretas: as mesmas colunas do Forecast, separadas em água e esgoto
-LINHAS_IND_AGUA = [("iA", "Fat. de água - Indireto", "moeda", True, ""),
-                   ("ri_CORTE", "RI Cortes/Recorte", "moeda", False, "dre-abertura"),
-                   ("ri_RELIGAÇÃO", "RI Religações", "moeda", False, "dre-abertura"),
-                   ("ri_LNA", "RI Ligações - Água", "moeda", False, "dre-abertura"),
-                   ("ri_SANÇÃO", "RI Fiscalização", "moeda", False, "dre-abertura"),
-                   ("ri_OUTROS", "RI Outros - Água", "moeda", False, "dre-abertura")]
-LINHAS_IND_ESGOTO = [("iE", "Fat. de esgoto - Indireto (LNE)", "moeda", True, ""),
-                     ("tot", "Total indiretas (água + esgoto)", "moeda", True, "")]
+# Aba Indiretas: (1) financeiro em R$ e (2) eventos faturados (quantidade), com as mesmas colunas do Forecast
+CLASSE_DA_LINHA = {"ri_CORTE": "CORTE", "ri_RELIGAÇÃO": "RELIGAÇÃO", "ri_LNA": "LNA", "ri_SANÇÃO": "SANÇÃO",
+                   "ri_OUTROS": "OUTROS", "iE": "LNE"}
+EV_BASICAS = ["ev_" + k for k in CLASSE_DA_LINHA]
+_ROTULOS_IND = [("iA", "Fat. de água - Indireto", True, ""), ("ri_CORTE", "RI Cortes/Recorte", False, "dre-abertura"),
+                ("ri_RELIGAÇÃO", "RI Religações", False, "dre-abertura"), ("ri_LNA", "RI Ligações - Água", False, "dre-abertura"),
+                ("ri_SANÇÃO", "RI Fiscalização", False, "dre-abertura"), ("ri_OUTROS", "RI Outros - Água", False, "dre-abertura"),
+                ("iE", "Fat. de esgoto - Indireto (LNE)", True, ""), ("tot", "Total indiretas (água + esgoto)", True, "")]
+LINHAS_IND_FIN = [(k, r, "moeda", n, c) for k, r, n, c in _ROTULOS_IND]
+LINHAS_IND_EV = [("ev_" + k, r, "num", n, c) for k, r, n, c in _ROTULOS_IND]
+MESES_TICKET = 3
+
+
+def _soma_ev(d):
+    """Completa ev_iA (soma das aberturas RI) e ev_tot (água + esgoto) num dict de eventos."""
+    ris = [d.get("ev_" + k) for k in CLASSE_DA_LINHA if k != "iE"]
+    d["ev_iA"] = None if all(v is None for v in ris) else sum(v or 0 for v in ris)
+    d["ev_tot"] = None if d["ev_iA"] is None and d.get("ev_iE") is None else (d["ev_iA"] or 0) + (d.get("ev_iE") or 0)
+    return d
+
+
+def eventos_indiretas(ctx, sup, ref):
+    """Eventos faturados (lançamentos do serviço avulso) por classe: realizado, ticket médio dos 3 meses fechados
+    anteriores, orçado em eventos (orçado R$ ÷ ticket) e forecast (mesmo método do Forecast: ritmo por dia útil)."""
+    from .dre import _indiretas_mes
+    mes = _indiretas_mes(ctx, sup, ref)
+    real = _soma_ev({"ev_" + k: float(mes[cl][0]) for k, cl in CLASSE_DA_LINHA.items()})
+    hist = [_indiretas_mes(ctx, sup, _mes_deslocado(ref, n)) for n in range(1, MESES_TICKET + 1)]
+    ticket = {}
+    for k, cl in CLASSE_DA_LINHA.items():
+        q, v = sum(h[cl][0] for h in hist), sum(h[cl][1] for h in hist)
+        ticket[k] = v / q if q else None
+    fontes, _ = _fontes(ctx)
+    orc_r = _orcados_do_mes(ctx, sup, ref, fontes)
+    orc_ev = {f: _soma_ev({"ev_" + k: (orc_r[f][k] / ticket[k]) if orc_r[f].get(k) is not None and ticket[k] else None
+                           for k in CLASSE_DA_LINHA}) for f in fontes}
+    falta = {}
+    if ref == ctx.ref_atual:
+        corte = getattr(ctx, "data_corte", None) or (dt.date.today() - dt.timedelta(days=1))   # D-1, como no Forecast
+        du = dias_uteis_do_mes(ref, corte)
+        for k in CLASSE_DA_LINHA:
+            tipo = "corte" if k == "ri_CORTE" else "uteis"
+            dec, fal = du[tipo + "_decorridos"], du[tipo + "_faltam"]
+            falta["ev_" + k] = real["ev_" + k] / dec * fal if dec else 0.0
+    return {"real": real, "orcado": orc_ev, "falta": falta, "ticket": ticket, "meses_ticket": [_mes_deslocado(ref, n) for n in range(MESES_TICKET, 0, -1)]}
 
 
 def indiretas_previsao_html(ctx, sup, ref):
-    """As duas tabelas da aba Indiretas (água e esgoto) para uma SUP × mês. No mês atual, o forecast é editável."""
+    """As duas tabelas da aba Indiretas (financeiro e eventos) para uma SUP × mês. No mês atual, o forecast é editável."""
     from .dre import realizado
     atual_mes = ref == ctx.ref_atual
     dados = calcula_previsao(ctx, sup) if atual_mes and getattr(ctx, "base_completa", None) is not None else None
     real = dados["atual"] if dados else realizado(ctx, sup, ref)
     falta = dados["falta"] if dados else {}
     editavel = bool(dados)
-    return (tabela_previsao_html(ctx, sup, ref, LINHAS_IND_AGUA, real, falta, editavel, "Classe — Água"),
-            tabela_previsao_html(ctx, sup, ref, LINHAS_IND_ESGOTO, real, falta, editavel, "Classe — Esgoto e total",
-                                 ocultas=[k for k, *_ in LINHAS_IND_AGUA if k != "iA"]))
+    ev = eventos_indiretas(ctx, sup, ref)
+    tk = {"ev_" + k: ("R$ " + fmt_num(v, 2) if v else "-") for k, v in ev["ticket"].items()}
+    fin = tabela_previsao_html(ctx, sup, ref, LINHAS_IND_FIN, real, falta, editavel, "Classe")
+    eventos = tabela_previsao_html(ctx, sup, ref, LINHAS_IND_EV, ev["real"], ev["falta"] if editavel else {}, editavel,
+                                   "Classe", orcados=ev["orcado"], colunas_extra=[("Ticket médio<br>3 meses (R$)", tk)],
+                                   rotulo_delta="Δ eventos")
+    return fin, eventos, ev
 
 
 def gera_aba_forecast_html(ctx):

@@ -537,31 +537,40 @@ def _destaques_df(ctx):
 
 
 def _indiretas_forecast_df(ctx):
-    """Tabelas da aba Indiretas (Todas as superintendências, mês atual): orçados, realizado, forecast automático e fechamento."""
-    from .previsao import LINHAS_IND_AGUA, LINHAS_IND_ESGOTO, _valor_linha, calcula_previsao
+    """Tabelas da aba Indiretas (Todas as superintendências, mês atual): financeiro e eventos, com forecast automático."""
+    from .previsao import LINHAS_IND_EV, LINHAS_IND_FIN, CLASSE_DA_LINHA, _valor_linha, calcula_previsao, eventos_indiretas
     from .dre import _orcados_do_mes
     d = calcula_previsao(ctx, TODAS) if getattr(ctx, "base_completa", None) is not None else None
     real = d["atual"] if d else realizado(ctx, TODAS, ctx.ref_atual)
     falta = dict(d["falta"]) if d else {}
-    falta["iA"] = sum(falta.get(k, 0.0) for k, *_ in LINHAS_IND_AGUA if k != "iA")
+    falta["iA"] = sum(falta.get(k, 0.0) for k in CLASSE_DA_LINHA if k != "iE")
     falta["tot"] = falta["iA"] + falta.get("iE", 0.0)
     fontes, _ = _fontes(ctx)
-    orc = _orcados_do_mes(ctx, TODAS, ctx.ref_atual, fontes)
-    linhas = []
-    for tabela, defs in (("Água", LINHAS_IND_AGUA), ("Esgoto e total", LINHAS_IND_ESGOTO)):
+    ev = eventos_indiretas(ctx, TODAS, ctx.ref_atual)
+    fev = dict(ev["falta"])
+    fev["ev_iA"] = sum(fev.get("ev_" + k, 0.0) for k in CLASSE_DA_LINHA if k != "iE")
+    fev["ev_tot"] = fev["ev_iA"] + fev.get("ev_iE", 0.0)
+    saida = {}
+    for nome, defs, r_, f_, orc in (("Financeiro", LINHAS_IND_FIN, real, falta, _orcados_do_mes(ctx, TODAS, ctx.ref_atual, fontes)),
+                                     ("Eventos", LINHAS_IND_EV, ev["real"], fev, ev["orcado"])):
+        linhas = []
         for chave, rotulo, *_ in defs:
-            r = _valor_linha(real, chave)
-            fc = falta.get(chave, 0.0)
+            r = _valor_linha(r_, chave)
+            fc = f_.get(chave, 0.0)
             fech = None if r is None else r + fc
-            l = {"Tabela": tabela, "Classe": rotulo}
+            l = {"Classe": rotulo}
+            if nome == "Eventos":
+                base = chave[3:]
+                l["Ticket médio 3 meses"] = ev["ticket"].get(base)
             l.update({f"Orçado {f}": _valor_linha(orc[f], chave) for f in fontes})
             l.update({"Realizado": r, "Forecast": fc, "Realizado + Forecast": fech})
             for f in fontes:
                 o = _valor_linha(orc[f], chave)
                 l[f"Δ % vs {f}"] = (fech / o - 1) * 100 if o and fech is not None else None
-                l[f"Δ R$ vs {f}"] = fech - o if o is not None and fech is not None else None
+                l[f"Δ vs {f}"] = fech - o if o is not None and fech is not None else None
             linhas.append(l)
-    return pd.DataFrame(linhas)
+        saida[nome] = pd.DataFrame(linhas)
+    return saida
 
 
 def _evolucao_df(ctx):
@@ -739,27 +748,40 @@ def gera_validacao_html(ctx):
     # ---------------- 4. Indiretas ----------------
     passo(96.5, "Criando aba Dados: explicação das Indiretas")
     base_av = ("avulso", "Referencia = mês; some Valor Parcela (e conte as linhas) por Classe")
+    ind_dfs = _indiretas_forecast_df(ctx)
+    calc_comum = ["Forecast (mês atual) = o mesmo da aba Forecast: realizado até D-1 ÷ dias úteis decorridos × dias úteis que faltam; "
+                  "Cortes pelos dias de corte (sem sextas e vésperas de feriado)",
+                  "Fat. de água - Indireto = soma das aberturas RI; Total indiretas = água + esgoto (realizado, forecast e orçado)",
+                  "Realizado + Forecast = fechamento projetado; Δ % = fechamento ÷ orçado − 1; Δ = fechamento − orçado",
+                  "Meses anteriores (mês fechado): sem forecast; o fechamento é o próprio realizado"]
+    montagem_comum = ["Linhas: Fat. de água - Indireto (negrito), aberturas RI recuadas, Fat. de esgoto - Indireto (LNE) e Total indiretas",
+                      "Forecast editável no mês atual: clique, digite e Enter; \"↺ Restaurar automático\" volta ao cálculo",
+                      "Δ em vermelho quando o fechamento fica abaixo do orçado"]
     indiretas = _aba("4. Indiretas", [
-        _bloco(f"Tabelas — Indiretas: orçado × realizado × forecast, Água e Esgoto ({mes})",
-               "duas tabelas: (1) Água — Fat. de água - Indireto e as aberturas RI; (2) Esgoto e total — Fat. de esgoto - Indireto (LNE) e "
-               "Total indiretas. Cada uma com orçado de cada planilha, realizado, forecast editável, realizado + forecast e as diferenças.",
+        _bloco(f"Tabela — Indiretas: financeiro em R$ ({mes})",
+               "por classe, o orçado de cada planilha (RF e RF SUP), o realizado em R$, o forecast, o fechamento e as diferenças.",
                ["Realizado = soma do Valor Parcela do serviço avulso por classe no mês, até D-1",
-                "Forecast (mês atual) = realizado ÷ dias úteis decorridos × dias úteis que faltam; Cortes usam os dias de corte (sem sextas e vésperas de feriado)",
-                "Fat. de água - Indireto = soma das aberturas RI (realizado e forecast); Total indiretas = água + esgoto",
-                "Realizado + Forecast = fechamento projetado; Δ R$ = fechamento − orçado; Δ % = fechamento ÷ orçado − 1",
-                "Orçado = linhas do RF pelos nomes CORTE, RELIGAÇÃO, LNA, SANÇÃO, OUTROS (ou RI Cortes/Recorte etc.)",
-                "Meses anteriores (mês fechado): sem forecast; o fechamento é o próprio realizado"],
-               ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b>", "Orçado: <b>Sup</b>, <b>Rubrica</b>, coluna do mês",
-                "Calendário: feriados do código e de regras.json"],
-               {"Indiretas com forecast": _indiretas_forecast_df(ctx), "Orcado x realizado": _indiretas_df(ctx)}, "indiretas",
+                "Orçado = linhas do RF pelos nomes CORTE, RELIGAÇÃO, LNA, SANÇÃO, OUTROS (ou RI Cortes/Recorte etc.)"] + calc_comum,
+               ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b>", "Orçado: <b>Sup</b>, <b>Rubrica</b>, coluna do mês"],
+               {"Financeiro": ind_dfs["Financeiro"]}, "indiretas_financeiro",
                bases=[base_av, ("orcado", f"Referencia = {ra}; linhas RI / CORTE / RELIGAÇÃO / LNA / SANÇÃO / OUTROS")],
-               montagem=["Tabela Água: Fat. de água - Indireto (negrito) e as aberturas RI recuadas; tabela Esgoto e total: LNE e Total indiretas",
-                         "Colunas: Orçado de cada planilha · Realizado · Forecast ✎ · Realizado + Forecast · Δ % e Δ R$ contra cada planilha",
-                         "Forecast editável no mês atual: clique, digite e Enter; a mesma edição vale na aba Forecast (e vice-versa); "
-                         "\"↺ Restaurar automático\" volta ao cálculo",
-                         "Δ em vermelho quando o fechamento fica abaixo do orçado"]),
+               montagem=["Colunas: Classe · Orçado de cada planilha · Realizado · Forecast ✎ · Realizado + Forecast · Δ % e Δ R$ contra cada planilha",
+                         "A edição do forecast é a mesma da aba Forecast (mudou numa, muda na outra)"] + montagem_comum),
+        _bloco(f"Tabela — Indiretas: eventos faturados ({mes})",
+               "por classe, a quantidade de eventos (lançamentos do serviço avulso): orçado em eventos de cada planilha, realizado, "
+               "forecast, fechamento e as diferenças.",
+               ["Realizado = quantidade de lançamentos do serviço avulso por classe no mês, até D-1",
+                f"Ticket médio da classe = valor ÷ lançamentos dos {3} meses fechados anteriores ao mês",
+                "Orçado em eventos = orçado em R$ da classe ÷ ticket médio da classe (sem ticket no histórico → sem orçado)"] + calc_comum,
+               ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b> (contagem de linhas)",
+                "Orçado: <b>Sup</b>, <b>Rubrica</b>, coluna do mês"],
+               {"Eventos": ind_dfs["Eventos"]}, "indiretas_eventos",
+               bases=[("avulso", "Referencia = mês: conte as linhas por Classe; 3 meses anteriores: some Valor Parcela ÷ linhas = ticket"),
+                      ("orcado", f"Referencia = {ra}; orçado da classe ÷ ticket")],
+               montagem=["Colunas: Classe · Ticket médio 3 meses · Orçado (eventos) de cada planilha · Realizado · Forecast ✎ · "
+                         "Realizado + Forecast · Δ % e Δ (eventos) contra cada planilha"] + montagem_comum),
         _bloco("Gráfico — Evolução mensal por classe",
-               "o valor do serviço avulso por classe em cada mês do arquivo, abaixo das tabelas.",
+               "o valor do serviço avulso por classe em cada mês do arquivo, no fim da aba (abaixo das duas tabelas).",
                ["Para cada mês e classe: soma do Valor Parcela (rubricas marcadas para excluir ficam de fora)",
                 "Total = soma das classes no mês"],
                ["Serviço avulso: <b>Rubrica</b> (classe), <b>Valor Parcela</b>, <b>Referencia</b>"],

@@ -410,6 +410,8 @@ def gera_aba_dre_html(ctx):
 def _indiretas_mes(ctx, sup, ref):
     """{classe: (qtd, valor)} do serviço avulso no mês (sem as rubricas excluídas)."""
     av = _filtra(ctx.avulso, sup)
+    if av is None or not len(av) or "Referencia" not in av.columns:
+        return {cl: (0, 0.0) for cl in CLASSES_ORDEM}
     av = av[(av["Referencia"] == ref) & (av["Classe"] != "EXCLUIR")]
     g = av.groupby("Classe")["Valor Parcela"].agg(["size", "sum"])
     return {cl: (int(g.loc[cl, "size"]), float(g.loc[cl, "sum"])) if cl in g.index else (0, 0.0) for cl in CLASSES_ORDEM}
@@ -434,18 +436,22 @@ def gera_aba_indiretas_html(ctx):
     for ref in lista_meses(ctx):
         for sup in lista_sups(ctx):
             nome = html.escape(_nome_sup(sup))
-            agua, esgoto = indiretas_previsao_html(ctx, sup, ref)
+            fin, eventos, ev = indiretas_previsao_html(ctx, sup, ref)
             no_mes = ref == ctx.ref_atual
-            nota = ("Realizado = serviço avulso do mês até D-1, por classe da rubrica. Forecast = ritmo por dia útil × dias úteis que "
-                    "faltam (Cortes: dias de corte). <b>Clique em um valor da coluna Forecast ✎ para editar</b> — a edição vale também "
-                    "na aba Forecast. Orçado das linhas \"RI\" só aparece se a planilha RF tiver essas linhas."
-                    if no_mes else "Mês fechado: o fechamento é o próprio realizado (sem forecast).")
             acoes = ('<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" '
                      'onclick="previsaoRestaurar(this)">↺ Restaurar automático</button></span>') if no_mes else ""
+            fc = (" <b>Clique em um valor da coluna Forecast ✎ para editar.</b>" if no_mes
+                  else " Mês fechado: o fechamento é o próprio realizado (sem forecast).")
+            meses_tk = ", ".join(nome_mes(m) for m in ev["meses_ticket"])
             blocos.append(_bloco(sup, ref, (
-                f'<div class="card prev-card"><h2 class="prev-titulo">Indiretas: orçado × realizado × forecast — {nome} — {nome_mes(ref)}'
-                f'{acoes}</h2><p class="nota-secao prev-nota">{nota}</p>'
-                f'<div class="ind-tabelas"><h3 class="ind-sub">Água</h3>{agua}<h3 class="ind-sub">Esgoto e total</h3>{esgoto}</div></div>'
+                f'<div class="card prev-card"><h2 class="prev-titulo">Indiretas — financeiro (R$) — {nome} — {nome_mes(ref)}{acoes}</h2>'
+                '<p class="nota-secao prev-nota">Realizado = valor do serviço avulso do mês até D-1, por classe. Forecast = o mesmo da aba '
+                'Forecast (ritmo por dia útil × dias úteis que faltam; Cortes pelos dias de corte) — editar aqui muda lá também.'
+                f'{fc}</p>{fin}</div>'
+                f'<div class="card prev-card"><h2 class="prev-titulo">Indiretas — eventos faturados — {nome} — {nome_mes(ref)}{acoes}</h2>'
+                f'<p class="nota-secao prev-nota">Eventos = quantidade de lançamentos do serviço avulso. Orçado em eventos = orçado (R$) ÷ '
+                f'ticket médio da classe nos 3 meses fechados anteriores ({meses_tk}). Forecast = eventos até D-1 ÷ dias úteis '
+                f'decorridos × dias úteis que faltam (Cortes pelos dias de corte).{fc}</p>{eventos}</div>'
                 f'<div class="card"><h2>Evolução mensal por classe — {nome}</h2>{grafico_evolucao(ctx, sup, ref, meses_av)}</div>')))
     return "".join(blocos)
 
