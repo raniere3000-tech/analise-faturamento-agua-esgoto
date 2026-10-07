@@ -145,17 +145,22 @@ def monta_bases(ctx):
     from .config import chave_texto
     BASES.clear()
     fat = ctx.base_final
-    fat = fat[fat["Rubrica"].str.contains("AGUA|ESGOTO", case=False, na=False)
-              & fat["Referencia de Leitura"].isin([ctx.ref_anterior, ctx.ref_atual])]
+    fat = fat[fat["Referencia de Leitura"].isin([ctx.ref_anterior, ctx.ref_atual])]
+    fat = fat[(fat["__serv"] != "") if "__serv" in fat.columns else fat["Rubrica"].str.contains("AGUA|ESGOTO", case=False, na=False)]
     cols = [c for c in COLUNAS_BASE + COLUNAS_ECONOMIA_TODAS + ["Situacao Conta", "Nome da Localidade", "__sup"] if c in fat.columns]
-    fat = _sup(fat[list(dict.fromkeys(cols))]).copy()
+    total_fat = len(fat)
+    fat = _sup(fat[list(dict.fromkeys(cols))].head(LIMITE_BASE)).copy()      # só as linhas que vão para o CSV
     fat["Entra em economias/volume"] = (fat["Consumo Faturado"] > 0).map({True: "Sim", False: "Não"})
-    BASES["fatura"] = {"df": fat.head(LIMITE_BASE), "truncada": len(fat) > LIMITE_BASE, "total": len(fat)}
+    BASES["fatura"] = {"df": fat, "truncada": total_fat > LIMITE_BASE, "total": total_fat}
 
     comp = getattr(ctx, "base_completa", None)
     comp = ctx.base_final if comp is None else comp
-    d = comp[comp["Rubrica"].str.contains("AGUA|ESGOTO", case=False, na=False)].copy()
-    d["Serviço"] = d["Rubrica"].str.contains("ESGOTO", case=False, na=False).map({True: "Esgoto", False: "Água"})
+    cols_m = [c for c in ("Referencia de Leitura", "Grupo", "Rubrica", "Valor (R$)", "Consumo Faturado", "Economias_Totais",
+                          "__sup", "__serv") if c in comp.columns]
+    d = comp[cols_m]                                   # só as colunas da soma (não copia a base inteira)
+    d = d[(d["__serv"] != "") if "__serv" in d.columns else d["Rubrica"].str.contains("AGUA|ESGOTO", case=False, na=False)].copy()
+    d["Serviço"] = (d["__serv"] == "E" if "__serv" in d.columns
+                    else d["Rubrica"].str.contains("ESGOTO", case=False, na=False)).map({True: "Esgoto", False: "Água"})
     d["Grupo"] = d["Grupo"].astype(str).str.strip()
     pos = d["Consumo Faturado"] > 0
     d["Volume (Consumo>0)"] = d["Consumo Faturado"].where(pos, 0)
@@ -168,9 +173,14 @@ def monta_bases(ctx):
     mensal = _sup(mensal.sort_values(["_ord", "Grupo", "Serviço"]).drop(columns="_ord"))
     BASES["fatura_mensal"] = {"df": mensal, "truncada": False, "total": len(mensal)}
 
-    for chave, df in (("avulso", ctx.avulso), ("cancelamento", ctx.cancelamento)):
+    # só as colunas que interessam para conferir (o arquivo embutido no relatório fica bem menor)
+    cols_av = ["N. da Ligacao", "Grupo", "Rubrica", "Classe", "Valor Parcela", "Referencia de Leitura", "Referencia",
+               "Nome da Localidade", "__sup"]
+    cols_canc = ["N. da Ligacao", "Grupo", "Rubrica", "Valor Parcela", "Referencia de Leitura", "Nome da Localidade", "__sup"]
+    for chave, df, cols in (("avulso", ctx.avulso, cols_av), ("cancelamento", ctx.cancelamento, cols_canc)):
         if df is not None and len(df):
-            BASES[chave] = {"df": _sup(df).head(LIMITE_BASE), "truncada": len(df) > LIMITE_BASE, "total": len(df)}
+            parte = df[[c for c in cols if c in df.columns]].head(LIMITE_BASE)
+            BASES[chave] = {"df": _sup(parte), "truncada": len(df) > LIMITE_BASE, "total": len(df)}
 
     linhas = []
     nomes = {"bruto": "Faturamento Bruto", "dA": "DIRETAS ÁGUA", "dE": "DIRETAS ESGOTO", "iA": "Fat. de água - Indireto",

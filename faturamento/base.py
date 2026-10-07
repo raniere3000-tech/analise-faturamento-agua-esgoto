@@ -2,11 +2,16 @@
 """Monta a base final: fatura + consumo + cronograma."""
 import os
 
+import numpy as np
 import pandas as pd
 
-from .config import COLUNAS_ECONOMIA_TOTAIS
-from .leitura import (chave_grupo, classifica_arquivos, nome_relativo, processa_avulso, processa_consumo, processa_cronograma,
+from .config import COLUNAS_ECONOMIA_TODAS, COLUNAS_ECONOMIA_TOTAIS
+from .leitura import (chave_grupo, classifica_arquivos, compacta_textos, nome_relativo, processa_avulso, processa_consumo, processa_cronograma,
                       processa_fatura_completa, processa_orcado)
+
+
+COLUNAS_DESCARTADAS = ["Leitura Atual", "Consumo Medido", "Total Economias", "Qtd. Tipos de Economia", "Mes Lancamento",
+                       "Ano Lancamento", "Data de Vencimento", "Aba/Mês Cronograma"]
 
 
 def sem_repetir_entre_arquivos(frames, chave=None):
@@ -21,7 +26,7 @@ def sem_repetir_entre_arquivos(frames, chave=None):
         return frames[0], 0
     tudo = pd.concat([f.assign(__arquivo=i) for i, f in enumerate(frames)], ignore_index=True)
     cols = [c for c in (chave or [c for c in tudo.columns if c != "__arquivo"]) if c in tudo.columns]
-    assinatura = pd.util.hash_pandas_object(tudo[cols].astype(str), index=False)
+    assinatura = pd.util.hash_pandas_object(tudo[cols], index=False)          # sem converter tudo para texto (memória)
     primeiro = tudo.groupby(assinatura.values)["__arquivo"].transform("min")
     manter = tudo["__arquivo"] == primeiro
     return tudo[manter].drop(columns="__arquivo").reset_index(drop=True), int((~manter).sum())
@@ -45,18 +50,24 @@ def _cruza_cronograma(base, crono):
     cols = ["Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma"]
     if not len(crono):
         return base.assign(**{c: pd.NA for c in cols})
-    chave = base["Grupo"].map(chave_grupo)
+    # cruza pelos pares (grupo, mês) distintos — poucos — e só então espalha nas linhas: não copia a base inteira
+    chave = base["Grupo"].map({g: chave_grupo(g) for g in base["Grupo"].dropna().unique()})
     por_mes = crono.dropna(subset=["Referencia Cronograma"]).drop_duplicates(["Grupo", "Referencia Cronograma"], keep="last")
     por_mes = por_mes.set_index(["Grupo", "Referencia Cronograma"])[cols]
     por_grupo = crono.drop_duplicates("Grupo", keep="last").set_index("Grupo")[cols]
-    idx = pd.MultiIndex.from_arrays([chave, base["Referencia de Leitura"]])
-    achados = por_mes.reindex(idx).reset_index(drop=True)
-    reserva = por_grupo.reindex(chave).reset_index(drop=True)
+    pares = pd.DataFrame({"g": chave.values, "r": base["Referencia de Leitura"].values}).drop_duplicates()
+    achados = por_mes.reindex(pd.MultiIndex.from_frame(pares[["g", "r"]])).reset_index(drop=True)
+    reserva = por_grupo.reindex(pares["g"].values).reset_index(drop=True)
     faltam = achados["Qts. Dias"].isna()
     for c in cols:
         achados[c] = achados[c].where(~faltam, reserva[c])
-    base = base.drop(columns=[c for c in cols if c in base.columns]).reset_index(drop=True)
-    return pd.concat([base, achados], axis=1)
+    achados.index = pd.MultiIndex.from_frame(pares[["g", "r"]])
+    idx_linhas = pd.MultiIndex.from_arrays([chave.values, base["Referencia de Leitura"].values])
+    posicoes = achados.index.get_indexer(idx_linhas)
+    for c in cols:
+        valores = achados[c].to_numpy()
+        base[c] = valores[posicoes]
+    return base
 
 
 def monta_base(ctx):
@@ -159,10 +170,13 @@ def monta_base(ctx):
         right_on=["N. Ligação_consumo", "Referência"],
         how="left",
     )
-    base_final["Encontrado no Consumo"] = base_final["N. Ligação_consumo"].notna().map({True: "Sim", False: "Não"})
+    ctx.fatura_total = fatura_total[["Grupo"]].drop_duplicates()     # só os grupos (filtro do relatório)
+    del fatura_total, consumo_total                  # libera as tabelas de origem: a base cruzada já tem tudo
+    compacta_textos(base_final)
+    base_final["Encontrado no Consumo"] = np.where(base_final["N. Ligação_consumo"].notna(), "Sim", "Não")
 
     base_final = _cruza_cronograma(base_final, cronograma_total)
-    base_final["Encontrado no Cronograma"] = base_final["Qts. Dias"].notna().map({True: "Sim", False: "Não"})
+    base_final["Encontrado no Cronograma"] = np.where(base_final["Qts. Dias"].notna(), "Sim", "Não")
     # ciclos considerados = os grupos que existem na fatura (já cruzada com o consumo); grupos só do cronograma são ignorados
     if len(cronograma_total):
         ciclos = sorted(base_final["Grupo"].dropna().astype(str).str.strip().unique(), key=lambda g: (len(g), g))
@@ -175,23 +189,19 @@ def monta_base(ctx):
             ctx.avisos_base.append(f"Ciclos da fatura/consumo sem linha no cronograma ({len(sem)} de {len(ciclos)}): "
                                    + ", ".join(sem[:15]) + (" …" if len(sem) > 15 else "") + " — ficaram sem dias de leitura.")
 
+    # ajustes de colunas sem copiar a tabela (com 2 milhões de linhas, cada cópia pesa centenas de MB no navegador)
     cols_excl = [c for c in base_final.columns if c.endswith("_consumo") or c.endswith("_cronograma")] + ["N. Ligação_consumo", "Referência"]
-    base_final = base_final.drop(columns=cols_excl, errors="ignore")
-
-    for col in list(base_final.columns):
-        if col.endswith("_x"):
-            col_base = col[:-2]
-            col_y = col_base + "_y"
-            if col_y in base_final.columns:
-                base_final = base_final.drop(columns=[col_y])
-            base_final = base_final.rename(columns={col: col_base})
+    cols_excl += [c[:-2] + "_y" for c in base_final.columns if c.endswith("_x") and c[:-2] + "_y" in base_final.columns]
+    cols_excl += [c for c in COLUNAS_DESCARTADAS if c in base_final.columns]   # só serviam para ler/cruzar
+    base_final.drop(columns=[c for c in dict.fromkeys(cols_excl) if c in base_final.columns], inplace=True)
+    novos = {c: c[:-2] for c in base_final.columns if c.endswith("_x")}
+    novos.update({"N. da Ligacao": "N. Ligação", "Valor Parcela": "Valor (R$)"})
+    base_final.rename(columns=novos, inplace=True)
 
     print(f"✅ Merge final: {len(base_final)} linhas")
-
-    base_final = base_final.rename(columns={"N. da Ligacao": "N. Ligação", "Valor Parcela": "Valor (R$)"})
-    colunas_analise = ["Total Economias", "Qtd. Tipos de Economia", "Economia Mista", "Encontrado no Consumo", "Encontrado no Cronograma"]
-    colunas_originais = [c for c in base_final.columns if c not in colunas_analise]
-    base_final = base_final[colunas_originais + colunas_analise]
+    for col in COLUNAS_ECONOMIA_TODAS:                 # quantidades de economia: inteiros pequenos
+        if col in base_final.columns:
+            base_final[col] = pd.to_numeric(base_final[col], errors="coerce").fillna(0).astype("int32")
 
     # Medida "Economias_Totais": soma das categorias de economia (sem "Outros"), usada em todas as etapas
     for col in COLUNAS_ECONOMIA_TOTAIS:
@@ -205,6 +215,5 @@ def monta_base(ctx):
     base_final["__serv"] = rub.map({r: "E" if "ESGOTO" in r.upper() else "A" if "AGUA" in r.upper() else "" for r in unicas})
 
     progresso.atualiza(52, "Base final pronta")
-    ctx.fatura_total = fatura_total
     ctx.base_final = base_final
     return base_final

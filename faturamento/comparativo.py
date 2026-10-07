@@ -74,7 +74,10 @@ def limita_ao_ultimo_grupo(ctx):
     grupos = base["Grupo"]
     manter = grupos.map({g: _num_grupo(g) is None or _num_grupo(g) <= ultimo for g in grupos.unique()}).astype(bool)
     removidas = int((~manter).sum())
-    ctx.base_final = base[manter].copy()
+    if not removidas:                                 # nada a tirar: usa a mesma tabela (sem copiar 2 milhões de linhas)
+        ctx.base_final = base
+    else:
+        ctx.base_final = base[manter]
     print(f"🔎 Último grupo faturado em {ctx.ref_atual}: {ctx.ultimo_grupo} — análise limitada aos grupos até esse "
           f"({removidas} linhas de grupos posteriores desconsideradas)")
 
