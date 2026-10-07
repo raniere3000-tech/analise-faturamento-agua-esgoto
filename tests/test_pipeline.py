@@ -226,3 +226,16 @@ def test_minimo_vetorizado_igual_a_regra_linha_a_linha(analise):
     linha = df.apply(calcula_minimo_matricula, axis=1).astype(float)
     vetor = minimo_matricula_vetorizado(df)
     assert np.allclose(linha.fillna(-1), vetor.fillna(-1))
+
+
+def test_etapa2_mostra_economias_das_ligacoes(tmp_path):
+    import json
+    from dados_sinteticos import gera_pasta
+    from faturamento import Sessao
+    gera_pasta(str(tmp_path))
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    info = s.preparar()
+    linhas = info["linhas"]
+    assert linhas and all("economias" in l for l in linhas)
+    assert sum(l["economias"] for l in linhas) > 0
+    json.dumps(linhas, allow_nan=False)                       # vai em JSON para o site: sem NaN
