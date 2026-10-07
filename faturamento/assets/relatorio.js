@@ -585,7 +585,10 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // CSV (";", aspas no padrão do pandas) só com as linhas cuja coluna Superintendência é `sup`; null se não houver a coluna
-function filtraCsvPorSup(texto, sup) {
+function filtraCsvPorSup(texto, sup) { return filtraCsv(texto, { 'Superintendência': sup }); }
+
+// CSV só com as linhas em que cada coluna de `filtros` ({coluna: valor}) tem o valor pedido; null se faltar alguma coluna
+function filtraCsv(texto, filtros) {
     const bom = texto.charCodeAt(0) === 0xFEFF ? '\uFEFF' : '';
     if (bom) texto = texto.slice(1);
     const registros = [];                                   // quebra de linha dentro de aspas não separa registros
@@ -608,11 +611,43 @@ function filtraCsvPorSup(texto, sup) {
         return out;
     };
     if (!registros.length) return null;
-    const col = campos(registros[0]).indexOf('Superintendência');
-    if (col < 0) return null;
-    const linhas = registros.slice(1).filter(r => r && (campos(r)[col] || '').trim() === sup);
+    const cab = campos(registros[0]);
+    const conds = Object.keys(filtros).map(nome => [cab.indexOf(nome), String(filtros[nome])]);
+    if (conds.some(([col]) => col < 0)) return null;
+    const linhas = registros.slice(1).filter(r => {
+        if (!r) return false;
+        const f = campos(r);
+        return conds.every(([col, v]) => (f[col] || '').trim() === v);
+    });
     return bom + [registros[0]].concat(linhas).join('\n') + '\n';
 }
+
+// Situação de lançamento: a seta de cada card baixa as ligações daquela situação (e da SUP do quadro).
+// A lista vem embutida uma vez, em gzip (script#sitl-detalhe); o navegador descompacta na hora.
+document.addEventListener('click', async function (e) {
+    const b = e.target.closest && e.target.closest('.btn-sitl-dl');
+    if (!b) return;
+    const el = document.getElementById('sitl-detalhe');
+    if (!el) return;
+    try {
+        const bin = atob(el.textContent.trim()), bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const fluxo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+        const texto = await new Response(fluxo).text();
+        const filtros = {}; filtros[el.dataset.colSit] = b.dataset.sit;
+        if (b.dataset.sup && b.dataset.sup !== 'TODAS') filtros['Superintendência'] = b.dataset.sup;
+        const csv = filtraCsv(texto, filtros);
+        if (csv === null) return;
+        const nome = el.dataset.arquivo + '_' + (b.dataset.sit + (b.dataset.sup && b.dataset.sup !== 'TODAS' ? '_' + b.dataset.sup : ''))
+            .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') + '.csv';
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (erro) {
+        alert('Não foi possível baixar a lista desta situação neste navegador (' + erro.message + ').');
+    }
+});
 
 // Botões "Base: ... (CSV)": a base vem embutida uma vez (script#base-dl-<chave>) e vários botões a usam
 document.addEventListener('click', function (e) {

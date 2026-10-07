@@ -248,6 +248,10 @@ td.num { text-align:right; }
 .sitl-card { border:1px solid var(--linha); border-top:3px solid var(--marinho); border-radius:8px; padding:10px 12px; background:#FFFFFF; font-size:12.5px; }
 .sitl-topo { display:flex; flex-direction:column; gap:1px; margin-bottom:6px; }
 .sitl-topo b { color:var(--marinho); font-size:13px; overflow-wrap:anywhere; }
+.btn-sitl-dl { border:1px solid var(--linha); background:#FFFFFF; color:var(--marinho); border-radius:5px; padding:0 5px; margin-left:4px;
+               font-size:12px; line-height:18px; cursor:pointer; vertical-align:1px; }
+.btn-sitl-dl:hover, .btn-sitl-dl:focus-visible { background:var(--marinho); color:#FFFFFF; }
+@media print { .btn-sitl-dl { display:none; } }
 .sitl-topo span { color:var(--azul-claro); font-size:11.5px; }
 .sitl-num { display:flex; flex-direction:column; margin-bottom:6px; }
 .sitl-num span { color:var(--azul); font-size:11px; }

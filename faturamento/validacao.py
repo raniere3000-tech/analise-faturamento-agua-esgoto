@@ -771,6 +771,8 @@ def gera_validacao_html(ctx):
                lambda sup: {"Situacao Lancamento": (r.get("situacao_lancamento") or {}).get(sup)}, "situacao_lancamento", ctx=ctx,
                bases=[("fatura", f"{f_atual_ant}; Serviço = Água: conte N. Ligação por Situacao Lancamento; some volume/valor")],
                montagem=["Um card por situação, da mais frequente para a menos frequente",
+                         "A seta ⬇ ao lado do código baixa (CSV) as ligações do mês atual nessa situação — da SUP do quadro —, "
+                         "com a situação do mês anterior, volume e valor dos dois meses",
                          "Variações em azul quando sobem e em laranja quando caem; o filtro Superintendência mostra o quadro da SUP"]),
         _bloco("Tabelas — Top 100 clientes com maior queda de consumo (Água / Esgoto)",
                "as ligações que consumiam no mês anterior e consumiram menos no atual.",
