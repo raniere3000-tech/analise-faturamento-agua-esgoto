@@ -19,7 +19,11 @@ def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False):
         df["Categoria"] = df.get("Categoria", pd.Series(dtype=str)).astype(str).str.strip()
         df["Consumo_Num"] = pd.to_numeric(df.get("Consumo Faturado", 0), errors="coerce").fillna(0)
         df["Valor_Num"] = pd.to_numeric(df.get("Valor (R$)", 0), errors="coerce").fillna(0)
+        df["Sit_Lanc"] = (df["Situacao Lancamento"].astype(object).where(df["Situacao Lancamento"].notna(), "").astype(str).str.strip()
+                          if com_sit else "")
         return df
+
+    com_sit = "Situacao Lancamento" in df_at.columns and "Situacao Lancamento" in df_ant.columns
 
     at = prepara(df_at[df_at["Rubrica"].str.contains(rubrica, case=False, na=False)])
     ant = prepara(df_ant[df_ant["Rubrica"].str.contains(rubrica, case=False, na=False)])
@@ -29,6 +33,7 @@ def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False):
             "Nome_Cliente": ("Nome_Cliente", "first"),
             "Grupo": ("Grupo", "first"),
             "Categoria": ("Categoria", "first"),
+            "Sit_Atual": ("Sit_Lanc", "first"),
             "Consumo_Atual": ("Consumo_Num", "sum"),
             "Valor_Atual": ("Valor_Num", "sum"),
         }
@@ -37,7 +42,8 @@ def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False):
     ant_group = ant.groupby("N. Ligação").agg(
         **{
             "Consumo_Anterior": ("Consumo_Num", "sum"),
-            "Valor_Anterior": ("Valor_Num", "sum")
+            "Valor_Anterior": ("Valor_Num", "sum"),
+            "Sit_Anterior": ("Sit_Lanc", "first"),
         }
     ).reset_index()
 
@@ -58,14 +64,18 @@ def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False):
     col_valor_at = f"Valor R$ {ref_at}"
     col_valor_ant = f"Valor R$ {ref_ant}"
 
+    col_sit_at, col_sit_ant = f"Situação Lançamento {ref_at}", f"Situação Lançamento {ref_ant}"
     comp = comp.rename(columns={
+        "Sit_Atual": col_sit_at,
+        "Sit_Anterior": col_sit_ant,
         "Consumo_Atual": col_nome_at,
         "Consumo_Anterior": col_nome_ant,
         "Valor_Atual": col_valor_at,
         "Valor_Anterior": col_valor_ant,
     })
 
-    return comp[["Ranking", "N. Ligação", "Nome_Cliente", "Grupo", "Categoria",
+    return comp[["Ranking", "N. Ligação", "Nome_Cliente", "Grupo", "Categoria"]
+        + ([col_sit_at, col_sit_ant] if com_sit else []) + [
         col_nome_at, col_nome_ant, f"{p}_Consumo", f"{p}_%",
         col_valor_at, col_valor_ant, f"{p}_Valor_R$"]]
 

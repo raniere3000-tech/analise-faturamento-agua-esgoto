@@ -708,7 +708,7 @@ def gera_tabela_top100_html(df, titulo, slug, botao_extra="", aumento=False):
         for c in colunas:
             v = r[c]
             texto = formata_valor(c, v)
-            alinhamento = "left" if c in ("Nome_Cliente", "Grupo", "Categoria") else "center"
+            alinhamento = "left" if c in ("Nome_Cliente", "Grupo", "Categoria") or str(c).startswith("Situação Lançamento") else "center"
             destaque = ""
             if c == f"{prefixo}_%" and isinstance(v, (int, float)) and v >= DESTAQUE_QUEDA_PCT_TOP100:
                 destaque = f"color:{cor}; font-weight:700;"

@@ -243,6 +243,22 @@ td.num { text-align:right; }
 #view-tabelas .card { box-shadow:none; border:1px solid #e5eaf0; }
 
 
+/* Diretas: cards da Situação de lançamento */
+.sitl-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:10px; }
+.sitl-card { border:1px solid var(--linha); border-top:3px solid var(--marinho); border-radius:8px; padding:10px 12px; background:#FFFFFF; font-size:12.5px; }
+.sitl-topo { display:flex; flex-direction:column; gap:1px; margin-bottom:6px; }
+.sitl-topo b { color:var(--marinho); font-size:13px; overflow-wrap:anywhere; }
+.sitl-topo span { color:var(--azul-claro); font-size:11.5px; }
+.sitl-num { display:flex; flex-direction:column; margin-bottom:6px; }
+.sitl-num span { color:var(--azul); font-size:11px; }
+.sitl-num b { font-size:20px; color:var(--preto); font-variant-numeric:tabular-nums; }
+.sitl-num small { color:var(--azul); font-size:11px; }
+.sitl-lista { list-style:none; margin:0 0 6px; padding:0; }
+.sitl-lista li { display:flex; justify-content:space-between; gap:8px; padding:2px 0; border-bottom:1px dashed #e5eaf0; font-variant-numeric:tabular-nums; }
+.sitl-lista li span { color:var(--azul); }
+.sitl-porque { margin:4px 0 0; font-size:11.5px !important; line-height:1.35; color:#33475f; }
+@media print { .sitl-card { break-inside:avoid; } }
+
 /* Aba Dados: validação dos cálculos */
 .val-aba { border:1px solid var(--linha); border-radius:8px; margin:8px 0; background:#fff; }
 .val-aba > summary { cursor:pointer; padding:10px 14px; font-weight:700; color:var(--marinho); }

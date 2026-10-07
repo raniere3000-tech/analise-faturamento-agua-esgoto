@@ -64,6 +64,7 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
                          "situacao": "ATIVA", "conta": "EM ANALISE", "eco": "Residencial", "n_eco": 1, "base": 500.0})
 
     fat, consumos = [], {}
+    rnd_sit = random.Random(semente + 1)               # sorteio à parte: não muda os demais números gerados
     for (mm, aa) in meses:
         ref_leitura = f"15/{mm:02d}/{aa}"
         linhas_consumo = []
@@ -82,13 +83,14 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
             extras = [(r, -20.0) for r in CANCELAMENTOS] if com_dre and rnd.random() < 0.1 else []
             # grupo que ainda não faturou no mês atual (os sorteios acontecem igual, para comparar com o mês completo)
             falta_no_mes = (mm, aa) == (m, a) and grupos_faltando and l["grupo"] in grupos[-grupos_faltando:]
+            sit_lanc = rnd_sit.choices(["01-LEITURA NORMAL", "02-MEDIA", "03-MINIMO", "04-ESTIMADO"], [70, 15, 10, 5])[0]
             for rub, val in (("VALOR DE AGUA", valor_agua), ("VALOR DE ESGOTO", valor_esg), ("VALOR DE OUTRO", 3.5), *extras):
                 if falta_no_mes:
                     continue
                 fat.append({
                     "N. da Ligacao": l["lig"], "Grupo": l["grupo"], "Nome Cliente": l["cliente"],
                     "Categoria": l["categoria"], "Situacao Ligacao": l["situacao"], "Situacao Conta": l["conta"],
-                    "Rubrica": rub, "Valor Parcela": _br(val),
+                    "Situação Lançamento": sit_lanc, "Rubrica": rub, "Valor Parcela": _br(val),
                     "Data de Vencimento": f"28/{mm:02d}/{aa}", "Referencia de Leitura": ref_leitura,
                     **({"Nome da Localidade": l["cidade"], "Endereco Ligacao": "RUA X, 1"} if com_dre else {}),
                 })
