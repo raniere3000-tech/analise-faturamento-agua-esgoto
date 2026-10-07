@@ -174,7 +174,9 @@ def monta_base(ctx):
     progresso.atualiza(47, "Merge base final")
 
     colunas_conflito = ["Grupo", "Situacao Ligacao", "Situacao Lancamento", "Nome Cliente", "Categoria"]
-    consumo_total = consumo_total.drop(columns=[c for c in colunas_conflito if c in consumo_total.columns], errors="ignore")
+    # a fatura manda; a coluna do consumo só fica se a fatura não tiver (ex.: Situacao Lancamento só no consumo)
+    consumo_total = consumo_total.drop(columns=[c for c in colunas_conflito if c in consumo_total.columns
+                                                and (c in fatura_total.columns or c != "Situacao Lancamento")], errors="ignore")
 
     base_final = fatura_total.merge(
         consumo_total,

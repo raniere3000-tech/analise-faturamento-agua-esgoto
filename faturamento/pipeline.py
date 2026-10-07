@@ -123,6 +123,9 @@ class Sessao:
         tabela_top100_agua_html, tabela_top100_esgoto_html = "".join(blocos_queda), ""
         passo(80, "Criando tabelas: Top 100 maior aumento de consumo (água e esgoto)")
         tabela_aumento_agua_html, tabela_aumento_esgoto_html = "".join(blocos_aumento), ""
+        passo(81, "Criando cards: Situação de lançamento (por que analisar cada código)")
+        from .situacao_lancamento import gera_cards_situacao_html
+        cards_situacao_html = gera_cards_situacao_html(ctx)
 
         passo(82, "Calculando: resumo consolidado por grupo")
         df_resumo_grupo = monta_dados_resumo_grupo(ctx)
@@ -177,6 +180,7 @@ class Sessao:
             quadro_ciclos_html=quadro_ciclos_html,
             matriz_html=matriz_html,
             tabela_minimo_html=tabela_minimo_html,
+            cards_situacao_html=cards_situacao_html,
             tabela_top100_agua_html=tabela_top100_agua_html,
             tabela_top100_esgoto_html=tabela_top100_esgoto_html,
             tabela_aumento_agua_html=tabela_aumento_agua_html,

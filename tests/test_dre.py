@@ -496,3 +496,26 @@ def test_card_de_dias_segue_o_filtro(sessao):
     assert 'data-field="dias-media-atual"' in html and "data-dias-atual=" in html[html.index('id="tabela-dados-resumo"'):]
     resumo = sessao.ctx.resultados["resumo"]
     assert (resumo["Dias_Leitura_Atual"] > 0).all()
+
+
+def test_situacao_lancamento_no_top100_e_nos_cards(sessao):
+    from faturamento.situacao_lancamento import classifica
+    ctx = sessao.ctx
+    top = ctx.resultados["top_agua"]
+    assert "Situação Lançamento 09/2026" in top.columns and "Situação Lançamento 08/2026" in top.columns
+    assert set(top["Situação Lançamento 09/2026"]) <= {"01-LEITURA NORMAL", "02-MEDIA", "03-MINIMO", "04-ESTIMADO"}
+    r = ctx.resultados["situacao_lancamento"]["TODAS"]
+    at = ctx.df_atual[ctx.df_atual["__serv"] == "A"]
+    assert r["Ligações atual"].sum() == at["N. Ligação"].nunique()
+    assert r["% ligações atual"].sum() == pytest.approx(100)
+    assert r.iloc[0]["Situação"] == "01-LEITURA NORMAL"            # a mais frequente primeiro
+    lagos = ctx.resultados["situacao_lancamento"]["LAGOS"]
+    assert 0 < lagos["Ligações atual"].sum() < r["Ligações atual"].sum()
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    diretas = html[html.index('id="view-tabelas"'):]
+    assert "Situação de lançamento —" in diretas and diretas.count('class="sitl-card"') >= 4
+    assert "Por que analisar:" in diretas and "Situação Lançamento 09/2026" in diretas
+    assert classifica("02-MEDIA")[0] == "Consumo pela média"
+    assert classifica("LEITURA NAO REALIZADA")[0] == "Leitura não realizada"
+    assert classifica("01-LEITURA NORMAL")[0] == "Leitura real"
+    assert classifica("XPTO")[0] == "Situação sem regra cadastrada"

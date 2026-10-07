@@ -13,7 +13,7 @@ from .tabelas_html import botao_download_xlsx, botoes_por_sup, filtra_sup, xlsx_
 
 LIMITE_BASE = 300000         # linhas por base para download (o Excel aceita até ~1 milhão)
 COLUNAS_BASE = ["N. Ligação", "Grupo", "Rubrica", "Referencia de Leitura", "Valor (R$)", "Consumo Faturado", "Economias_Totais",
-                "Qts. Dias", "Situacao Ligacao", "Categoria", "Cidade"]
+                "Qts. Dias", "Situacao Ligacao", "Situacao Lancamento", "Categoria", "Cidade"]
 
 
 def _amostra(df, n=10):
@@ -758,6 +758,20 @@ def gera_validacao_html(ctx):
                lambda sup: {"Minimo": filtra_sup(ctx, r.get("minimo"), sup)}, "minimo", ctx=ctx,
                bases=[("fatura", f"{f_atual_ant}; Serviço = Água; compare Consumo Faturado com o mínimo da Categoria (regras.json)")],
                montagem=["Uma linha por grupo: acima e abaixo nos dois meses e as diferenças; linha Total"]),
+        _bloco("Cards — Situação de lançamento",
+               "um card por código da coluna Situacao Lancamento da fatura de ciclo (como o consumo da conta foi apurado: leitura real, "
+               "média, mínimo, estimado...), com ligações, participação, volume, valor e o motivo para analisar cada situação.",
+               ["Uma ligação por linha da rubrica de água; a situação é a da conta no mês (a primeira, se houver mais de uma)",
+                "Ligações = quantidade de ligações na situação; % = ligações da situação ÷ total de ligações do mês; Δ p.p. = % atual − % anterior",
+                "Volume e economias = soma de Consumo Faturado e Economias_Totais só onde Consumo Faturado &gt; 0; Vol./economia = volume ÷ economias",
+                "Valor = Valor (R$) de água + esgoto da ligação; Δ valor = atual − anterior",
+                "Leitura da situação e 'Por que analisar' vêm de palavras-chave no código (MEDIA, MINIMO, ESTIMADO, NORMAL, CANCEL...); "
+                "código sem palavra conhecida recebe a explicação genérica"],
+               comum_fatura + ["<b>Situacao Lancamento</b> (fatura de ciclo; se só o consumo tiver, usa a do consumo)", "<b>N. Ligação</b>"],
+               lambda sup: {"Situacao Lancamento": (r.get("situacao_lancamento") or {}).get(sup)}, "situacao_lancamento", ctx=ctx,
+               bases=[("fatura", f"{f_atual_ant}; Serviço = Água: conte N. Ligação por Situacao Lancamento; some volume/valor")],
+               montagem=["Um card por situação, da mais frequente para a menos frequente",
+                         "Variações em azul quando sobem e em laranja quando caem; o filtro Superintendência mostra o quadro da SUP"]),
         _bloco("Tabelas — Top 100 clientes com maior queda de consumo (Água / Esgoto)",
                "as ligações que consumiam no mês anterior e consumiram menos no atual.",
                ["Queda de consumo = consumo anterior − consumo atual (só quedas positivas); Queda % = queda ÷ anterior",
