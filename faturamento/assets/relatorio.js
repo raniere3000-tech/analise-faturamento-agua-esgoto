@@ -1011,6 +1011,7 @@ function gerarExecutivo() {
             try { const img = new Image(); img.src = cv.toDataURL('image/png'); img.className = 'exec-grafico'; copias[i].replaceWith(img); }
             catch (e) { copias[i].remove(); }
         });
+        c.querySelectorAll('script').forEach(x => x.remove());          // só o conteúdo: nada roda no documento do PDF
         c.querySelectorAll('[contenteditable]').forEach(x => x.removeAttribute('contenteditable'));
         c.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
         c.removeAttribute('id');
@@ -1040,9 +1041,38 @@ function gerarExecutivo() {
         q('#card-justificativa'),
     ];
     itens.forEach(el => { const c = clona(el); if (c) { c.classList.add('exec-item'); cont.appendChild(c); } });
-    document.body.appendChild(cont);
-    document.body.classList.add('modo-executivo');
-    const limpa = () => { document.body.classList.remove('modo-executivo'); cont.remove(); window.removeEventListener('afterprint', limpa); };
-    window.addEventListener('afterprint', limpa);
-    setTimeout(() => window.print(), 150);                            // dá tempo das imagens dos gráficos carregarem
+    imprimirDocumentoLeve(cont);
+}
+
+// Imprime só o conteúdo do Executivo num documento à parte (iframe escondido), com os estilos do relatório.
+// Imprimir o relatório inteiro (vários MB com as bases embutidas) fazia a visualização de impressão falhar e o PDF
+// salvo sair corrompido ("Não é possível abrir este arquivo").
+function montaDocumentoExecutivo(cont) {
+    const estilos = Array.from(document.querySelectorAll('style')).map(s => s.textContent).join('\n');
+    const fontes = Array.from(document.querySelectorAll('link[rel="stylesheet"], link[rel="preconnect"]')).map(l => l.outerHTML).join('');
+    return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>' +
+        (document.title || 'Relatório Executivo').replace(/</g, '&lt;') + ' — Executivo</title>' + fontes +
+        '<style>' + estilos + '\n#view-executivo{display:block !important}</style></head><body class="modo-executivo">' +
+        cont.outerHTML + '</body></html>';
+}
+
+function imprimirDocumentoLeve(cont) {
+    const antigo = document.getElementById('frame-executivo'); if (antigo) antigo.remove();
+    const fr = document.createElement('iframe');
+    fr.id = 'frame-executivo'; fr.setAttribute('aria-hidden', 'true'); fr.title = 'Executivo';
+    fr.style.cssText = 'position:fixed; right:0; bottom:0; width:1px; height:1px; border:0; opacity:0; pointer-events:none;';
+    document.body.appendChild(fr);
+    const doc = fr.contentDocument;
+    doc.open(); doc.write(montaDocumentoExecutivo(cont)); doc.close();
+    const imgs = Array.from(doc.images);
+    const prontas = Promise.all(imgs.map(i => i.complete ? null : new Promise(r => { i.onload = i.onerror = r; })));
+    const fontes = doc.fonts && doc.fonts.ready ? doc.fonts.ready.catch(() => null) : null;
+    Promise.race([Promise.all([prontas, fontes]), new Promise(r => setTimeout(r, 3000))]).then(() => {
+        const w = fr.contentWindow;
+        const tira = () => setTimeout(() => fr.remove(), 1000);
+        w.addEventListener('afterprint', tira);
+        w.focus();
+        w.print();
+        setTimeout(() => { if (document.body.contains(fr)) fr.remove(); }, 120000);   // garantia, se afterprint não vier
+    });
 }
