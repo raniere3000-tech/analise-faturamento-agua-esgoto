@@ -111,6 +111,7 @@ class Sessao:
                                          xlsx_bytes({"Top100_Aumento_Agua": aa, "Top100_Aumento_Esgoto": ae}))
                 suf = f" ({_nome_sup(sup)})"
             top_por_sup[sup] = (qa, qe)
+            ctx.resultados.setdefault("top_sup", {})[sup] = (qa, qe, aa, ae)      # para os downloads da aba Dados
             sl = "".join(c for c in sup.lower() if c.isalnum())
             ds = html.escape(sup, quote=True)
             blocos_queda.append(f'<div class="sup-top-bloco" data-sup="{ds}">'
