@@ -231,10 +231,10 @@ def test_dados_tem_validacao_dos_calculos(sessao):
     assert "validação dos cálculos" in dados and "btn-baixar" in dados
     # todos os tópicos recolhíveis e fechados ao abrir a aba
     for t in ("Avisos (", "Conferência dos KPIs", "Bases carregadas", "Orçado: linhas reconhecidas", "Bases para download",
-              "1. Resumo", "2. Diretas", "3. Indiretas", "4. Forecast", "5. DRE"):
+              "1. Resumo", "2. Diretas", "3. Análise", "4. Indiretas", "5. Forecast", "6. DRE"):
         assert f'<details class="val-aba"><summary>{t}' in dados, t
     assert '<details class="val-aba" open' not in dados
-    pos = [dados.index(t) for t in ("1. Resumo", "2. Diretas", "3. Indiretas", "4. Forecast", "5. DRE")]
+    pos = [dados.index(t) for t in ("1. Resumo", "2. Diretas", "3. Análise", "4. Indiretas", "5. Forecast", "6. DRE")]
     assert pos == sorted(pos)
 
 

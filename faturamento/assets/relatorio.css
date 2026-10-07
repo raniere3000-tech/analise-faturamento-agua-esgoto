@@ -44,8 +44,8 @@ body { font-family:var(--fonte); background:var(--cinza); margin:0; color:var(--
 .toggle button.active { background:var(--marinho); color:#FFFFFF; }
 button:focus-visible, input:focus-visible { outline:2px solid var(--azul-claro); outline-offset:2px; }
 
-#view-resumo, #view-tabelas, #view-dre, #view-indiretas, #view-dados, #view-forecast { display:none; padding:0 16px 48px; }
-#view-resumo.ativo, #view-tabelas.ativo, #view-dre.ativo, #view-indiretas.ativo, #view-dados.ativo, #view-forecast.ativo { display:block; }
+#view-resumo, :is(#view-tabelas, #view-analise), #view-dre, #view-indiretas, #view-dados, #view-forecast { display:none; padding:0 16px 48px; }
+#view-resumo.ativo, :is(#view-tabelas, #view-analise).ativo, #view-dre.ativo, #view-indiretas.ativo, #view-dados.ativo, #view-forecast.ativo { display:block; }
 
 /* ===== Seções ===== */
 .card { background:#FFFFFF; margin:16px auto; padding:20px 22px; max-width:1800px; border:1px solid var(--linha); border-radius:12px; box-shadow:0 3px 12px rgba(17,42,66,.045); overflow-x:auto; }
@@ -129,14 +129,14 @@ tbody tr.linha-media td, tbody tr.linha-total td { font-weight:700; background-c
     body { background:#FFFFFF; font-size:11px; }
     .header-exec { -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:14px 16px; }
     .toolbar, .btn-just, .pular-conteudo, .btn-remover-item { display:none !important; }
-    #view-resumo, #view-tabelas, #view-dre, #view-indiretas, #view-dados, #view-forecast { display:block !important; padding:0; }
+    #view-resumo, :is(#view-tabelas, #view-analise), #view-dre, #view-indiretas, #view-dados, #view-forecast { display:block !important; padding:0; }
     .seletor-sup { display:none !important; }
     .sup-bloco, .prev-bloco { display:none; }
     .sup-bloco[data-sup="TODAS"], .prev-bloco[data-sup="TODAS"] { display:block !important; }
     .card, .kpis-grid { break-inside:avoid; border-color:#BBB; margin:8px auto; }
     .tabela-wrap { overflow:visible; }
     th, .kpi-card { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    #view-tabelas .card { break-inside:auto; }
+    :is(#view-tabelas, #view-analise) .card { break-inside:auto; }
 }
 
 /* ===== DRE e Indiretas ===== */
@@ -190,7 +190,7 @@ td.num { text-align:right; }
 .toggle button { padding:4px 16px; }
 .btn-filtro { padding:5px 12px; }
 .seletor-sup select { padding:4px 8px; }
-#view-resumo, #view-tabelas, #view-dre, #view-indiretas, #view-dados, #view-forecast { padding-bottom:32px; }
+#view-resumo, :is(#view-tabelas, #view-analise), #view-dre, #view-indiretas, #view-dados, #view-forecast { padding-bottom:32px; }
 .card { margin:10px auto; padding:14px 18px; }
 .card h2, .card h2 { font-size:14px; margin:0 0 8px 0; }
 .nota-secao { margin:-4px 0 6px; font-size:11.5px; line-height:1.35; }
@@ -208,10 +208,10 @@ td.num { text-align:right; }
 .btn-filtro { font-size:12px; white-space:nowrap; }
 
 /* Diretas: tabelas menores */
-#view-tabelas table { font-size:10.5px; line-height:1.25; }
-#view-tabelas th, #view-tabelas td { padding:2px 5px; }
-#view-tabelas th { font-size:10px; }
-#view-tabelas .card h2 { font-size:15px; }
+:is(#view-tabelas, #view-analise) table { font-size:10.5px; line-height:1.25; }
+:is(#view-tabelas, #view-analise) th, :is(#view-tabelas, #view-analise) td { padding:2px 5px; }
+:is(#view-tabelas, #view-analise) th { font-size:10px; }
+:is(#view-tabelas, #view-analise) .card h2 { font-size:15px; }
 .btn-baixar { margin-left:0; padding:2px 9px; font-size:13px; line-height:20px; }   /* só a seta; o nome aparece ao passar o mouse */
 @media print { .btn-baixar { display:none !important; } }
 
@@ -230,17 +230,17 @@ td.num { text-align:right; }
 
 /* Diretas: visual mais limpo — cabeçalho claro, sem preenchimentos coloridos, só texto laranja nas quedas */
 .barra-diretas { display:flex; justify-content:flex-end; margin:8px 0 -4px; }
-#view-tabelas.compacto .x-det { display:none; }
-#view-tabelas table { border-collapse:collapse; }
-#view-tabelas th, #view-tabelas td { border:0; border-bottom:1px solid #edf1f5; padding:4px 7px; }
-#view-tabelas th { background:var(--marinho) !important; color:#fff; font-weight:600; border-bottom:1px solid var(--marinho); }
-#view-tabelas .header-sub th { background:var(--azul) !important; color:#fff; font-weight:500; font-size:9.5px; border-bottom:1px solid var(--azul); }
-#view-tabelas table:not(.tabela-matriz-grupo) tbody tr:nth-child(even) td { background:transparent !important; }
-#view-tabelas table:not(.tabela-matriz-grupo) tbody tr:hover td { background:#f8fafc !important; }
-#view-tabelas tbody tr.linha-media td, #view-tabelas tbody tr.linha-total td { background:var(--tint) !important; border-top:1.5px solid var(--azul); font-weight:700; }
-#view-tabelas table:not(.tabela-matriz-grupo) td[style*="background"] { background:transparent !important; }
-#view-tabelas td[data-field="grupo"], #view-tabelas td:first-child { color:#334155; font-weight:600; }
-#view-tabelas .card { box-shadow:none; border:1px solid #e5eaf0; }
+:is(#view-tabelas, #view-analise).compacto .x-det { display:none; }
+:is(#view-tabelas, #view-analise) table { border-collapse:collapse; }
+:is(#view-tabelas, #view-analise) th, :is(#view-tabelas, #view-analise) td { border:0; border-bottom:1px solid #edf1f5; padding:4px 7px; }
+:is(#view-tabelas, #view-analise) th { background:var(--marinho) !important; color:#fff; font-weight:600; border-bottom:1px solid var(--marinho); }
+:is(#view-tabelas, #view-analise) .header-sub th { background:var(--azul) !important; color:#fff; font-weight:500; font-size:9.5px; border-bottom:1px solid var(--azul); }
+:is(#view-tabelas, #view-analise) table:not(.tabela-matriz-grupo) tbody tr:nth-child(even) td { background:transparent !important; }
+:is(#view-tabelas, #view-analise) table:not(.tabela-matriz-grupo) tbody tr:hover td { background:#f8fafc !important; }
+:is(#view-tabelas, #view-analise) tbody tr.linha-media td, :is(#view-tabelas, #view-analise) tbody tr.linha-total td { background:var(--tint) !important; border-top:1.5px solid var(--azul); font-weight:700; }
+:is(#view-tabelas, #view-analise) table:not(.tabela-matriz-grupo) td[style*="background"] { background:transparent !important; }
+:is(#view-tabelas, #view-analise) td[data-field="grupo"], :is(#view-tabelas, #view-analise) td:first-child { color:#334155; font-weight:600; }
+:is(#view-tabelas, #view-analise) .card { box-shadow:none; border:1px solid #e5eaf0; }
 
 
 /* Diretas: cards da Situação de lançamento */
@@ -301,13 +301,13 @@ td.num { text-align:right; }
 .tabela-dados.fc-metodos td:first-child { width:24%; } .tabela-dados.fc-metodos td:nth-child(2) { width:14%; white-space:nowrap; }
 
 /* Diretas: linhas de Total / Média na mesma cor do cabeçalho (fundo marinho, texto branco; quedas em laranja claro) */
-#view-tabelas tbody tr.linha-media td, #view-tabelas tbody tr.linha-total td,
-#view-tabelas table:not(.tabela-matriz-grupo) tbody tr.linha-media td, #view-tabelas table:not(.tabela-matriz-grupo) tbody tr.linha-total td,
-#view-tabelas table tbody tr.linha-media:hover td, #view-tabelas table tbody tr.linha-total:hover td {
+:is(#view-tabelas, #view-analise) tbody tr.linha-media td, :is(#view-tabelas, #view-analise) tbody tr.linha-total td,
+:is(#view-tabelas, #view-analise) table:not(.tabela-matriz-grupo) tbody tr.linha-media td, :is(#view-tabelas, #view-analise) table:not(.tabela-matriz-grupo) tbody tr.linha-total td,
+:is(#view-tabelas, #view-analise) table tbody tr.linha-media:hover td, :is(#view-tabelas, #view-analise) table tbody tr.linha-total:hover td {
     background:var(--marinho) !important; color:#fff !important; border-top:0; border-bottom:1px solid var(--marinho); font-weight:700; }
-#view-tabelas table:not(.tabela-matriz-grupo) tbody tr.linha-media td:is([style*="C2560C"], [style*="194, 86, 12"]),
-#view-tabelas table:not(.tabela-matriz-grupo) tbody tr.linha-total td:is([style*="C2560C"], [style*="194, 86, 12"]),
-#view-tabelas table tbody tr:is(.linha-media, .linha-total):hover td:is([style*="C2560C"], [style*="194, 86, 12"]) { color:#FFB37A !important; }
+:is(#view-tabelas, #view-analise) table:not(.tabela-matriz-grupo) tbody tr.linha-media td:is([style*="C2560C"], [style*="194, 86, 12"]),
+:is(#view-tabelas, #view-analise) table:not(.tabela-matriz-grupo) tbody tr.linha-total td:is([style*="C2560C"], [style*="194, 86, 12"]),
+:is(#view-tabelas, #view-analise) table tbody tr:is(.linha-media, .linha-total):hover td:is([style*="C2560C"], [style*="194, 86, 12"]) { color:#FFB37A !important; }
 
 /* Dados: bases para download em cada item da validação */
 .val-bases { list-style:none; padding-left:0 !important; margin:4px 0 8px; }

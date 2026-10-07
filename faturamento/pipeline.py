@@ -17,7 +17,7 @@ from .comparativo import calcula_comparativos, define_referencias
 from .dados import gera_aba_dados_html
 from .previsao import gera_aba_forecast_html
 from .dre import gera_aba_dre_html, gera_aba_indiretas_html, gera_filtros_dre_html, gera_info_filtros_json
-from .config import NOME_RELATORIO_HTML, NOME_TOP100_AUMENTO_XLSX, NOME_TOP100_XLSX, TEXTO_JUSTIFICATIVA_PADRAO
+from .config import NOME_RELATORIO_HTML, NOME_TOP100_XLSX, TEXTO_JUSTIFICATIVA_PADRAO
 from .contexto import Contexto
 from .orcado_ciclo import gera_tabelas_orcado_ciclo_html
 from .painel_html import (gera_card_leitura_html, gera_cards_insights_html, gera_cards_kpis_html, gera_destaques_html,
@@ -92,41 +92,43 @@ class Sessao:
         prepara(ctx)                                   # marca a superintendência de cada linha (Top 100 por SUP)
         top_agua_df, top_esg_df = exporta_top100(ctx.df_atual, ctx.df_anterior, ctx.ref_atual,
                                                  ctx.ref_anterior, self.caminho_top100)
-        with open(self.caminho_top100, "rb") as f:
-            botao_top100 = botao_download_xlsx("Baixar Top 100 (Excel)", NOME_TOP100_XLSX, f.read())
         aum_agua_df, aum_esg_df = gera_top100_aumentos(ctx.df_atual, ctx.df_anterior, ctx.ref_atual, ctx.ref_anterior)
-        botao_aumento = botao_download_xlsx("Baixar Top 100 aumentos (Excel)", NOME_TOP100_AUMENTO_XLSX,
-                                            xlsx_bytes({"Top100_Aumento_Agua": aum_agua_df, "Top100_Aumento_Esgoto": aum_esg_df}))
+
+        def seta(df, rotulo, arquivo, aba, chave, ds):
+            """Seta de baixar de UMA tabela (água ou esgoto); com grupos desmarcados, baixa o CSV refeito só com eles."""
+            b = botao_download_xlsx(rotulo, arquivo, xlsx_bytes({aba: df}))
+            return (f'<span data-csv-filtrado="top" data-tops="{chave}" data-sup="{ds}" '
+                    f'data-nome="{arquivo.rsplit(".", 1)[0]}">{b}</span>')
+
         # um conjunto de rankings por superintendência (o filtro Superintendência mostra o da SUP escolhida)
         blocos_queda, blocos_aumento = [], []
         top_por_sup = {}                               # para os Destaques do mês de cada superintendência
         for sup in lista_sups(ctx):
             if sup == "TODAS":
-                qa, qe, aa, ae, bq, ba, suf = top_agua_df, top_esg_df, aum_agua_df, aum_esg_df, botao_top100, botao_aumento, ""
+                qa, qe, aa, ae, suf, nome_sup = top_agua_df, top_esg_df, aum_agua_df, aum_esg_df, "", ""
             else:
                 # mesma comparação por ligação de Todas (cache), só filtrada pela SUP: não refaz a soma por ligação
                 qa, qe = (gera_top100_quedas(ctx.df_atual, ctx.df_anterior, rub, ctx.ref_atual, ctx.ref_anterior, sup=sup)
                           for rub in ("AGUA", "ESGOTO"))
                 aa, ae = gera_top100_aumentos(ctx.df_atual, ctx.df_anterior, ctx.ref_atual, ctx.ref_anterior, sup=sup)
-                slug_sup = "".join(c for c in sup.lower() if c.isalnum())
-                bq = botao_download_xlsx(f"Baixar Top 100 {sup} (Excel)", f"Top100_Quedas_{slug_sup}.xlsx",
-                                         xlsx_bytes({"Top100_Agua": qa, "Top100_Esgoto": qe}))
-                ba = botao_download_xlsx(f"Baixar Top 100 aumentos {sup} (Excel)", f"Top100_Aumentos_{slug_sup}.xlsx",
-                                         xlsx_bytes({"Top100_Aumento_Agua": aa, "Top100_Aumento_Esgoto": ae}))
-                suf = f" ({_nome_sup(sup)})"
+                suf, nome_sup = f" ({_nome_sup(sup)})", f" {sup}"
             top_por_sup[sup] = (qa, qe)
             ctx.resultados.setdefault("top_sup", {})[sup] = (qa, qe, aa, ae)      # para os downloads da aba Dados
             sl = "".join(c for c in sup.lower() if c.isalnum())
             ds = html.escape(sup, quote=True)
-            # com grupos desmarcados no filtro, o botão baixa (CSV) o Top 100 refeito só com os grupos marcados
-            bq = f'<span data-csv-filtrado="top" data-tops="queda-agua,queda-esgoto" data-sup="{ds}" data-nome="Top100_Quedas_{sl}">{bq}</span>'
-            ba = f'<span data-csv-filtrado="top" data-tops="aumento-agua,aumento-esgoto" data-sup="{ds}" data-nome="Top100_Aumentos_{sl}">{ba}</span>'
+            sa = "" if sup == "TODAS" else "_" + sl
+            bqa = seta(qa, f"Baixar Top 100 quedas — Água{nome_sup} (Excel)", f"Top100_Quedas_Agua{sa}.xlsx", "Top100_Agua", "queda-agua", ds)
+            bqe = seta(qe, f"Baixar Top 100 quedas — Esgoto{nome_sup} (Excel)", f"Top100_Quedas_Esgoto{sa}.xlsx", "Top100_Esgoto", "queda-esgoto", ds)
+            baa = seta(aa, f"Baixar Top 100 aumentos — Água{nome_sup} (Excel)", f"Top100_Aumentos_Agua{sa}.xlsx", "Top100_Aumento_Agua",
+                       "aumento-agua", ds)
+            bae = seta(ae, f"Baixar Top 100 aumentos — Esgoto{nome_sup} (Excel)", f"Top100_Aumentos_Esgoto{sa}.xlsx", "Top100_Aumento_Esgoto",
+                       "aumento-esgoto", ds)
             blocos_queda.append(f'<div class="sup-top-bloco" data-sup="{ds}">'
-                                + gera_tabela_top100_html(qa, "Água" + suf, "agua-" + sl, bq, chave="queda-agua")
-                                + gera_tabela_top100_html(qe, "Esgoto" + suf, "esgoto-" + sl, chave="queda-esgoto") + "</div>")
+                                + gera_tabela_top100_html(qa, "Água" + suf, "agua-" + sl, bqa, chave="queda-agua")
+                                + gera_tabela_top100_html(qe, "Esgoto" + suf, "esgoto-" + sl, bqe, chave="queda-esgoto") + "</div>")
             blocos_aumento.append(f'<div class="sup-top-bloco" data-sup="{ds}">'
-                                  + gera_tabela_top100_html(aa, "Água" + suf, "aumento-agua-" + sl, ba, aumento=True, chave="aumento-agua")
-                                  + gera_tabela_top100_html(ae, "Esgoto" + suf, "aumento-esgoto-" + sl, aumento=True, chave="aumento-esgoto")
+                                  + gera_tabela_top100_html(aa, "Água" + suf, "aumento-agua-" + sl, baa, aumento=True, chave="aumento-agua")
+                                  + gera_tabela_top100_html(ae, "Esgoto" + suf, "aumento-esgoto-" + sl, bae, aumento=True, chave="aumento-esgoto")
                                   + "</div>")
         # candidatos para o filtro de grupos: as 100 maiores de cada grupo (Todas as SUPs), embutidas uma vez
         candidatos = {}

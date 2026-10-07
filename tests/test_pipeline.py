@@ -195,17 +195,22 @@ def test_dias_uteis_e_forecast_das_indiretas():
 def test_top100_aumento_de_consumo_com_download(analise):
     import base64, io, re
     html = open(analise.caminho_html, encoding="utf-8").read()
-    tab = html[html.index('id="view-tabelas"'):]
+    diretas = html[html.index('id="view-tabelas"'):html.index('id="view-analise"')]
+    assert "Top 100 clientes" not in diretas and "Economias faturadas por ciclo" not in diretas   # foram para a aba Análise
+    tab = html[html.index('id="view-analise"'):]
     i = tab.index("Top 100 clientes com maior aumento de consumo — Água")
     assert tab.index("Top 100 clientes com maior queda de consumo — Esgoto") < i
     assert i < tab.index("Top 100 clientes com maior aumento de consumo — Esgoto")
-    b64 = re.search(r'data-arquivo="Top100_Aumentos_Consumo.xlsx" [^>]*data-b64="([^"]+)"', tab).group(1)
-    xls = pd.ExcelFile(io.BytesIO(base64.b64decode(b64)))
-    assert xls.sheet_names == ["Top100_Aumento_Agua", "Top100_Aumento_Esgoto"]
-    for aba in xls.sheet_names:
+    # uma seta por tabela: água e esgoto (quedas e aumentos) baixam cada uma a sua lista
+    for arquivo, aba in (("Top100_Aumentos_Agua.xlsx", "Top100_Aumento_Agua"), ("Top100_Aumentos_Esgoto.xlsx", "Top100_Aumento_Esgoto")):
+        b64 = re.search(r'data-arquivo="' + arquivo + r'" [^>]*data-b64="([^"]+)"', tab).group(1)
+        xls = pd.ExcelFile(io.BytesIO(base64.b64decode(b64)))
+        assert xls.sheet_names == [aba]
         df = pd.read_excel(xls, sheet_name=aba)
         assert len(df) <= 100 and (df["Aumento_Consumo"] > 0).all()
         assert df["Aumento_Consumo"].is_monotonic_decreasing
+    for arquivo in ("Top100_Quedas_Agua.xlsx", "Top100_Quedas_Esgoto.xlsx"):
+        assert f'data-arquivo="{arquivo}"' in tab
 
 
 def test_delta_faturamento_sem_casas_decimais(analise):

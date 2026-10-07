@@ -328,7 +328,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v44</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v45</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -364,6 +364,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <nav class="nav" id="nav" aria-label="Páginas do relatório">
   <button class="tab active" data-view="resumo" type="button">Resumo</button>
   <button class="tab" data-view="tabelas" type="button">Diretas</button>
+  <button class="tab" data-view="analise" type="button">Análise</button>
   <button class="tab" data-view="indiretas" type="button">Indiretas</button>
   <button class="tab" data-view="forecast" type="button">Forecast</button>
   <button class="tab" data-view="dre" type="button">DRE</button>
@@ -417,7 +418,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v44-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v45-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -909,7 +910,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     forecast: ["Forecast", "Previsão de fechamento do mês, editável: ao mudar um valor, os totais e comparações se refazem"],
   };
   // quais filtros valem em cada aba (os demais ficam esmaecidos)
-  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo"], tabelas: ["Sup", "Grupo"], dados: [], forecast: ["Sup", "Ref"] };
+  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo"], tabelas: ["Sup", "Grupo"], analise: ["Sup", "Grupo"], dados: [], forecast: ["Sup", "Ref"] };
 
   function aplicaFiltros() {
     document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
@@ -934,7 +935,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     try { infoFiltros = el ? JSON.parse(el.textContent) : null; } catch (e) { infoFiltros = null; }
     // esconde, dentro do relatório, os controles que ficam no cabeçalho do site
     const estilo = doc.createElement("style");
-    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-dre, #view-indiretas, #view-dados { padding-top: 16px; }";
+    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-analise, #view-dre, #view-indiretas, #view-dados { padding-top: 16px; }";
     doc.head.appendChild(estilo);
     filtrosEstado.sup = "TODAS"; filtrosEstado.ref = infoFiltros.refPadrao || "";
     filtrosEstado.mes = infoFiltros ? infoFiltros.mesAtual : null;
