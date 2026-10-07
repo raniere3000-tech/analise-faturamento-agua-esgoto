@@ -5,8 +5,26 @@ import os
 import pandas as pd
 
 from .config import COLUNAS_ECONOMIA_TOTAIS
-from .leitura import (chave_grupo, classifica_arquivos, processa_avulso, processa_consumo, processa_cronograma,
+from .leitura import (chave_grupo, classifica_arquivos, nome_relativo, processa_avulso, processa_consumo, processa_cronograma,
                       processa_fatura_completa, processa_orcado)
+
+
+def sem_repetir_entre_arquivos(frames, chave=None):
+    """Junta as tabelas de vários arquivos sem contar duas vezes a mesma linha.
+    Uma linha que aparece em mais de um arquivo vale só no primeiro em que aparece; linhas repetidas dentro do mesmo
+    arquivo são mantidas (podem ser lançamentos legítimos). `chave`: colunas que identificam a linha (padrão: todas).
+    Devolve (tabela, linhas descartadas)."""
+    frames = [f for f in frames if f is not None and len(f)]
+    if not frames:
+        return pd.DataFrame(), 0
+    if len(frames) == 1:
+        return frames[0], 0
+    tudo = pd.concat([f.assign(__arquivo=i) for i, f in enumerate(frames)], ignore_index=True)
+    cols = [c for c in (chave or [c for c in tudo.columns if c != "__arquivo"]) if c in tudo.columns]
+    assinatura = pd.util.hash_pandas_object(tudo[cols].astype(str), index=False)
+    primeiro = tudo.groupby(assinatura.values)["__arquivo"].transform("min")
+    manter = tudo["__arquivo"] == primeiro
+    return tudo[manter].drop(columns="__arquivo").reset_index(drop=True), int((~manter).sum())
 
 
 def _processa_lista(progresso, lista, func, ini, fin, desc):
@@ -55,19 +73,32 @@ def monta_base(ctx):
     print("=" * 70)
     consumos = _processa_lista(progresso, ctx.classificacao["consumo"], processa_consumo, 18, 29, "Processando consumo")
     consumo_total = pd.concat(consumos, ignore_index=True) if consumos else pd.DataFrame(columns=["N. Ligação_consumo", "Referência"])
+    # a mesma ligação no mesmo mês em dois arquivos de consumo duplicaria as linhas da fatura no cruzamento: vale a primeira
+    antes = len(consumo_total)
+    consumo_total = consumo_total.drop_duplicates(subset=["N. Ligação_consumo", "Referência"])
+    if len(consumo_total) < antes:
+        ctx.avisos_base.append(f"{antes - len(consumo_total)} linha(s) de consumo repetidas entre arquivos (mesma ligação e mês) "
+                               "foram contadas uma vez só.")
     print(f"✅ Consumo: {len(consumo_total)} linhas")
 
     faturas_cc = _processa_lista(progresso, ctx.classificacao["fatura"], processa_fatura_completa, 29, 40, "Processando faturas")
     faturas = [f for f, _ in faturas_cc]
-    fatura_total = pd.concat(faturas, ignore_index=True) if faturas else pd.DataFrame(columns=["N. da Ligacao"])
-    cancs = [c for _, c in faturas_cc if len(c)]
-    ctx.cancelamento = pd.concat(cancs, ignore_index=True) if cancs else pd.DataFrame()
+    fatura_total, rep_fat = sem_repetir_entre_arquivos(faturas)
+    if not len(fatura_total):
+        fatura_total = pd.DataFrame(columns=["N. da Ligacao"])
+    ctx.cancelamento, rep_canc = sem_repetir_entre_arquivos([c for _, c in faturas_cc])
     avulsos = [processa_avulso(c) for c in ctx.classificacao["avulso"]]
-    ctx.avulso = pd.concat(avulsos, ignore_index=True) if avulsos else pd.DataFrame()
+    ctx.avulso, rep_av = sem_repetir_entre_arquivos(avulsos)
+    for qtd, tipo in ((rep_fat, "fatura"), (rep_canc, "cancelamento"), (rep_av, "serviço avulso")):
+        if qtd:
+            ctx.avisos_base.append(f"{qtd} linha(s) de {tipo} que já estavam em outro arquivo foram contadas uma vez só "
+                                   "(arquivos com informações sobrepostas).")
     ctx.orcado = {}
     for caminho, aba in ctx.classificacao["orcado"]:
-        arquivo = os.path.basename(caminho)
-        nome = os.path.splitext(arquivo)[0].replace("_", " ").strip()
+        arquivo = nome_relativo(caminho, ctx.pasta)
+        nome = os.path.splitext(os.path.basename(caminho))[0].replace("_", " ").strip()
+        if nome in ctx.orcado and ctx.orcado[nome]["arquivo"] != arquivo:     # mesmo nome em outra pasta: inclui a pasta
+            nome = os.path.splitext(arquivo)[0].replace("_", " ").strip()
         longo = processa_orcado(caminho, aba)
         if not len(longo):
             print(f"   ⚠️ {arquivo}: orçado sem valores (planilha vazia); ignorado.")
@@ -86,11 +117,11 @@ def monta_base(ctx):
         meses = sorted({m for m in serie.dropna().astype(str) if len(m) == 7}, key=lambda r: (r[3:], r[:2]))
         return ", ".join(meses)
     ctx.bases_info = (
-        [{"tipo": "Consumo", "arquivo": os.path.basename(c), "linhas": len(d), "periodo": periodo(d["Referência"])}
+        [{"tipo": "Consumo", "arquivo": nome_relativo(c, ctx.pasta), "linhas": len(d), "periodo": periodo(d["Referência"])}
          for c, d in zip(ctx.classificacao["consumo"], consumos)]
-        + [{"tipo": "Fatura", "arquivo": os.path.basename(c), "linhas": len(f), "periodo": periodo(f["Referencia de Leitura"]),
+        + [{"tipo": "Fatura", "arquivo": nome_relativo(c, ctx.pasta), "linhas": len(f), "periodo": periodo(f["Referencia de Leitura"]),
             "extra": f"{len(canc)} linhas de cancelamento"} for c, (f, canc) in zip(ctx.classificacao["fatura"], faturas_cc)]
-        + [{"tipo": "Serviço avulso", "arquivo": os.path.basename(c), "linhas": len(a), "periodo": periodo(a["Referencia"])}
+        + [{"tipo": "Serviço avulso", "arquivo": nome_relativo(c, ctx.pasta), "linhas": len(a), "periodo": periodo(a["Referencia"])}
            for c, a in zip(ctx.classificacao["avulso"], avulsos)]
     )
 
@@ -106,7 +137,7 @@ def monta_base(ctx):
     elif not ctx.classificacao["cronograma"]:
         ctx.avisos_base.append("Nenhum cronograma de leitura reconhecido na pasta (colunas Grupo, Data da Leitura e Qts. Dias): "
                                "os dias de leitura ficaram vazios.")
-    ctx.bases_info += [{"tipo": "Cronograma", "arquivo": os.path.basename(c), "linhas": len(d),
+    ctx.bases_info += [{"tipo": "Cronograma", "arquivo": nome_relativo(c, ctx.pasta), "linhas": len(d),
                         "periodo": periodo(d["Referencia Cronograma"]) if "Referencia Cronograma" in d else "",
                         "extra": f"{d['Grupo'].nunique()} grupos" if len(d) else "nenhuma linha válida"}
                        for c, d in zip(ctx.classificacao["cronograma"], cronogramas)]

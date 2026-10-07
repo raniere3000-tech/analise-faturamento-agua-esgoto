@@ -190,6 +190,24 @@ def referencia_do_nome(nome_arquivo):
     return np.nan
 
 
+def referencia_do_consumo(df, caminho):
+    """Mês do arquivo de consumo: pelo nome do arquivo; se não tiver, pelo nome das pastas (ex.: '09-2026/Consumo.csv');
+    se ainda não tiver, pelas colunas 'Mes Lancamento' e 'Ano Lancamento' do próprio arquivo."""
+    ref = referencia_do_nome(os.path.basename(caminho))
+    partes = os.path.normpath(caminho).split(os.sep)[:-1]
+    for pasta in reversed(partes[-3:]):
+        if isinstance(ref, str):
+            break
+        ref = referencia_do_nome(pasta + " ")
+    if isinstance(ref, str):
+        return ref
+    if {"Mes Lancamento", "Ano Lancamento"}.issubset(df.columns):
+        mes = pd.to_numeric(df["Mes Lancamento"], errors="coerce")
+        ano = pd.to_numeric(df["Ano Lancamento"], errors="coerce")
+        return [f"{int(m):02d}/{int(a)}" if pd.notna(m) and pd.notna(a) and 1 <= m <= 12 else np.nan for m, a in zip(mes, ano)]
+    return np.nan
+
+
 def processa_consumo(caminho):
     print(f"   ⚙️ Processando CONSUMO: {os.path.basename(caminho)}")
     df = le_dataframe(caminho)
@@ -202,7 +220,7 @@ def processa_consumo(caminho):
     df["Total Economias"] = df[COLUNAS_ECONOMIA_TODAS].sum(axis=1)
     df["Qtd. Tipos de Economia"] = (df[COLUNAS_ECONOMIA_TODAS] > 0).sum(axis=1)
     df["Economia Mista"] = np.where(df["Qtd. Tipos de Economia"] > 1, "Sim", "Não")
-    df["Referência"] = referencia_do_nome(os.path.basename(caminho))
+    df["Referência"] = referencia_do_consumo(df, caminho)
 
     df["N. Ligação_consumo"] = df[col_ligacao].astype(str).str.strip()
 
@@ -337,13 +355,32 @@ def chave_grupo(valor):
 
 
 def lista_arquivos_entrada(pasta):
-    """CSV/XLSX/XLS da pasta, sem os arquivos que o próprio pipeline gera."""
+    """CSV/XLSX/XLS da pasta E das subpastas (sem os arquivos que o próprio pipeline gera nem os temporários do Excel '~$').
+    Arquivos com o mesmo nome em pastas diferentes são arquivos diferentes (o caminho os distingue)."""
     saidas = {os.path.abspath(os.path.join(pasta, n))
               for n in (NOME_RELATORIO_HTML, NOME_TOP100_XLSX) + NOMES_SAIDA_LEGADOS}
     brutos = []
     for ext in ("csv", "xlsx", "xls"):
-        brutos += glob.glob(os.path.join(pasta, f"*.{ext}"))
-    return [c for c in brutos if os.path.abspath(c) not in saidas]
+        brutos += glob.glob(os.path.join(pasta, "**", f"*.{ext}"), recursive=True)
+    brutos = [c for c in sorted(set(brutos)) if os.path.abspath(c) not in saidas and not os.path.basename(c).startswith("~$")]
+    return sorted(brutos, key=lambda c: (c.count(os.sep), c))         # pasta principal primeiro, depois subpastas
+
+
+def nome_relativo(caminho, pasta):
+    """'Leste/Consumo 09-2026.csv' — o nome que aparece nos avisos e nas bases carregadas."""
+    try:
+        return os.path.relpath(caminho, pasta).replace(os.sep, "/")
+    except ValueError:
+        return os.path.basename(caminho)
+
+
+def _hash_arquivo(caminho):
+    import hashlib
+    h = hashlib.sha1()
+    with open(caminho, "rb") as f:
+        for bloco in iter(lambda: f.read(1 << 20), b""):
+            h.update(bloco)
+    return h.hexdigest()
 
 
 def classifica_arquivos(pasta, progresso=None):
@@ -359,10 +396,18 @@ def classifica_arquivos(pasta, progresso=None):
         raise FileNotFoundError(f"Nenhum arquivo CSV/XLSX/XLS em {pasta}")
 
     classificados, ignorados = [], []
+    vistos = {}                                      # conteúdo idêntico em dois lugares conta uma vez só
     for idx, caminho in enumerate(arquivos, start=1):
-        nome = os.path.basename(caminho)
+        nome = nome_relativo(caminho, pasta)
         tipo_achado = None
         try:
+            assinatura = _hash_arquivo(caminho)
+            if assinatura in vistos:
+                ignorados.append({"arquivo": nome, "motivo": f"conteúdo idêntico a {vistos[assinatura]} (não contado duas vezes)"})
+                if progresso:
+                    progresso.etapa(idx, len(arquivos), 2, 18, f"Classificando ({idx}/{len(arquivos)})")
+                continue
+            vistos[assinatura] = nome
             if caminho.lower().endswith((".xlsx", ".xls")):
                 for aba in pd.ExcelFile(caminho).sheet_names:
                     df_head = le_dataframe(caminho, nrows=5, sheet_name=aba)
