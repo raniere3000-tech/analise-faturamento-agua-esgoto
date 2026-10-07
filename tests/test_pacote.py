@@ -78,3 +78,12 @@ def test_worker_nao_para_se_o_pypi_falhar():
     import os
     js = open(os.path.join(os.path.dirname(__file__), "..", "analisador.worker.js"), encoding="utf-8").read()
     assert "pyodide.loadPackage(EXTRAS)" in js and "try { await micropip.install(pacote); }" in js
+
+
+def test_bibliotecas_do_pdf_no_site():
+    import os
+    raiz = os.path.join(os.path.dirname(__file__), "..")
+    for arq in ("lib/jspdf.umd.min.js", "lib/html2canvas.min.js"):
+        assert os.path.getsize(os.path.join(raiz, arq)) > 100000, arq
+    site = open(os.path.join(raiz, "index.html"), encoding="utf-8").read()
+    assert '"lib/jspdf.umd.min.js", "lib/html2canvas.min.js"' in site and "w.gerarExecutivo(await libsPdf())" in site

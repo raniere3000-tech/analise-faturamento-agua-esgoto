@@ -574,5 +574,11 @@ def test_executivo_imprime_documento_leve(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     ini = html.index("function gerarExecutivo")
     trecho = html[ini:html.index("function imprimirDocumentoLeve")]
-    assert "imprimirDocumentoLeve(cont)" in trecho and "window.print()" not in trecho
+    assert "imprimirDocumentoLeve(cont)" in trecho and "window.print()" not in trecho   # a impressão leve fica como reserva
     assert "querySelectorAll('script').forEach(x => x.remove())" in trecho
+    # PDF gerado direto (arquivo .pdf), com as seções pedidas, cada uma começando página
+    assert "gerarPdfDireto(cont" in trecho
+    for secao in ("'DRE - Forecast'", "'Orçado x Realizado'", "'Faturamento Mês a Mês'", "'Indiretas'"):
+        assert secao in trecho
+    # o documento do PDF não leva a classe que esconde os filhos do <body> (o quadro do html2canvas ficava em branco)
+    assert "(telaComoImpressao ? '<body>' : '<body class=\"modo-executivo\">')" in html
