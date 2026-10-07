@@ -56,3 +56,25 @@ def test_selo_de_versao_igual_a_versao_do_site():
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     versao = re.search(r'const VERSAO_SITE = "(v\d+)-\d{8}"', site).group(1)
     assert f'<span class="versao" id="versao">{versao}</span>' in site
+
+
+def test_excel_sem_xlsxwriter_usa_openpyxl(monkeypatch):
+    """Rede que bloqueia o PyPI ("Can't fetch metadata for 'xlsxwriter'"): o Excel sai pelo openpyxl."""
+    import importlib.util
+    import io
+    import pandas as pd
+    from faturamento import tabelas_html
+    original = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda nome, *a: None if nome == "xlsxwriter" else original(nome, *a))
+    assert tabelas_html.motor_excel() == "openpyxl"
+    conteudo = tabelas_html.xlsx_bytes({"Aba": pd.DataFrame({"a": [1, 2]})})
+    assert pd.read_excel(io.BytesIO(conteudo))["a"].tolist() == [1, 2]
+    monkeypatch.setattr(importlib.util, "find_spec", lambda nome, *a: None)
+    assert tabelas_html.xlsx_bytes({"Aba": pd.DataFrame({"a": [1]})}) == b""
+    assert tabelas_html.botao_download_xlsx("x", "x.xlsx", b"") == ""
+
+
+def test_worker_nao_para_se_o_pypi_falhar():
+    import os
+    js = open(os.path.join(os.path.dirname(__file__), "..", "analisador.worker.js"), encoding="utf-8").read()
+    assert "pyodide.loadPackage(EXTRAS)" in js and "try { await micropip.install(pacote); }" in js

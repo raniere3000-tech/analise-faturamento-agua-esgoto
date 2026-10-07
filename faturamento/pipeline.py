@@ -72,6 +72,9 @@ class Sessao:
         print("=" * 70)
         passo(59, "Calculando: comparativos de água e esgoto por grupo")
         define_referencias(ctx)
+        from .dre import prepara as marca_sup_e_servico
+        marca_sup_e_servico(ctx)                       # SUP e serviço (água/esgoto) de cada linha uma vez: as tabelas
+                                                       # seguintes usam a marca em vez de procurar texto na Rubrica
         calcula_comparativos(ctx)
 
         print("📊 Gerando tabelas e insights auxiliares...")
@@ -101,10 +104,10 @@ class Sessao:
             if sup == "TODAS":
                 qa, qe, aa, ae, bq, ba, suf = top_agua_df, top_esg_df, aum_agua_df, aum_esg_df, botao_top100, botao_aumento, ""
             else:
-                at = ctx.df_atual[ctx.df_atual["__sup"] == sup]
-                an = ctx.df_anterior[ctx.df_anterior["__sup"] == sup]
-                qa, qe = (gera_top100_quedas(at, an, rub, ctx.ref_atual, ctx.ref_anterior) for rub in ("AGUA", "ESGOTO"))
-                aa, ae = gera_top100_aumentos(at, an, ctx.ref_atual, ctx.ref_anterior)
+                # mesma comparação por ligação de Todas (cache), só filtrada pela SUP: não refaz a soma por ligação
+                qa, qe = (gera_top100_quedas(ctx.df_atual, ctx.df_anterior, rub, ctx.ref_atual, ctx.ref_anterior, sup=sup)
+                          for rub in ("AGUA", "ESGOTO"))
+                aa, ae = gera_top100_aumentos(ctx.df_atual, ctx.df_anterior, ctx.ref_atual, ctx.ref_anterior, sup=sup)
                 slug_sup = "".join(c for c in sup.lower() if c.isalnum())
                 bq = botao_download_xlsx(f"Baixar Top 100 {sup} (Excel)", f"Top100_Quedas_{slug_sup}.xlsx",
                                          xlsx_bytes({"Top100_Agua": qa, "Top100_Esgoto": qe}))

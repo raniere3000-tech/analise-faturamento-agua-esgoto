@@ -819,14 +819,24 @@ document.addEventListener('click', async function (e) {
     }
 });
 
-// Botões "Base: ... (CSV)": a base vem embutida uma vez (script#base-dl-<chave>) e vários botões a usam
-document.addEventListener('click', function (e) {
+// base64 (e gzip, com data-gz="1") embutido num <script> → bytes do arquivo
+async function bytesEmbutidos(el) {
+    const bin = atob(el.textContent.trim()), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    if (el.dataset.gz !== '1') return bytes;
+    const fluxo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Uint8Array(await new Response(fluxo).arrayBuffer());
+}
+
+// Botões "Base: ... (CSV)": a base vem embutida uma vez (script#base-dl-<chave>, comprimida) e vários botões a usam
+document.addEventListener('click', async function (e) {
     const b = e.target.closest && e.target.closest('.btn-baixar-base');
     if (!b) return;
     const el = document.getElementById('base-dl-' + b.dataset.ref);
     if (!el) return;
-    const bin = atob(el.textContent.trim()), bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    let bytes;
+    try { bytes = await bytesEmbutidos(el); }
+    catch (erro) { alert('Não foi possível abrir a base neste navegador (' + erro.message + ').'); return; }
     let conteudo = bytes, nome = el.dataset.arquivo;
     const sup = (typeof ESTADO !== 'undefined' && ESTADO.sup) || 'TODAS';
     const grupos = gruposFiltro();

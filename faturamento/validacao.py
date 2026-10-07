@@ -210,9 +210,11 @@ def monta_bases(ctx):
 
 
 def _csv_b64(df):
+    """CSV comprimido (gzip) em base64: o relatório fica bem menor (abre mais rápido); o navegador descompacta ao baixar."""
     import base64
-    texto = "﻿" + df.to_csv(sep=";", decimal=",", index=False)
-    return base64.b64encode(texto.encode("utf-8")).decode("ascii")
+    import gzip
+    texto = "\ufeff" + df.to_csv(sep=";", decimal=",", index=False)
+    return base64.b64encode(gzip.compress(texto.encode("utf-8"), 3)).decode("ascii")
 
 
 def _botao_base(chave):
@@ -229,7 +231,7 @@ def _secao_bases(ctx):
         obs = (f" — <b>limitada às primeiras {fmt_num(LIMITE_BASE)} de {fmt_num(info['total'])} linhas</b>" if info["truncada"]
                else f" — {fmt_num(info['total'])} linhas")
         linhas.append(f"<li>{_botao_base(ch)}{obs}. {DESCRICAO_BASES[ch]}</li>")
-    dados = "".join(f'<script type="application/octet-stream" id="base-dl-{ch}" data-arquivo="base_{ch}.csv">{_csv_b64(i["df"])}</script>'
+    dados = "".join(f'<script type="application/octet-stream" id="base-dl-{ch}" data-gz="1" data-arquivo="base_{ch}.csv">{_csv_b64(i["df"])}</script>'
                     for ch, i in BASES.items())
     return ('<p class="val-rot">Bases para download</p>'
             '<p>Arquivos CSV (separador ";" e vírgula decimal — abrem direto no Excel). Cada item abaixo indica qual base usar e o filtro '

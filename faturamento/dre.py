@@ -167,7 +167,10 @@ def sup_por_grupo(ctx):
     if base is not None and len(base) and "__sup" in base.columns:
         t = base.loc[base["__sup"] != SEM_SUP, ["Grupo", "__sup"]]
         if len(t):
-            freq = t.groupby([t["Grupo"].astype(str).map(chave_grupo), "__sup"]).size().reset_index(name="n")
+            # conta primeiro por grupo bruto × SUP (poucas linhas) e só então normaliza o grupo — antes era linha a linha
+            freq = t.groupby(["Grupo", "__sup"], observed=True, dropna=True).size().reset_index(name="n")
+            freq["Grupo"] = freq["Grupo"].astype(str).map(chave_grupo)
+            freq = freq.groupby(["Grupo", "__sup"], observed=True).n.sum().reset_index()
             for g, d in freq.sort_values("n", ascending=False).groupby(freq.columns[0]):
                 mapa.setdefault(g, d["__sup"].iloc[0])
     return mapa
