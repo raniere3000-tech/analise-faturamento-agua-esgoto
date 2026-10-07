@@ -14,6 +14,17 @@ COLUNAS_DESCARTADAS = ["Leitura Atual", "Consumo Medido", "Total Economias", "Qt
                        "Ano Lancamento", "Data de Vencimento", "Aba/Mês Cronograma"]
 
 
+def localidade_por_grupo(crono):
+    """{grupo: cidade} pelo cronograma (coluna Localidade; a mais frequente se o grupo aparecer com mais de uma)."""
+    if crono is None or not len(crono) or "Localidade" not in crono.columns:
+        return {}
+    t = crono.dropna(subset=["Localidade"])
+    t = t[~t["Localidade"].astype(str).str.strip().str.lower().isin(["", "nan", "none"])]
+    if not len(t):
+        return {}
+    return t.groupby("Grupo")["Localidade"].agg(lambda s: s.value_counts().index[0]).to_dict()
+
+
 def sem_repetir_entre_arquivos(frames, chave=None):
     """Junta as tabelas de vários arquivos sem contar duas vezes a mesma linha.
     Uma linha que aparece em mais de um arquivo vale só no primeiro em que aparece; linhas repetidas dentro do mesmo
@@ -142,6 +153,7 @@ def monta_base(ctx):
         if cronogramas else pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma"])
     )
     print(f"✅ Cronogramas: {len(cronograma_total)} linhas")
+    ctx.grupo_localidade = localidade_por_grupo(cronograma_total)
     if ctx.classificacao["cronograma"] and not len(cronograma_total):
         ctx.avisos_base.append("O cronograma foi encontrado, mas nenhuma linha válida foi lida (são necessárias as colunas Grupo, "
                                "Data da Leitura e Qts. Dias): os dias de leitura ficaram vazios.")

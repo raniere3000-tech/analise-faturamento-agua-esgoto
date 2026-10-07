@@ -114,8 +114,10 @@ def test_blocos_por_mes_e_sup(sessao):
     with open(sessao.caminho_html, encoding="utf-8") as f:
         html = f.read()
     for mes in ("08/2026", "09/2026"):
-        for sup in ("TODAS", "LAGOS", "LESTE", "SEM SUP"):
+        for sup in ("TODAS", "LAGOS", "LESTE"):
             assert f'data-sup="{sup}" data-mes="{mes}"' in html
+    # linhas sem cidade herdam a SUP do grupo: não sobra "SEM SUP"
+    assert 'data-sup="SEM SUP" data-mes="09/2026"' not in html
     assert 'id="info-filtros"' in html and "Evolução mensal por classe" in html and "Ticket médio" in html
 
 
@@ -390,3 +392,19 @@ def test_ordem_das_abas(sessao):
     vistas = ["resumo", "tabelas", "indiretas", "forecast", "dre", "dados"]
     pos = [site.index(f'data-view="{v}"') for v in vistas]
     assert pos == sorted(pos) and 'class="tab active" data-view="resumo"' in site
+
+
+def test_sup_dos_grupos_pelo_cronograma(tmp_path):
+    gera_pasta(str(tmp_path))                                   # fatura e consumo sem cidade: a SUP só pode vir do grupo
+    cr = pd.read_csv(tmp_path / "Cronograma.csv", sep=";", dtype=str, encoding="utf-8-sig")
+    cr["Localidade"] = ["MARICA" if int(g) % 2 else "CANTAGALO" for g in cr["Grupo"]]      # ímpares Leste, pares Lagos
+    cr.to_csv(tmp_path / "Cronograma.csv", sep=";", index=False, encoding="utf-8-sig")
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    s.preparar()
+    s.continuar()
+    ctx = s.ctx
+    assert ctx.grupo_sup["1"] == "LESTE" and ctx.grupo_sup["2"] == "LAGOS"
+    b = ctx.base_final
+    assert set(b.loc[b["Grupo"] == "01", "__sup"]) == {"LESTE"} and set(b.loc[b["Grupo"] == "02", "__sup"]) == {"LAGOS"}
+    html = open(s.caminho_html, encoding="utf-8").read()
+    assert '"grupoSup": {"01": "LESTE", "02": "LAGOS"' in html

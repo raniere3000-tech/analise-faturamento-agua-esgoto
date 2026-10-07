@@ -116,6 +116,12 @@ def prepara(ctx):
     ctx.cancelamento = marca(ctx.cancelamento, "N. da Ligacao")
     ctx.avulso = marca(avu, "N. da Ligacao") if len(avu) else avu
 
+    # superintendência de cada grupo: pela Localidade do cronograma; sem cronograma, pela SUP mais frequente das ligações do grupo.
+    # Linhas sem cidade (SEM SUP) herdam a SUP do seu grupo.
+    ctx.grupo_sup = sup_por_grupo(ctx)
+    for nome in ("base_final", "base_completa", "df_atual", "df_anterior", "cancelamento", "avulso"):
+        setattr(ctx, nome, _preenche_sup_pelo_grupo(getattr(ctx, nome, None), ctx.grupo_sup))
+
     if not len(avu):
         avisos.append("Nenhum arquivo de serviço avulso encontrado na pasta (o nome precisa conter \"avulso\"): as indiretas ficaram zeradas.")
     else:
@@ -146,6 +152,47 @@ def _cache(ctx, nome, chave, funcao):
     if atual is None or atual[0] != chave:
         atual = ctx.__dict__[nome] = (chave, funcao())
     return atual[1]
+
+
+def sup_por_grupo(ctx):
+    """{grupo: SUP}. Prioridade: cidade do grupo no cronograma (Localidade); senão, a SUP mais frequente nas linhas do grupo."""
+    from .leitura import chave_grupo
+    mapa = {}
+    for g, cidade in (getattr(ctx, "grupo_localidade", None) or {}).items():
+        sup = SUP_POR_CIDADE.get(chave_texto(cidade))
+        if sup:
+            mapa[chave_grupo(g)] = sup
+    base = getattr(ctx, "base_completa", None)
+    base = ctx.base_final if base is None else base
+    if base is not None and len(base) and "__sup" in base.columns:
+        t = base.loc[base["__sup"] != SEM_SUP, ["Grupo", "__sup"]]
+        if len(t):
+            freq = t.groupby([t["Grupo"].astype(str).map(chave_grupo), "__sup"]).size().reset_index(name="n")
+            for g, d in freq.sort_values("n", ascending=False).groupby(freq.columns[0]):
+                mapa.setdefault(g, d["__sup"].iloc[0])
+    return mapa
+
+
+def _preenche_sup_pelo_grupo(df, grupo_sup):
+    if df is None or not len(df) or "__sup" not in df.columns or "Grupo" not in df.columns or not grupo_sup:
+        return df
+    from .leitura import chave_grupo
+    sem = df["__sup"] == SEM_SUP
+    if not sem.any():
+        return df
+    grupos = df.loc[sem, "Grupo"]
+    chaves = {g: grupo_sup.get(chave_grupo(g)) for g in grupos.dropna().unique()}
+    novo = grupos.map(chaves)
+    df = df.copy(deep=False)
+    df.loc[sem, "__sup"] = novo.where(novo.notna(), SEM_SUP).values
+    return df
+
+
+def grupos_da_sup(ctx, rotulos):
+    """{rótulo do grupo como aparece no filtro: SUP} para o filtro de grupos do relatório."""
+    from .leitura import chave_grupo
+    mapa = getattr(ctx, "grupo_sup", None) or {}
+    return {g: mapa.get(chave_grupo(g), SEM_SUP) for g in rotulos}
 
 
 def lista_sups(ctx):
@@ -490,5 +537,7 @@ def gera_info_filtros_json(ctx):
     refs = opcoes_referencia(ctx)
     info = {"sups": lista_sups(ctx), "meses": [{"ref": m, "label": nome_mes(m)} for m in lista_meses(ctx)],
             "mesAtual": ctx.ref_atual, "fontes": fontes_rf(ctx) + fontes_sup(ctx), "refs": [{"valor": v, "rotulo": t} for v, t in refs],
-            "refPadrao": refs[0][0] if refs else ""}
+            "refPadrao": refs[0][0] if refs else "",
+            "grupoSup": grupos_da_sup(ctx, sorted({str(g).strip() for g in ctx.fatura_total["Grupo"].dropna()} - {"nan", "None", ""}))
+            if getattr(ctx, "fatura_total", None) is not None else {}}
     return '<script type="application/json" id="info-filtros">' + json.dumps(info).replace("<", "\\u003c") + "</script>"

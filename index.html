@@ -305,6 +305,10 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 body.relatorio-aberto { height: 100vh; overflow: hidden; }
 body.relatorio-aberto .conteudo { min-height: 0; }
 #quadroRelatorio { min-height: 0; }
+.filtros-top20 { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 0 0 8px; flex: none; }
+.filtros-top20 input { width: 100%; max-width: 340px; padding: 5px 10px; font: inherit; font-size: .82rem; border: 1px solid var(--line); border-radius: 8px; }
+.sup-top20 { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; font-weight: 600; color: var(--navy, #102840); }
+.sup-top20 select { font: inherit; font-weight: 400; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; }
 /* tempo estimado */
 .eta { margin-left: 14px; white-space: nowrap; font-weight: 700; color: #ffd166; font-variant-numeric: tabular-nums; }
 .eta[hidden] { display: none; }
@@ -324,7 +328,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v31</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v32</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -388,11 +392,14 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     <h2 id="top20Titulo"><span class="badge">Etapa 2 · Conferência</span><span id="top20TituloTexto"></span></h2>
     <p class="lead"><span id="textoFiltro"></span>Maiores <b>Consumo Faturado</b> do mês atual. Se quiser, altere o consumo ou o valor total (água + esgoto) de algum cliente. Ao aplicar, toda a análise e a comparação usam os valores alterados. Os arquivos da pasta não são modificados.</p>
     <p class="nota" id="avisoTop20" hidden style="flex:none;color:var(--laranja-texto);font-weight:600;font-size:.8rem;margin:0 0 6px;">A coluna "Situacao Conta" não foi encontrada nos arquivos, então abaixo aparece o Top 20 de maior consumo de todas as contas.</p>
-    <input type="search" id="buscaTop20" placeholder="Filtrar por ligação, cliente ou grupo…" aria-label="Filtrar clientes" style="flex:none;width:100%;max-width:340px;margin:0 0 8px;padding:5px 10px;font:inherit;font-size:.82rem;border:1px solid var(--line);border-radius:8px;">
+    <div class="filtros-top20">
+      <input type="search" id="buscaTop20" placeholder="Filtrar por ligação, cliente ou grupo…" aria-label="Filtrar clientes">
+      <label class="sup-top20">Superintendência <select id="supTop20" aria-label="Filtrar por superintendência"><option value="">Todas</option></select></label>
+    </div>
     <div class="tabela-rolagem">
       <table class="tabela-top20">
         <thead><tr>
-          <th>#</th><th>Ligação</th><th>Grupo</th><th>Cliente</th><th>Categoria</th><th>Situação conta</th>
+          <th>#</th><th>Ligação</th><th>Grupo</th><th>SUP</th><th>Cliente</th><th>Categoria</th><th>Situação conta</th>
           <th class="num ordenavel" data-ordem="consumo" tabindex="0" title="Ordenar">Consumo Faturado (m³) <span class="seta"></span></th><th class="num ordenavel" data-ordem="valor" tabindex="0" title="Ordenar">Valor total (R$) <span class="seta"></span></th>
         </tr></thead>
         <tbody id="corpoTop20"></tbody>
@@ -409,7 +416,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v31-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v32-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -755,12 +762,15 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     $("avisoTop20").hidden = !!colunaSituacao;
     $("textoFiltro").textContent = colunaSituacao ? "Aparecem todos os clientes com Situação Conta = EM ANALISE. " : "";
     $("buscaTop20").value = "";
+    const sups = Array.from(new Set(linhas.map((l) => l.sup || "SEM SUP"))).sort((a, b) => (a === "SEM SUP") - (b === "SEM SUP") || a.localeCompare(b));
+    $("supTop20").innerHTML = `<option value="">Todas (${linhas.length})</option>` +
+      sups.map((s) => `<option value="${escapa(s)}">${escapa(s)} (${linhas.filter((l) => (l.sup || "SEM SUP") === s).length})</option>`).join("");
     const corpo = $("corpoTop20");
     corpo.innerHTML = "";
     linhas.forEach((l, i) => {
       const tr = document.createElement("tr");
       const cel = (txt, cls) => { const td = document.createElement("td"); td.textContent = txt; if (cls) td.className = cls; return td; };
-      tr.append(cel(i + 1), cel(l.ligacao), cel(l.grupo), cel(l.cliente, "cli"), cel(l.categoria), cel(l.situacao || "—"));
+      tr.append(cel(i + 1), cel(l.ligacao), cel(l.grupo), cel(l.sup || "—"), cel(l.cliente, "cli"), cel(l.categoria), cel(l.situacao || "—"));
       tr.lastChild.previousSibling.title = l.cliente;
       [["consumo", 0], ["valor", 2]].forEach(([campo, dec]) => {
         const td = document.createElement("td");
@@ -835,13 +845,17 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     th.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ordenaTabela(th.dataset.ordem); } });
   });
 
-  $("buscaTop20").addEventListener("input", () => {
-    const termo = $("buscaTop20").value.trim().toLowerCase();
+  // filtros da conferência: texto (ligação, cliente, grupo) e superintendência — valem juntos
+  function filtraTop20() {
+    const termo = $("buscaTop20").value.trim().toLowerCase(), sup = $("supTop20").value;
     document.querySelectorAll("#corpoTop20 tr").forEach((tr) => {
       const l = linhasTop20[+tr.dataset.indice];
-      tr.hidden = !!termo && !(`${l.ligacao} ${l.cliente} ${l.grupo}`.toLowerCase().includes(termo));
+      tr.hidden = (!!termo && !(`${l.ligacao} ${l.cliente} ${l.grupo}`.toLowerCase().includes(termo)))
+        || (!!sup && (l.sup || "SEM SUP") !== sup);
     });
-  });
+  }
+  $("buscaTop20").addEventListener("input", filtraTop20);
+  $("supTop20").addEventListener("change", filtraTop20);
 
   function atualizaContador() {
     const { ajustes, invalido } = leAjustes();
@@ -892,7 +906,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     forecast: ["Forecast", "Previsão de fechamento do mês, editável: ao mudar um valor, os totais e comparações se refazem"],
   };
   // quais filtros valem em cada aba (os demais ficam esmaecidos)
-  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Grupo"], tabelas: ["Grupo"], dados: [], forecast: ["Sup", "Ref"] };
+  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo"], tabelas: ["Sup", "Grupo"], dados: [], forecast: ["Sup", "Ref"] };
 
   function aplicaFiltros() {
     document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
@@ -951,7 +965,16 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     const t = e.target.closest(".tab"); if (!t) return;
     filtrosEstado.view = t.dataset.view; aplicaFiltros();
   });
-  $("selSupTop").addEventListener("change", (e) => { filtrosEstado.sup = e.target.value; aplicaFiltros(); });
+  // a lista de grupos do topo mostra só os grupos da superintendência escolhida (o relatório já marcou quais são)
+  function sincronizaGrupos() {
+    const doc = quadro().contentDocument; if (!doc) return;
+    const caixas = Array.from(doc.querySelectorAll(".chk-grupo")).filter((c) => { const l = c.closest("label"); return !l || l.style.display !== "none"; });
+    $("listaGrupos").innerHTML = `<label><input type="checkbox" id="chkTodosGrupos" ${caixas.every((c) => c.checked) ? "checked" : ""}> <b>Selecionar todos</b></label><hr>` +
+      caixas.map((g) => `<label><input type="checkbox" class="chk-grupo-top" value="${escapa(g.value)}" ${g.checked ? "checked" : ""}> ${escapa(g.value)}</label>`).join("");
+    const marcados = caixas.filter((c) => c.checked).length;
+    $("btnGrupo").textContent = (marcados === caixas.length ? "Todos" : `${marcados} de ${caixas.length}`) + " ▾";
+  }
+  $("selSupTop").addEventListener("change", (e) => { filtrosEstado.sup = e.target.value; aplicaFiltros(); sincronizaGrupos(); });
   const mudouRef = () => {
     const escolhidas = [$("selRef1Top").value, $("selRef2Top").value].filter((v, i, a) => v && a.indexOf(v) === i);
     filtrosEstado.ref = escolhidas.join("|"); aplicaFiltros();

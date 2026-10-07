@@ -7,9 +7,10 @@
 
 Rodando direto (`executar`), as duas fases acontecem em sequência.
 """
+import html
 import os
 
-from .analises import exporta_top100, gera_top100_aumentos, monta_dados_resumo_grupo
+from .analises import exporta_top100, gera_top100_aumentos, gera_top100_quedas, monta_dados_resumo_grupo
 from .base import monta_base
 from .comparativo import calcula_comparativos, define_referencias
 from .dados import gera_aba_dados_html
@@ -83,19 +84,42 @@ class Sessao:
         tabela_minimo_html, ctx.df_minimo_por_grupo = gera_tabela_acima_abaixo_minimo(ctx)
 
         passo(78, "Criando tabelas: Top 100 maior queda de consumo (água e esgoto)")
+        from .dre import lista_sups, prepara, _nome_sup
+        prepara(ctx)                                   # marca a superintendência de cada linha (Top 100 por SUP)
         top_agua_df, top_esg_df = exporta_top100(ctx.df_atual, ctx.df_anterior, ctx.ref_atual,
                                                  ctx.ref_anterior, self.caminho_top100)
         with open(self.caminho_top100, "rb") as f:
             botao_top100 = botao_download_xlsx("Baixar Top 100 (Excel)", NOME_TOP100_XLSX, f.read())
-        tabela_top100_agua_html = gera_tabela_top100_html(top_agua_df, "Água", "agua", botao_top100)
-        tabela_top100_esgoto_html = gera_tabela_top100_html(top_esg_df, "Esgoto", "esgoto")
-
-        passo(80, "Criando tabelas: Top 100 maior aumento de consumo (água e esgoto)")
         aum_agua_df, aum_esg_df = gera_top100_aumentos(ctx.df_atual, ctx.df_anterior, ctx.ref_atual, ctx.ref_anterior)
         botao_aumento = botao_download_xlsx("Baixar Top 100 aumentos (Excel)", NOME_TOP100_AUMENTO_XLSX,
                                             xlsx_bytes({"Top100_Aumento_Agua": aum_agua_df, "Top100_Aumento_Esgoto": aum_esg_df}))
-        tabela_aumento_agua_html = gera_tabela_top100_html(aum_agua_df, "Água", "aumento-agua", botao_aumento, aumento=True)
-        tabela_aumento_esgoto_html = gera_tabela_top100_html(aum_esg_df, "Esgoto", "aumento-esgoto", aumento=True)
+        # um conjunto de rankings por superintendência (o filtro Superintendência mostra o da SUP escolhida)
+        blocos_queda, blocos_aumento = [], []
+        for sup in lista_sups(ctx):
+            if sup == "TODAS":
+                qa, qe, aa, ae, bq, ba, suf = top_agua_df, top_esg_df, aum_agua_df, aum_esg_df, botao_top100, botao_aumento, ""
+            else:
+                at = ctx.df_atual[ctx.df_atual["__sup"] == sup]
+                an = ctx.df_anterior[ctx.df_anterior["__sup"] == sup]
+                qa, qe = (gera_top100_quedas(at, an, rub, ctx.ref_atual, ctx.ref_anterior) for rub in ("AGUA", "ESGOTO"))
+                aa, ae = gera_top100_aumentos(at, an, ctx.ref_atual, ctx.ref_anterior)
+                slug_sup = "".join(c for c in sup.lower() if c.isalnum())
+                bq = botao_download_xlsx(f"Baixar Top 100 {sup} (Excel)", f"Top100_Quedas_{slug_sup}.xlsx",
+                                         xlsx_bytes({"Top100_Agua": qa, "Top100_Esgoto": qe}))
+                ba = botao_download_xlsx(f"Baixar Top 100 aumentos {sup} (Excel)", f"Top100_Aumentos_{slug_sup}.xlsx",
+                                         xlsx_bytes({"Top100_Aumento_Agua": aa, "Top100_Aumento_Esgoto": ae}))
+                suf = f" ({_nome_sup(sup)})"
+            sl = "".join(c for c in sup.lower() if c.isalnum())
+            ds = html.escape(sup, quote=True)
+            blocos_queda.append(f'<div class="sup-top-bloco" data-sup="{ds}">'
+                                + gera_tabela_top100_html(qa, "Água" + suf, "agua-" + sl, bq)
+                                + gera_tabela_top100_html(qe, "Esgoto" + suf, "esgoto-" + sl) + "</div>")
+            blocos_aumento.append(f'<div class="sup-top-bloco" data-sup="{ds}">'
+                                  + gera_tabela_top100_html(aa, "Água" + suf, "aumento-agua-" + sl, ba, aumento=True)
+                                  + gera_tabela_top100_html(ae, "Esgoto" + suf, "aumento-esgoto-" + sl, aumento=True) + "</div>")
+        tabela_top100_agua_html, tabela_top100_esgoto_html = "".join(blocos_queda), ""
+        passo(80, "Criando tabelas: Top 100 maior aumento de consumo (água e esgoto)")
+        tabela_aumento_agua_html, tabela_aumento_esgoto_html = "".join(blocos_aumento), ""
 
         passo(82, "Calculando: resumo consolidado por grupo")
         df_resumo_grupo = monta_dados_resumo_grupo(ctx)

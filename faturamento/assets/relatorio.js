@@ -18,12 +18,31 @@ function definirFiltros(parcial) {
     document.querySelectorAll('.sup-bloco').forEach(b => {
         b.style.display = (b.dataset.sup === ESTADO.sup && b.dataset.mes === ESTADO.mes) ? 'block' : 'none';
     });
-    document.querySelectorAll('.prev-bloco').forEach(b => { b.style.display = (b.dataset.sup === ESTADO.sup) ? 'block' : 'none'; });
+    document.querySelectorAll('.prev-bloco, .sup-top-bloco').forEach(b => { b.style.display = (b.dataset.sup === ESTADO.sup) ? 'block' : 'none'; });
+    aplicarSupNosGrupos();
     aplicarFontes();
     [['selSup', ESTADO.sup], ['selMes', ESTADO.mes], ['selRef', ESTADO.ref]].forEach(([id, v]) => {
         const el = document.getElementById(id); if (el && v) el.value = v;
     });
     desenharGraficosIndiretas();
+}
+
+// Superintendência nas abas por grupo (Resumo e Diretas): marca só os grupos da SUP escolhida (pela Localidade do cronograma)
+let supGruposAplicada = null;
+function aplicarSupNosGrupos() {
+    if (ESTADO.sup === supGruposAplicada) return;           // só quando a SUP muda: não desfaz a escolha manual de grupos
+    supGruposAplicada = ESTADO.sup;
+    let mapa = {};
+    try { mapa = JSON.parse(document.getElementById('info-filtros').textContent).grupoSup || {}; } catch (e) { /* sem mapa */ }
+    const caixas = Array.from(document.querySelectorAll('.chk-grupo'));
+    const daSup = (c) => ESTADO.sup === 'TODAS' || mapa[c.value] === ESTADO.sup;
+    const algum = caixas.some(daSup);                       // SUP sem grupo conhecido: não esconde tudo
+    caixas.forEach(c => {
+        const ok = !algum || daSup(c);
+        c.checked = ok;
+        const rotulo = c.closest('label'); if (rotulo) rotulo.style.display = ok ? '' : 'none';
+    });
+    if (typeof filtrarPorGrupo === 'function' && document.getElementById('badgeFiltro')) filtrarPorGrupo();
 }
 
 // Referência = planilhas de orçado mostradas (ex.: "RF01T26|RF SUP" mostra as duas e a diferença entre elas)
