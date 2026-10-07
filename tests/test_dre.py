@@ -226,7 +226,12 @@ def test_tabelas_orcado_por_ciclo_acima_das_economias(sessao):
 def test_dados_tem_validacao_dos_calculos(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     dados = html[html.index('id="view-dados"'):]
-    assert "Validação dos cálculos" in dados and "btn-baixar" in dados
+    assert "validação dos cálculos" in dados and "btn-baixar" in dados
+    # todos os tópicos recolhíveis e fechados ao abrir a aba
+    for t in ("Avisos (", "Conferência dos KPIs", "Bases carregadas", "Orçado: linhas reconhecidas", "Bases para download",
+              "1. DRE", "2. Resumo", "3. Diretas", "4. Indiretas", "5. Forecast"):
+        assert f'<details class="val-aba"><summary>{t}' in dados, t
+    assert '<details class="val-aba" open' not in dados
     pos = [dados.index(t) for t in ("1. DRE", "2. Resumo", "3. Diretas", "4. Indiretas", "5. Forecast")]
     assert pos == sorted(pos)
 
