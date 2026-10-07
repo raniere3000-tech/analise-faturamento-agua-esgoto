@@ -55,24 +55,66 @@ def _num_grupo(g):
     return int(g) if g.isdigit() else None
 
 
-def limita_ao_ultimo_grupo(ctx):
-    """Só entram na análise os grupos até o último que faturou na última referência.
+def _sup_dos_grupos(ctx, base):
+    """{grupo: SUP} antes da marcação da DRE: Localidade do cronograma; senão a cidade mais frequente das ligações do grupo."""
+    from .config import sup_da_localidade
+    from .leitura import chave_grupo
+    mapa = {}
+    for g, loc in (getattr(ctx, "grupo_localidade", None) or {}).items():
+        sup = sup_da_localidade(loc)
+        if sup:
+            mapa[chave_grupo(g)] = sup
+    faltam = {chave_grupo(g) for g in base["Grupo"].dropna().unique()} - set(mapa)
+    if faltam and "Nome da Localidade" in base.columns:          # só quando o cronograma não resolveu todos os grupos
+        freq = base.groupby(["Grupo", "Nome da Localidade"], observed=True).size()
+        for (g, cidade), _ in freq.sort_values(ascending=False).items():
+            sup = sup_da_localidade(cidade)
+            if sup:
+                mapa.setdefault(chave_grupo(g), sup)
+    return mapa
 
-    Ex.: se a última referência só tem faturamento dos grupos 01 a 05, os demais grupos (que ainda não
-    faturaram) ficam de fora também nos outros meses, para a comparação ser entre os mesmos grupos."""
+
+def limita_ao_ultimo_grupo(ctx):
+    """Só entram na análise os grupos até o último que faturou na última referência — em cada superintendência.
+
+    Ex.: se a última referência só tem faturamento dos grupos 501 a 503 (Lagos) e 401 a 404 (Leste), os grupos 504+
+    e 405+ (que ainda não faturaram) ficam de fora também nos outros meses, para a comparação ser entre os mesmos
+    grupos. Cada SUP tem a sua numeração (4xx, 5xx...), por isso o corte é feito por SUP; uma SUP sem nenhum grupo
+    faturado no mês ainda fica toda de fora (entra no forecast)."""
+    from .leitura import chave_grupo
     base = ctx.base_final
     ctx.base_completa = base          # base inteira (todos os grupos): a previsão de fechamento projeta os grupos que faltam
     atual = base[base["Referencia de Leitura"] == ctx.ref_atual]
     com_fat = atual[pd.to_numeric(atual["Valor (R$)"], errors="coerce").fillna(0) != 0]
-    nums = [n for n in (_num_grupo(g) for g in com_fat["Grupo"].unique()) if n is not None]
     ctx.ultimo_grupo = ""
-    if not nums:
+    ctx.ultimo_por_sup = {}
+    faturados = [g for g in com_fat["Grupo"].unique() if _num_grupo(g) is not None]
+    if not faturados:
         return
-    ultimo = max(nums)
-    largura = max(len(str(g)) for g in com_fat["Grupo"].unique() if _num_grupo(g) is not None)
-    ctx.ultimo_grupo = str(ultimo).zfill(largura)
+    sup_grupo = _sup_dos_grupos(ctx, base)
+    familia = lambda g: sup_grupo.get(chave_grupo(g))          # None = grupo sem SUP conhecida (todos juntos)
+    ultimo = {}
+    for g in faturados:
+        f = familia(g)
+        if f not in ultimo or _num_grupo(g) > _num_grupo(ultimo[f]):
+            ultimo[f] = g
+    ctx.ultimo_por_sup = {f: str(g).strip() for f, g in ultimo.items()}
+    maior = max(_num_grupo(g) for g in ultimo.values())
+    nomeados = sorted((f, g) for f, g in ultimo.items() if f)
+    ctx.ultimo_grupo = (str(next(iter(ultimo.values()))).strip() if len(ultimo) == 1
+                        else ", ".join(f"{str(g).strip()} ({f})" for f, g in nomeados))
+
+    def fica(g):
+        n = _num_grupo(g)
+        if n is None:
+            return True
+        f = familia(g)
+        if f is None:                          # grupo sem SUP conhecida: corte pelo maior grupo faturado (como antes)
+            return n <= maior
+        return f in ultimo and n <= _num_grupo(ultimo[f])
+
     grupos = base["Grupo"]
-    manter = grupos.map({g: _num_grupo(g) is None or _num_grupo(g) <= ultimo for g in grupos.unique()}).astype(bool)
+    manter = grupos.map({g: fica(g) for g in grupos.unique()}).astype(bool)
     removidas = int((~manter).sum())
     if not removidas:                                 # nada a tirar: usa a mesma tabela (sem copiar 2 milhões de linhas)
         ctx.base_final = base

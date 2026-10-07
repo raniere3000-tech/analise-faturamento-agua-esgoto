@@ -464,3 +464,35 @@ def test_filtro_do_csv_por_superintendencia_no_navegador(tmp_path):
     lagos, sem_coluna = json.loads(saida)
     assert lagos == '﻿A;Superintendência;B\n1;LAGOS;"x;y"\n3;LAGOS;"aspas ""z"""\n'
     assert sem_coluna is None
+
+
+def test_ultimo_grupo_por_superintendencia_e_dias_de_leitura():
+    """Lagos (5xx) e Leste (4xx) leem em paralelo: o corte do 'último grupo faturado' é por SUP, e grupo sem leitura
+    no mês não entra como 0 dia na média (era o que dava 9,0 dias em vez de ~30)."""
+    from types import SimpleNamespace
+    from faturamento.comparativo import limita_ao_ultimo_grupo
+    from faturamento.config import sup_da_localidade
+    from faturamento.painel_html import media_dias
+    assert sup_da_localidade("Lagos") == "LAGOS" and sup_da_localidade("Leste") == "LESTE"
+    assert sup_da_localidade("Interior") == "LAGOS" and sup_da_localidade("Maricá") == "LESTE"
+    assert sup_da_localidade("Rio Centro-Sul") is None
+    linhas = []
+    for g in list(range(401, 406)) + list(range(501, 506)):
+        linhas.append({"Grupo": str(g), "Referencia de Leitura": "09/2026", "Valor (R$)": 100.0})
+        if g in (401, 402, 501, 502, 503):                       # já faturados em outubro
+            linhas.append({"Grupo": str(g), "Referencia de Leitura": "10/2026", "Valor (R$)": 100.0})
+    ctx = SimpleNamespace(base_final=pd.DataFrame(linhas), ref_atual="10/2026",
+                          grupo_localidade={str(g): ("Leste" if g < 500 else "Lagos") for g in list(range(401, 406)) + list(range(501, 506))})
+    limita_ao_ultimo_grupo(ctx)
+    assert sorted(ctx.base_final["Grupo"].unique()) == ["401", "402", "501", "502", "503"]
+    assert ctx.ultimo_grupo == "503 (LAGOS), 402 (LESTE)"
+    assert len(ctx.base_completa) == len(linhas)                # o forecast continua vendo todos os grupos
+    assert media_dias(pd.Series([30.0, 31.0, 0.0, 0.0])) == pytest.approx(30.5)
+    assert media_dias(pd.Series([0.0])) == 0.0
+
+
+def test_card_de_dias_segue_o_filtro(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert 'data-field="dias-media-atual"' in html and "data-dias-atual=" in html[html.index('id="tabela-dados-resumo"'):]
+    resumo = sessao.ctx.resultados["resumo"]
+    assert (resumo["Dias_Leitura_Atual"] > 0).all()

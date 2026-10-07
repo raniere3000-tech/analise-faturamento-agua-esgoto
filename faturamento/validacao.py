@@ -533,7 +533,8 @@ def _dias_df(resumo):
     if resumo is None or not len(resumo):
         return None
     d = resumo[["Grupo", "Dias_Leitura_Atual", "Dias_Leitura_Anterior"]].copy()
-    d.loc[len(d)] = ["Média", d["Dias_Leitura_Atual"].mean(), d["Dias_Leitura_Anterior"].mean()]
+    from .painel_html import media_dias
+    d.loc[len(d)] = ["Média (só grupos com leitura no mês)", media_dias(d["Dias_Leitura_Atual"]), media_dias(d["Dias_Leitura_Anterior"])]
     return d
 
 
@@ -678,7 +679,9 @@ def gera_validacao_html(ctx):
         _bloco("Dias de leitura (média)",
                "a média de dias de leitura dos grupos nos dois meses e a diferença.",
                ["Dias de leitura do grupo = média de Qts. Dias (cronograma) das linhas de água e esgoto do grupo",
-                "Média = média simples entre os grupos; Δ = atual − anterior"],
+                "Média = média simples entre os grupos que tiveram leitura no mês (grupo ainda sem leitura não entra como 0); Δ = atual − anterior",
+                "Os grupos são os da análise: em cada superintendência, até o último grupo já faturado no mês atual",
+                "O filtro Superintendência / Grupo refaz a média só com os grupos marcados"],
                comum_fatura + ["<b>Qts. Dias</b> (cronograma: cruzado por grupo e mês pela Data da Leitura; sem o mês, usa a última linha do grupo)"], lambda sup: {"Dias de leitura": _dias_df(rs(sup))},
                "dias_leitura", ctx=ctx, bases=[("fatura", f"{f_atual_ant}; média de Qts. Dias por Grupo")],
                montagem=["Faixa com os dois meses e o Δ em dias (laranja quando diminui)"]),

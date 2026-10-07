@@ -212,7 +212,7 @@ function filtrarPorGrupo() {
 function recalcularTotais() {
     document.querySelectorAll('table.tabela-comparativo').forEach(function (tabela) {
         const marcados = Array.from(document.querySelectorAll('.chk-grupo:checked')).map(c => c.value);
-        let fatAt=0, fatAnt=0, ecoAt=0, ecoAnt=0, volAt=0, volAnt=0, diasAtSoma=0, diasAntSoma=0, diasCount=0;
+        let fatAt=0, fatAnt=0, ecoAt=0, ecoAnt=0, volAt=0, volAnt=0, diasAtSoma=0, diasAntSoma=0, diasAtN=0, diasAntN=0;
         tabela.querySelectorAll('tbody tr[data-grupo]').forEach(function (tr) {
             const grupo = tr.getAttribute('data-grupo');
             if (grupo === '' || !marcados.includes(grupo)) return;
@@ -222,9 +222,10 @@ function recalcularTotais() {
             ecoAnt += parseFloat(tr.getAttribute('data-eco-anterior')) || 0;
             volAt += parseFloat(tr.getAttribute('data-vol-atual')) || 0;
             volAnt += parseFloat(tr.getAttribute('data-vol-anterior')) || 0;
-            diasAtSoma += parseFloat(tr.getAttribute('data-dias-atual')) || 0;
-            diasAntSoma += parseFloat(tr.getAttribute('data-dias-anterior')) || 0;
-            diasCount++;
+            // dias 0 = grupo sem leitura naquele mês: fica fora da média
+            const dAt = parseFloat(tr.getAttribute('data-dias-atual')) || 0, dAnt = parseFloat(tr.getAttribute('data-dias-anterior')) || 0;
+            if (dAt > 0) { diasAtSoma += dAt; diasAtN++; }
+            if (dAnt > 0) { diasAntSoma += dAnt; diasAntN++; }
         });
         const linhaTotal = tabela.querySelector('tbody tr.linha-media');
         if (!linhaTotal) return;
@@ -234,8 +235,8 @@ function recalcularTotais() {
         const tarAnt = volAnt ? fatAnt / volAnt : 0;
         const ticAt = ecoAt ? fatAt / ecoAt : 0;
         const ticAnt = ecoAnt ? fatAnt / ecoAnt : 0;
-        const diasAt = diasCount ? diasAtSoma / diasCount : 0;
-        const diasAnt = diasCount ? diasAntSoma / diasCount : 0;
+        const diasAt = diasAtN ? diasAtSoma / diasAtN : 0;
+        const diasAnt = diasAntN ? diasAntSoma / diasAntN : 0;
 
         function fmt(v, dec) {
             dec = dec || 0;
@@ -375,10 +376,13 @@ function recalcularKPIsResumo() {
     const tabelaResumo = document.getElementById('tabela-dados-resumo');
     if (!tabelaResumo) return;
     let fatAt=0, fatAnt=0, ecoAt=0, ecoAnt=0, volFatAt=0, volFatAnt=0, acimaAt=0, acimaAnt=0;
-    let fatAguaAt=0, fatAguaAnt=0, fatEsgotoAt=0, fatEsgotoAnt=0;
+    let fatAguaAt=0, fatAguaAnt=0, fatEsgotoAt=0, fatEsgotoAnt=0, diasAt=0, diasAnt=0, diasAtN=0, diasAntN=0;
     tabelaResumo.querySelectorAll('tr[data-grupo]').forEach(function (tr) {
         const grupo = tr.getAttribute('data-grupo');
         if (!marcados.includes(grupo)) return;
+        const dAt = parseFloat(tr.getAttribute('data-dias-atual')) || 0, dAnt = parseFloat(tr.getAttribute('data-dias-anterior')) || 0;
+        if (dAt > 0) { diasAt += dAt; diasAtN++; }               // grupo sem leitura no mês não entra na média
+        if (dAnt > 0) { diasAnt += dAnt; diasAntN++; }
         fatAt += parseFloat(tr.getAttribute('data-fat-atual')) || 0;
         fatAnt += parseFloat(tr.getAttribute('data-fat-anterior')) || 0;
         ecoAt += parseFloat(tr.getAttribute('data-eco-atual')) || 0;
@@ -392,6 +396,17 @@ function recalcularKPIsResumo() {
         fatEsgotoAt += parseFloat(tr.getAttribute('data-fatesgoto-atual')) || 0;
         fatEsgotoAnt += parseFloat(tr.getAttribute('data-fatesgoto-anterior')) || 0;
     });
+    // Card "Dias de leitura (média)": só os grupos marcados (segue o filtro de grupos e de Superintendência)
+    const mDiasAt = diasAtN ? diasAt / diasAtN : 0, mDiasAnt = diasAntN ? diasAnt / diasAntN : 0;
+    const fmtDias = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const elDAt = document.querySelector('[data-field="dias-media-atual"]');
+    if (elDAt) {
+        elDAt.innerText = fmtDias(mDiasAt);
+        document.querySelector('[data-field="dias-media-anterior"]').innerText = fmtDias(mDiasAnt);
+        const elDelta = document.querySelector('[data-field="dias-media-delta"]');
+        elDelta.innerText = 'Δ ' + fmtDias(mDiasAt - mDiasAnt) + ' dias';
+        elDelta.style.color = (mDiasAt - mDiasAnt) < 0 ? '#C2560C' : '#1A2740';
+    }
     const tarifaAt = volFatAt ? fatAt / volFatAt : 0;
     const tarifaAnt = volFatAnt ? fatAnt / volFatAnt : 0;
     const vmAt = ecoAt ? volFatAt / ecoAt : 0;

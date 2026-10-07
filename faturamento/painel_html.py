@@ -211,18 +211,25 @@ def gera_grafico_faturamento_html(ctx, df_resumo):
     """
 
 
+def media_dias(serie):
+    """Média dos dias de leitura só dos grupos com leitura no mês (0 = grupo ainda sem leitura / sem cronograma)."""
+    s = serie[serie > 0] if serie is not None else []
+    return float(s.mean()) if len(s) else 0.0
+
+
 def gera_card_leitura_html(ctx, df_resumo):
-    dias_at = df_resumo["Dias_Leitura_Atual"].mean() if len(df_resumo) else 0
-    dias_ant = df_resumo["Dias_Leitura_Anterior"].mean() if len(df_resumo) else 0
+    # o filtro de grupos / Superintendência refaz as médias no navegador (recalcularKPIsResumo)
+    dias_at = media_dias(df_resumo["Dias_Leitura_Atual"]) if len(df_resumo) else 0
+    dias_ant = media_dias(df_resumo["Dias_Leitura_Anterior"]) if len(df_resumo) else 0
     diff = dias_at - dias_ant
     cor = "#C2560C" if diff < 0 else "#1A2740"
     return f"""
     <div class="card card-faixa">
     <h2>Dias de leitura (média)</h2>
     <p class="obs-dias">
-        {ctx.mes_atual}: <b>{fmt_num(dias_at,1)}</b> dias &nbsp;|&nbsp;
-        {ctx.mes_anterior}: <b>{fmt_num(dias_ant,1)}</b> dias &nbsp;|&nbsp;
-        <span style="color:{cor}; font-weight:700;">Δ {fmt_num(diff,1)} dias</span>
+        {ctx.mes_atual}: <b data-field="dias-media-atual">{fmt_num(dias_at,1)}</b> dias &nbsp;|&nbsp;
+        {ctx.mes_anterior}: <b data-field="dias-media-anterior">{fmt_num(dias_ant,1)}</b> dias &nbsp;|&nbsp;
+        <span data-field="dias-media-delta" style="color:{cor}; font-weight:700;">Δ {fmt_num(diff,1)} dias</span>
     </p>
     </div>
     """

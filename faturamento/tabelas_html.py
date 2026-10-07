@@ -72,8 +72,8 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     for _, r in comp.iterrows():
         linhas_html += linha(r["Grupo"], r)
     media = {
-        "Dias_Leitura_atual": comp["Dias_Leitura_atual"].mean() if len(comp) else 0,
-        "Dias_Leitura_anterior": comp["Dias_Leitura_anterior"].mean() if len(comp) else 0,
+        "Dias_Leitura_atual": media_dias(comp["Dias_Leitura_atual"]) if len(comp) else 0,      # só grupos com leitura no mês
+        "Dias_Leitura_anterior": media_dias(comp["Dias_Leitura_anterior"]) if len(comp) else 0,
         "Faturamento_atual": comp["Faturamento_atual"].sum(),
         "Faturamento_anterior": comp["Faturamento_anterior"].sum(),
         "Economias_atual": comp["Economias_atual"].sum(),
@@ -261,6 +261,11 @@ def botao_download_xlsx(rotulo, nome_arquivo, conteudo):
     b64 = base64.b64encode(conteudo).decode("ascii")
     return (f'<button type="button" class="btn-just btn-baixar" data-arquivo="{html.escape(nome_arquivo)}" '
             f'data-b64="{b64}">&#11015; {html.escape(rotulo)}</button>')
+
+
+def media_dias(serie):
+    from .painel_html import media_dias as m
+    return m(serie)
 
 
 def filtra_sup(ctx, df, sup):
@@ -645,7 +650,8 @@ def gera_tabela_dados_resumo_html(df_resumo):
             data-fatesgoto-atual="{r['FatEsgoto_Atual']}" data-fatesgoto-anterior="{r['FatEsgoto_Anterior']}"
             data-eco-atual="{r['Eco_Atual']}" data-eco-anterior="{r['Eco_Anterior']}"
             data-volfat-atual="{r['VolFat_Atual']}" data-volfat-anterior="{r['VolFat_Anterior']}"
-            data-acima-atual="{r['Acima_Atual']}" data-acima-anterior="{r['Acima_Ant']}">
+            data-acima-atual="{r['Acima_Atual']}" data-acima-anterior="{r['Acima_Ant']}"
+            data-dias-atual="{r['Dias_Leitura_Atual']}" data-dias-anterior="{r['Dias_Leitura_Anterior']}">
             <td style="text-align:center;">{html.escape(str(r['Grupo']))}</td>
             <td style="text-align:center;">{fmt_moeda_br(r['Fat_Atual'])}</td>
             <td style="text-align:center;">{fmt_moeda_br(r['Fat_Anterior'])}</td>
