@@ -430,17 +430,28 @@ function recalcularKPIsResumo() {
     if (window.graficoFaturamentoChart && window.dadosGraficoOriginal) {
         const chart = window.graficoFaturamentoChart;
         const original = window.dadosGraficoOriginal;
-        const novosLabels = [], novosAtuais = [], novosAnteriores = [];
+        const novosLabels = [], novosAtuais = [], novosAnteriores = [], novasCores = [];
         original.labels.forEach(function (label, idx) {
             if (marcados.includes(label)) {
                 novosLabels.push(label);
                 novosAtuais.push(original.atual[idx]);
                 novosAnteriores.push(original.anterior[idx]);
+                if (original.cores) novasCores.push(original.cores[idx]);
             }
         });
         chart.data.labels = novosLabels;
         chart.data.datasets[1].data = novosAtuais;
         chart.data.datasets[0].data = novosAnteriores;
+        if (original.cores) chart.data.datasets[1].backgroundColor = novasCores;   // cor de alerta acompanha o grupo
+        // poucos grupos: estreita o espaço de cada grupo para as barras não ficarem largas demais (o par fica junto)
+        const espaco = Math.min(0.65, 0.12 + 0.1 * novosLabels.length);
+        chart.data.datasets.forEach(ds => { ds.categoryPercentage = espaco; });
+        // escala refeita só com os grupos filtrados (antes ficava presa ao maior valor de todos os grupos)
+        const maximo = Math.max(0, ...novosAtuais, ...novosAnteriores);
+        if (chart.options.scales && chart.options.scales.y) {
+            chart.options.scales.y.suggestedMax = maximo * 1.2;
+            delete chart.options.scales.y.max;
+        }
         chart.update();
     }
 }

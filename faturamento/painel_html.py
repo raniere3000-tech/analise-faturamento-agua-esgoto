@@ -87,7 +87,8 @@ def gera_grafico_faturamento_html(ctx, df_resumo):
         window.dadosGraficoOriginal = {{
             labels: {labels},
             atual: listaAtual,
-            anterior: listaAnterior
+            anterior: listaAnterior,
+            cores: {cores_atual}
         }};
 
         const maxValor = Math.max(...listaAtual, ...listaAnterior, 0);
