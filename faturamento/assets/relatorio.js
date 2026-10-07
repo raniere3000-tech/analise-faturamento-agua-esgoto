@@ -261,6 +261,7 @@ function recalcularTotais() {
         setCell('fat-atual', fatAt);
         setCell('fat-anterior', fatAnt);
         setDelta('delta-fat', fatAt - fatAnt);
+        setDelta('delta-pct-fat', fatAnt ? (fatAt - fatAnt) / fatAnt : 0, true);
         setCell('eco-atual', ecoAt);
         setCell('eco-anterior', ecoAnt);
         setDelta('delta-pct-eco', ecoAnt ? (ecoAt - ecoAnt) / ecoAnt : 0, true);
@@ -272,12 +273,15 @@ function recalcularTotais() {
         setCell('vm-atual', vmAt, 2);
         setCell('vm-anterior', vmAnt, 2);
         setDelta('delta-vm', vmAt - vmAnt, false, 2);
+        setDelta('delta-pct-vm', vmAnt ? (vmAt - vmAnt) / vmAnt : 0, true);
         setCell('tar-atual', tarAt, 2);
         setCell('tar-anterior', tarAnt, 2);
         setDelta('delta-tar', tarAt - tarAnt, false, 2);
+        setDelta('delta-pct-tar', tarAnt ? (tarAt - tarAnt) / tarAnt : 0, true);
         setCell('tic-atual', ticAt, 2);
         setCell('tic-anterior', ticAnt, 2);
         setDelta('delta-tic', ticAt - ticAnt, false, 2);
+        setDelta('delta-pct-tic', ticAnt ? (ticAt - ticAnt) / ticAnt : 0, true);
     });
 }
 
