@@ -109,7 +109,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
     <div class="kpis-grid">{cards_kpis_html}</div>
     {grafico_faturamento_html}
     {card_leitura_html}
-    <div class="card"><h2>Destaques do mês — {ctx.mes_atual}</h2>{cards_insights_html}</div>
+    {cards_insights_html}
     {tabela_dados_resumo_html}
     {justificativa_html}
 </div>

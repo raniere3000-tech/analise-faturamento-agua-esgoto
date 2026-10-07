@@ -408,3 +408,10 @@ def test_sup_dos_grupos_pelo_cronograma(tmp_path):
     assert set(b.loc[b["Grupo"] == "01", "__sup"]) == {"LESTE"} and set(b.loc[b["Grupo"] == "02", "__sup"]) == {"LAGOS"}
     html = open(s.caminho_html, encoding="utf-8").read()
     assert '"grupoSup": {"01": "LESTE", "02": "LAGOS"' in html
+
+
+def test_destaques_um_quadro_por_superintendencia(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    resumo = html[html.index('id="view-resumo"'):html.index('id="view-dre"')]
+    assert 'class="card sup-dest" data-sup="LAGOS"' in resumo and 'class="card sup-dest" data-sup="LESTE"' in resumo
+    assert "Destaques do mês — Setembro/2026 — LAGOS" in resumo and "Destaques do mês — Setembro/2026 — LESTE" in resumo

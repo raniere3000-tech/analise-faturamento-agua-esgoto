@@ -311,3 +311,28 @@ def gera_cards_insights_html(ctx, comp_agua, comp_esgoto, df_ciclos, top_agua_df
         {card_top100_agua}
     </div>
     """
+
+
+def gera_destaques_html(ctx, df_ciclos, top_agua_df, top_esg_df, top_por_sup):
+    """Destaques do mês: um quadro por superintendência (LAGOS, LESTE...), cada um só com os dados dela.
+    O filtro Superintendência mostra o quadro escolhido (Todas: todos os quadros). Sem SUP identificada, um quadro geral."""
+    from .comparativo import monta_comparativo
+    from .dre import SEM_SUP, TODAS, _nome_sup, lista_sups
+    from .leitura import chave_grupo
+    sups = [s for s in lista_sups(ctx) if s not in (TODAS, SEM_SUP)] if "__sup" in ctx.df_atual.columns else []
+    titulo = f"Destaques do mês — {ctx.mes_atual}"
+    if not sups:
+        return (f'<div class="card"><h2>{titulo}</h2>'
+                + gera_cards_insights_html(ctx, ctx.comp_agua, ctx.comp_esgoto, df_ciclos, top_agua_df, top_esg_df) + "</div>")
+    grupo_sup = getattr(ctx, "grupo_sup", None) or {}
+    blocos = []
+    for sup in sups:
+        at, an = ctx.df_atual[ctx.df_atual["__sup"] == sup], ctx.df_anterior[ctx.df_anterior["__sup"] == sup]
+        comp_a, comp_e = monta_comparativo(at, an, "AGUA"), monta_comparativo(at, an, "ESGOTO")
+        ciclos = df_ciclos
+        if df_ciclos is not None and len(df_ciclos):
+            ciclos = df_ciclos[df_ciclos["Grupo"].astype(str).map(lambda g: grupo_sup.get(chave_grupo(g)) == sup)]
+        qa, qe = top_por_sup.get(sup, (top_agua_df.iloc[:0], top_esg_df.iloc[:0]))
+        blocos.append(f'<div class="card sup-dest" data-sup="{html.escape(sup, quote=True)}"><h2>{titulo} — {html.escape(_nome_sup(sup))}</h2>'
+                      + gera_cards_insights_html(ctx, comp_a, comp_e, ciclos, qa, qe) + "</div>")
+    return "".join(blocos)
