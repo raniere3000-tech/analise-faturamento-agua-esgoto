@@ -34,8 +34,17 @@ async function preparaPython() {
 
   avisa("etapa", { texto: "Instalando pandas e leitores de Excel…" });
   await pyodide.loadPackage(["pandas", "micropip"]);
+  // leitores/gravadores de Excel: primeiro do próprio Pyodide (mesmo servidor do Python); o que faltar, tenta no PyPI.
+  // Falha em um deles não para a análise (redes que bloqueiam o PyPI davam "Can't fetch metadata for 'xlsxwriter'").
+  const EXTRAS = ["openpyxl", "xlrd", "xlsxwriter"];
+  try { await pyodide.loadPackage(EXTRAS); } catch (e) { avisa("log", { linha: "Aviso: " + e.message }); }
   const micropip = pyodide.pyimport("micropip");
-  await micropip.install(["openpyxl", "xlrd", "xlsxwriter"]);
+  for (const pacote of EXTRAS) {
+    const modulo = pacote;
+    if (pyodide.runPython(`import importlib.util; importlib.util.find_spec("${modulo}") is not None`)) continue;
+    try { await micropip.install(pacote); }
+    catch (e) { avisa("log", { linha: `Aviso: não foi possível instalar ${pacote} (${String(e.message || e).split("\n").pop()}).` }); }
+  }
 
   avisa("etapa", { texto: "Carregando o programa de análise…" });
   const FS = pyodide.FS;

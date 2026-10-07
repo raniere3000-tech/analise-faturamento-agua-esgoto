@@ -258,6 +258,8 @@ def monta_quadro_ciclos_situacao(ctx):
 
 def botao_download_xlsx(rotulo, nome_arquivo, conteudo):
     """Botão que baixa um .xlsx embutido no próprio relatório (funciona dentro do iframe e offline)."""
+    if not conteudo:
+        return ""
     b64 = base64.b64encode(conteudo).decode("ascii")
     return (f'<button type="button" class="btn-just btn-baixar" data-arquivo="{html.escape(nome_arquivo)}" '
             f'data-b64="{b64}">&#11015; {html.escape(rotulo)}</button>')
@@ -282,7 +284,8 @@ def filtra_sup(ctx, df, sup):
     if col is None:
         return df
     mapa = getattr(ctx, "grupo_sup", None) or {}
-    return df[df[col].map(lambda g: mapa.get(chave_grupo(g)) == sup)]
+    da_sup = {g: mapa.get(chave_grupo(g)) == sup for g in df[col].unique()}     # uma vez por grupo, não por linha
+    return df[df[col].map(da_sup).astype(bool)]
 
 
 def botoes_por_sup(ctx, rotulo, nome_arquivo, abas_da_sup):
@@ -306,10 +309,22 @@ def botoes_por_sup(ctx, rotulo, nome_arquivo, abas_da_sup):
     return "".join(partes)
 
 
+def motor_excel():
+    """Gravador de .xlsx disponível: xlsxwriter (mais rápido) ou openpyxl; None se nenhum (os botões de Excel somem)."""
+    import importlib.util
+    for motor in ("xlsxwriter", "openpyxl"):
+        if importlib.util.find_spec(motor) is not None:
+            return motor
+    return None
+
+
 def xlsx_bytes(abas):
-    """abas: {nome_da_aba: DataFrame} -> bytes de um .xlsx."""
+    """abas: {nome_da_aba: DataFrame} -> bytes de um .xlsx (b"" se não houver gravador de Excel)."""
+    motor = motor_excel()
+    if motor is None:
+        return b""
     buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="xlsxwriter") as w:
+    with pd.ExcelWriter(buf, engine=motor) as w:
         for nome, df in abas.items():
             df.to_excel(w, sheet_name=nome[:31], index=False)
     return buf.getvalue()

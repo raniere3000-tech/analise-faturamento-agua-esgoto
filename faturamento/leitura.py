@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Leitura e classificação dos arquivos (consumo, fatura e cronograma)."""
+import functools
 import glob
 import io
 import os
@@ -69,11 +70,36 @@ def detecta_linha_cabecalho(caminho, sheet_name=0, max_linhas=30):
             df_raw = pd.DataFrame([[c.strip().strip('"') for c in l.split(";")] for l in linhas])
     except ERROS_LEITURA:
         return None
+    return _linha_cabecalho(df_raw)
+
+
+def _linha_cabecalho(df_raw):
     for i in range(len(df_raw)):
         valores_linha = {chave_texto(v) for v in df_raw.iloc[i].tolist() if v is not None and str(v).strip()}
         if len(valores_linha & _CHAVES_CONHECIDAS) >= 2:
             return i
     return None
+
+
+def _aba_com_cabecalho(raw, max_linhas=30):
+    """Aba lida sem cabeçalho (header=None) → DataFrame com o cabeçalho na linha certa, como le_dataframe faria,
+    sem ler a planilha de novo. Nomes repetidos ganham .1, .2 (como o pandas)."""
+    i = _linha_cabecalho(raw.head(max_linhas))
+    i = 0 if i is None else i
+    if len(raw) <= i:
+        return None
+    nomes, vistos = [], {}
+    for c in raw.iloc[i].tolist():
+        n = _limpa_nome_coluna("" if c is None or (isinstance(c, float) and c != c) else c) or f"Unnamed: {len(nomes)}"
+        if n in vistos:
+            vistos[n] += 1
+            n = f"{n}.{vistos[n]}"
+        else:
+            vistos[n] = 0
+        nomes.append(n)
+    df = raw.iloc[i + 1:].reset_index(drop=True)
+    df.columns = nomes
+    return padroniza_colunas_cronograma(df)
 
 
 def _limpa_nome_coluna(c):
@@ -364,13 +390,14 @@ def processa_cronograma(caminho):
     frames = []
     if ext in (".xlsx", ".xls"):
         try:
-            abas = pd.ExcelFile(caminho).sheet_names
+            livro = pd.ExcelFile(caminho)          # abre o arquivo uma vez só (cronograma costuma ter uma aba por mês)
+            abas = livro.sheet_names
         except Exception as exc:   # arquivo problemático não derruba a análise; o motivo é informado
             print(f"   ⚠️ Cronograma {nome} não pôde ser aberto ({exc}); ignorado.")
             return pd.DataFrame()
         for aba in abas:
             try:
-                df = le_dataframe(caminho, sheet_name=aba)
+                df = _aba_com_cabecalho(livro.parse(aba, header=None, dtype=str))      # cada aba lida uma vez
             except Exception as exc:
                 print(f"   ⚠️ Aba '{aba}' de {nome} ignorada ({exc}).")
                 continue
@@ -402,6 +429,7 @@ def processa_cronograma(caminho):
         subset=["Grupo", "Referencia Cronograma", "Aba/Mês Cronograma"])
 
 
+@functools.lru_cache(maxsize=65536)
 def chave_grupo(valor):
     """'514', '514.0', ' 05 ' → '514', '5' (mesmo formato na fatura e no cronograma)."""
     t = str(valor).strip()
@@ -453,11 +481,19 @@ def classifica_arquivos(pasta, progresso=None):
 
     classificados, ignorados = [], []
     vistos = {}                                      # conteúdo idêntico em dois lugares conta uma vez só
+    # só arquivos com o MESMO tamanho podem ser cópias: os demais nem são lidos para o hash (era o passo mais lento)
+    tamanhos = {}
+    for c in arquivos:
+        try:
+            tamanhos.setdefault(os.path.getsize(c), []).append(c)
+        except OSError:
+            pass
+    suspeitos = {c for grupo in tamanhos.values() if len(grupo) > 1 for c in grupo}
     for idx, caminho in enumerate(arquivos, start=1):
         nome = nome_relativo(caminho, pasta)
         tipo_achado = None
         try:
-            assinatura = _hash_arquivo(caminho)
+            assinatura = _hash_arquivo(caminho) if caminho in suspeitos else ("unico", caminho)
             if assinatura in vistos:
                 ignorados.append({"arquivo": nome, "motivo": f"conteúdo idêntico a {vistos[assinatura]} (não contado duas vezes)"})
                 if progresso:

@@ -329,8 +329,9 @@ def test_dados_explica_cada_tabela_e_grafico_com_bases_para_baixar(sessao):
     for ch in ("fatura", "fatura_mensal", "avulso", "cancelamento", "orcado"):
         assert dados.count(f'id="base-dl-{ch}"') == 1
         assert dados.count(f'data-ref="{ch}"') >= 2
-    b64 = re.search(r'id="base-dl-fatura" data-arquivo="base_fatura.csv">([^<]+)<', dados).group(1)
-    df = pd.read_csv(io.BytesIO(base64.b64decode(b64)), sep=";", decimal=",", encoding="utf-8-sig")
+    import gzip
+    b64 = re.search(r'id="base-dl-fatura" data-gz="1" data-arquivo="base_fatura.csv">([^<]+)<', dados).group(1)
+    df = pd.read_csv(io.BytesIO(gzip.decompress(base64.b64decode(b64))), sep=";", decimal=",", encoding="utf-8-sig")
     assert {"N. Ligação", "Grupo", "Valor (R$)", "Superintendência", "Entra em economias/volume"} <= set(df.columns)
     assert set(df["Referencia de Leitura"]) == {"08/2026", "09/2026"}
 

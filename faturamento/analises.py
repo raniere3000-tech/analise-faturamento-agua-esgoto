@@ -9,86 +9,87 @@ from .config import CONSUMO_MINIMO_POR_CATEGORIA, MINIMO_POR_TIPO_ECONOMIA
 from .formatacao import normaliza_texto
 
 
-def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False, por_grupo=False):
+_CACHE_COMP = {}          # (id das tabelas, rubrica) -> comparação por ligação (a parte cara do Top 100), reaproveitada
+
+
+def _texto(serie):
+    """str + strip calculado uma vez por valor distinto (bem mais rápido que .astype(str).str.strip() na coluna inteira)."""
+    return serie.map({u: ("" if u is None or (isinstance(u, float) and u != u) else str(u).strip()) for u in serie.unique()})
+
+
+def comparativo_ligacoes(df_at, df_ant, rubrica):
+    """Uma linha por ligação que faturou a rubrica nos dois meses: consumo e valor de cada mês, nome, grupo, categoria,
+    SUP e situação de lançamento. Calculado uma vez por par de tabelas e rubrica (cache)."""
+    chave = (id(df_at), id(df_ant), len(df_at), len(df_ant), rubrica)
+    if chave in _CACHE_COMP:
+        return _CACHE_COMP[chave]
+    com_sit = "Situacao Lancamento" in df_at.columns and "Situacao Lancamento" in df_ant.columns
+    serv = "E" if "ESGOTO" in rubrica.upper() else "A"
+
+    def lado(df, atual):
+        filtro = (df["__serv"] == serv) if "__serv" in df.columns else df["Rubrica"].str.contains(rubrica, case=False, na=False)
+        extras = ["Nome Cliente", "Grupo", "Categoria", "__sup"] if atual else []
+        cols = [c for c in ["N. Ligação", "Consumo Faturado", "Valor (R$)", "Situacao Lancamento"] + extras if c in df.columns]
+        d = df.loc[filtro, cols]                       # só as colunas usadas (não copia a tabela inteira)
+        out = pd.DataFrame({"N. Ligação": _texto(d["N. Ligação"]),
+                            "Consumo": pd.to_numeric(d["Consumo Faturado"], errors="coerce").fillna(0),
+                            "Valor": pd.to_numeric(d["Valor (R$)"], errors="coerce").fillna(0),
+                            "Sit": _texto(d["Situacao Lancamento"]) if com_sit else ""})
+        aggs = {"Consumo": "sum", "Valor": "sum", "Sit": "first"}
+        if atual:
+            for c, nome in (("Nome Cliente", "Nome_Cliente"), ("Grupo", "Grupo"), ("Categoria", "Categoria"), ("__sup", "Superintendência")):
+                out[nome] = _texto(d[c]) if c in d.columns else ""
+                aggs[nome] = "first"
+        return out.groupby("N. Ligação", sort=False).agg(aggs)
+
+    at, ant = lado(df_at, True), lado(df_ant, False)
+    comp = at.join(ant, how="inner", lsuffix="_Atual", rsuffix="_Anterior").reset_index()
+    comp.attrs["com_sit"] = com_sit
+    if len(_CACHE_COMP) > 8:
+        _CACHE_COMP.clear()
+    _CACHE_COMP[chave] = comp
+    return comp
+
+
+def gera_top100_quedas(df_at, df_ant, rubrica, ref_at, ref_ant, aumento=False, por_grupo=False, sup=None):
     """Top 100 ligações com maior queda de consumo (ou maior aumento, com `aumento=True`) entre os dois meses.
+    sup: só as ligações dessa superintendência (None/TODAS = todas).
     por_grupo=True: as 100 maiores de CADA grupo, na ordem geral (+ coluna Superintendência) — o Top 100 de qualquer
     conjunto de grupos sai dessa lista, e é isso que o filtro de grupos usa no navegador."""
-    def prepara(df):
-        df = df.copy()
-        df["N. Ligação"] = df["N. Ligação"].astype(str).str.strip()
-        df["Nome_Cliente"] = df.get("Nome Cliente", pd.Series(dtype=str)).astype(str).str.strip()
-        df["Grupo"] = df.get("Grupo", pd.Series(dtype=str)).astype(str).str.strip()
-        df["Categoria"] = df.get("Categoria", pd.Series(dtype=str)).astype(str).str.strip()
-        df["Consumo_Num"] = pd.to_numeric(df.get("Consumo Faturado", 0), errors="coerce").fillna(0)
-        df["Valor_Num"] = pd.to_numeric(df.get("Valor (R$)", 0), errors="coerce").fillna(0)
-        df["Sup"] = df["__sup"].astype(str) if "__sup" in df.columns else ""
-        df["Sit_Lanc"] = (df["Situacao Lancamento"].astype(object).where(df["Situacao Lancamento"].notna(), "").astype(str).str.strip()
-                          if com_sit else "")
-        return df
-
-    com_sit = "Situacao Lancamento" in df_at.columns and "Situacao Lancamento" in df_ant.columns
-
-    at = prepara(df_at[df_at["Rubrica"].str.contains(rubrica, case=False, na=False)])
-    ant = prepara(df_ant[df_ant["Rubrica"].str.contains(rubrica, case=False, na=False)])
-
-    at_group = at.groupby("N. Ligação").agg(
-        **{
-            "Nome_Cliente": ("Nome_Cliente", "first"),
-            "Grupo": ("Grupo", "first"),
-            "Categoria": ("Categoria", "first"),
-            "Sit_Atual": ("Sit_Lanc", "first"),
-            "Superintendência": ("Sup", "first"),
-            "Consumo_Atual": ("Consumo_Num", "sum"),
-            "Valor_Atual": ("Valor_Num", "sum"),
-        }
-    ).reset_index()
-
-    ant_group = ant.groupby("N. Ligação").agg(
-        **{
-            "Consumo_Anterior": ("Consumo_Num", "sum"),
-            "Valor_Anterior": ("Valor_Num", "sum"),
-            "Sit_Anterior": ("Sit_Lanc", "first"),
-        }
-    ).reset_index()
-
-    comp = at_group.merge(ant_group, on="N. Ligação", how="inner")
+    base = comparativo_ligacoes(df_at, df_ant, rubrica)
+    com_sit = base.attrs.get("com_sit", False)
+    if sup and sup != "TODAS":
+        base = base[base["Superintendência"] == sup]
     p = "Aumento" if aumento else "Queda"
     sinal = -1 if aumento else 1
-    comp[f"{p}_Consumo"] = sinal * (comp["Consumo_Anterior"] - comp["Consumo_Atual"])
+    dif = sinal * (base["Consumo_Anterior"] - base["Consumo_Atual"])
+    comp = base[dif > 0].copy()
+    comp[f"{p}_Consumo"] = dif[dif > 0]
+    ant_pos = comp["Consumo_Anterior"] > 0
     # no aumento, quem não consumia no mês anterior fica sem % (vazio), em vez de 0%
-    comp[f"{p}_%"] = np.where(comp["Consumo_Anterior"] > 0, comp[f"{p}_Consumo"] / comp["Consumo_Anterior"].where(comp["Consumo_Anterior"] > 0, 1) * 100,
+    comp[f"{p}_%"] = np.where(ant_pos, comp[f"{p}_Consumo"] / comp["Consumo_Anterior"].where(ant_pos, 1) * 100,
                               np.nan if aumento else 0)
     comp[f"{p}_Valor_R$"] = sinal * (comp["Valor_Anterior"] - comp["Valor_Atual"])
-    comp = comp[comp[f"{p}_Consumo"] > 0]
     comp = comp.sort_values(f"{p}_Consumo", ascending=False, kind="stable")
     comp = comp.groupby("Grupo", sort=False).head(100) if por_grupo else comp.head(100)
     comp["Ranking"] = range(1, len(comp) + 1)
 
-    col_nome_at = f"Consumo {ref_at}"
-    col_nome_ant = f"Consumo {ref_ant}"
-    col_valor_at = f"Valor R$ {ref_at}"
-    col_valor_ant = f"Valor R$ {ref_ant}"
-
+    col_nome_at, col_nome_ant = f"Consumo {ref_at}", f"Consumo {ref_ant}"
+    col_valor_at, col_valor_ant = f"Valor R$ {ref_at}", f"Valor R$ {ref_ant}"
     col_sit_at, col_sit_ant = f"Situação Lançamento {ref_at}", f"Situação Lançamento {ref_ant}"
-    comp = comp.rename(columns={
-        "Sit_Atual": col_sit_at,
-        "Sit_Anterior": col_sit_ant,
-        "Consumo_Atual": col_nome_at,
-        "Consumo_Anterior": col_nome_ant,
-        "Valor_Atual": col_valor_at,
-        "Valor_Anterior": col_valor_ant,
-    })
-
+    comp = comp.rename(columns={"Sit_Atual": col_sit_at, "Sit_Anterior": col_sit_ant,
+                                "Consumo_Atual": col_nome_at, "Consumo_Anterior": col_nome_ant,
+                                "Valor_Atual": col_valor_at, "Valor_Anterior": col_valor_ant})
     return comp[["Ranking", "N. Ligação", "Nome_Cliente", "Grupo", "Categoria"]
-        + ([col_sit_at, col_sit_ant] if com_sit else []) + [
-        col_nome_at, col_nome_ant, f"{p}_Consumo", f"{p}_%",
-        col_valor_at, col_valor_ant, f"{p}_Valor_R$"] + (["Superintendência"] if por_grupo else [])]
+                + ([col_sit_at, col_sit_ant] if com_sit else [])
+                + [col_nome_at, col_nome_ant, f"{p}_Consumo", f"{p}_%", col_valor_at, col_valor_ant, f"{p}_Valor_R$"]
+                + (["Superintendência"] if por_grupo else [])].reset_index(drop=True)
 
 
-def gera_top100_aumentos(df_at, df_ant, ref_at, ref_ant):
+def gera_top100_aumentos(df_at, df_ant, ref_at, ref_ant, sup=None):
     """(água, esgoto): Top 100 ligações com maior aumento de consumo."""
     print("📈 Calculando Top 100 clientes com maior aumento de consumo...")
-    return tuple(gera_top100_quedas(df_at, df_ant, rub, ref_at, ref_ant, aumento=True) for rub in ("AGUA", "ESGOTO"))
+    return tuple(gera_top100_quedas(df_at, df_ant, rub, ref_at, ref_ant, aumento=True, sup=sup) for rub in ("AGUA", "ESGOTO"))
 
 
 def monta_dados_resumo_grupo(ctx):
@@ -150,10 +151,10 @@ def exporta_top100(df_atual, df_anterior, ref_atual, ref_anterior, caminho_saida
     top_agua_df = gera_top100_quedas(df_atual, df_anterior, "AGUA", ref_atual, ref_anterior)
     top_esg_df = gera_top100_quedas(df_atual, df_anterior, "ESGOTO", ref_atual, ref_anterior)
 
+    from .tabelas_html import xlsx_bytes            # xlsxwriter ou openpyxl, o que estiver instalado
     os.makedirs(os.path.dirname(caminho_saida), exist_ok=True)
-    with pd.ExcelWriter(caminho_saida, engine="xlsxwriter") as writer:
-        top_agua_df.to_excel(writer, sheet_name="Top100_Agua", index=False)
-        top_esg_df.to_excel(writer, sheet_name="Top100_Esgoto", index=False)
+    with open(caminho_saida, "wb") as f:
+        f.write(xlsx_bytes({"Top100_Agua": top_agua_df, "Top100_Esgoto": top_esg_df}))
 
     print(f"✅ Top 100 quedas exportado para: {caminho_saida}")
     return top_agua_df, top_esg_df
