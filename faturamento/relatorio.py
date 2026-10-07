@@ -95,6 +95,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
   <div class="toggle" role="tablist" aria-label="Visualização">
     <button id="btn-resumo" class="active" onclick="mostrarView('resumo')">Resumo</button>
     <button id="btn-tabelas" onclick="mostrarView('tabelas')">Diretas</button>
+    <button id="btn-analise" onclick="mostrarView('analise')">Análise</button>
     <button id="btn-indiretas" onclick="mostrarView('indiretas')">Indiretas</button>
     <button id="btn-forecast" onclick="mostrarView('forecast')">Forecast</button>
     <button id="btn-dre" onclick="mostrarView('dre')">DRE</button>
@@ -135,6 +136,9 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
     {tabela_agua_html}
     {tabela_esgoto_html}
     {tabelas_orcado_ciclo_html}
+</div>
+
+<div id="view-analise">
     {quadro_ciclos_html}
     {matriz_html}
     {tabela_minimo_html}

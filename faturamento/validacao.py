@@ -631,7 +631,7 @@ def gera_validacao_html(ctx):
 
     # ---------------- 1. DRE ----------------
     passo(95, "Criando aba Dados: explicação da DRE")
-    dre = _aba("5. DRE", [_bloco(
+    dre = _aba("6. DRE", [_bloco(
         f"Tabela DRE — Realizado × Orçado ({mes})",
         f"o realizado do mês, linha a linha da DRE, contra cada planilha de orçado ({fonte_txt}), com Δ % e Δ R$. "
         "Os números da amostra são de Todas as superintendências; na tela, os filtros Superintendência e Mês escolhem o bloco "
@@ -737,6 +737,9 @@ def gera_validacao_html(ctx):
                       ("orcado", f"Referencia = {ra}; Planilha escolhida; linhas DIRETAS, Volume e Economias")],
                montagem=["Mesmo formato do comparativo: Realizado no lugar do mês atual e Orçado no lugar do mês anterior",
                          "Só o par (Água e Esgoto) da planilha escolhida aparece; as outras ficam prontas e escondidas"]),
+    ]
+    # aba Análise: da tabela ativas × cortadas para baixo (antes ficava nas Diretas)
+    analise_blocos = [
         _bloco("Tabela — Economias faturadas por ciclo (ativas × cortadas)",
                "quantidade de economias de água por grupo, separadas pela situação da ligação.",
                ["Soma de Economias_Totais por grupo e Situacao Ligacao (ativa/cortada), só rubrica de água e Consumo Faturado &gt; 0"],
@@ -811,7 +814,7 @@ def gera_validacao_html(ctx):
     montagem_comum = ["Linhas: Fat. de água - Indireto (negrito), aberturas RI recuadas, Fat. de esgoto - Indireto (LNE) e Total indiretas",
                       "Forecast editável no mês atual: clique, digite e Enter; \"↺ Restaurar automático\" volta ao cálculo",
                       "Δ em vermelho quando o fechamento fica abaixo do orçado"]
-    indiretas = _aba("3. Indiretas", [
+    indiretas = _aba("4. Indiretas", [
         _bloco(f"Tabela — Indiretas: financeiro em R$ ({mes})",
                "por classe, o orçado de cada planilha (RF e RF SUP), o realizado em R$, o forecast, o fechamento e as diferenças.",
                ["Realizado = soma do Valor Parcela do serviço avulso por classe no mês, até D-1",
@@ -844,8 +847,8 @@ def gera_validacao_html(ctx):
     ])
 
     passo(97, "Criando aba Dados: memória de cálculo do Forecast")
-    forecast = _aba("4. Forecast", [_bloco_forecast(ctx)])
+    forecast = _aba("5. Forecast", [_bloco_forecast(ctx)])
 
     # cada tópico é recolhível (fechado ao abrir a aba); quem monta o cartão da aba Dados é dados.py
     return (_aba("Bases para download", [f'<div class="val-bloco">{_secao_bases(ctx)}</div>'])
-            + resumo + _aba("2. Diretas", dir_blocos) + indiretas + forecast + dre)
+            + resumo + _aba("2. Diretas", dir_blocos) + _aba("3. Análise", analise_blocos) + indiretas + forecast + dre)
