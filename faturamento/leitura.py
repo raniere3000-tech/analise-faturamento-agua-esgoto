@@ -37,7 +37,12 @@ def _texto_csv(caminho, limite=None):
         return raw.decode("latin-1")
 
 
-BYTES_CABECALHO = 256 * 1024          # para achar o cabeçalho e o tipo do arquivo basta o começo
+BYTES_CABECALHO = 256 * 1024
+# Colunas que o relatório usa (o resto — endereço, bairro, complemento, rota... — não é carregado: economiza memória)
+COLUNAS_USADAS_FATURA = set(NOMES_LIGACAO) | {"Grupo", "Rubrica", "Valor Parcela", "Referencia de Leitura", "Data de Vencimento",
+                                              "Nome Cliente", "Categoria", "Situacao Ligacao", "Situacao Conta", "Nome da Localidade"}
+COLUNAS_USADAS_CONSUMO = set(NOMES_LIGACAO) | {"Leitura Atual", "Consumo Medido", "Consumo Faturado", "Mes Lancamento",
+                                               "Ano Lancamento", "Situacao Conta", "Nome da Localidade"} | set(COLUNAS_ECONOMIA_TODAS)          # para achar o cabeçalho e o tipo do arquivo basta o começo
 
 
 def mapeia_unicos(serie, funcao):
@@ -70,28 +75,66 @@ def detecta_linha_cabecalho(caminho, sheet_name=0, max_linhas=30):
     return None
 
 
-def le_dataframe(caminho, nrows=None, sheet_name=0):
+def _limpa_nome_coluna(c):
+    c = str(c).strip().replace('"', '').replace('ï»¿', '').replace('\ufeff', '')
+    return c.replace("P?blica", "Publica").replace("Pública", "Publica")
+
+
+def _encoding_csv(caminho):
+    """utf-8-sig se o começo do arquivo for UTF-8 válido; senão latin-1."""
+    with open(caminho, "rb") as f:
+        raw = f.read(BYTES_CABECALHO)
+    try:
+        raw.decode("utf-8-sig")
+        return "utf-8-sig"
+    except UnicodeDecodeError as erro:
+        return "utf-8-sig" if erro.start >= len(raw) - 3 else "latin-1"
+
+
+def le_dataframe(caminho, nrows=None, sheet_name=0, colunas=None):
+    """Lê CSV/Excel com o cabeçalho na linha certa. `colunas`: só essas colunas são carregadas (economiza memória com
+    arquivos grandes); o nome é comparado depois de limpo (aspas, BOM, 'P?blica')."""
     ext = os.path.splitext(caminho)[1].lower()
     linha_header = detecta_linha_cabecalho(caminho, sheet_name=sheet_name)
     if linha_header is None:
         linha_header = 0
+    filtro = None
+    if colunas is not None:
+        alvo = set(colunas)
+        filtro = lambda c: _limpa_nome_coluna(c) in alvo or NOMES_CRONOGRAMA.get(chave_texto(c)) in alvo
     if ext == ".csv":
-        f = io.StringIO(_texto_csv(caminho, BYTES_CABECALHO if nrows else None))
-        primeira_linha = f.readline()
+        primeira_linha = _texto_csv(caminho, BYTES_CABECALHO).split("\n", 1)[0]
         skip = linha_header
-        if primeira_linha.strip().lower().startswith("sep="):
-            skip += 1
-        f.seek(0)
-        if primeira_linha.strip().lower().startswith("sep=") and linha_header:
-            skip = linha_header                       # a detecção já contou a linha "sep=;"
-        df = pd.read_csv(f, sep=";", skiprows=skip, dtype=str, nrows=nrows)
+        if primeira_linha.strip().lower().startswith("sep=") and not linha_header:
+            skip += 1                                  # a detecção falhou e a 1ª linha é "sep=;"
+        opcoes = dict(sep=";", skiprows=skip, dtype=str, nrows=nrows, usecols=filtro)
+        enc = _encoding_csv(caminho)
+        try:                                           # lê direto do disco, sem carregar o arquivo inteiro como texto
+            df = pd.read_csv(caminho, encoding=enc, **opcoes)
+        except UnicodeDecodeError:
+            df = pd.read_csv(caminho, encoding="latin-1", **opcoes)
     elif ext in (".xlsx", ".xls"):
         df = pd.read_excel(caminho, sheet_name=sheet_name, dtype=str, header=linha_header, nrows=nrows)
+        if filtro is not None:
+            df = df[[c for c in df.columns if filtro(c)]]
     else:
         return None
-    df.columns = df.columns.astype(str).str.strip().str.replace('"', '').str.replace('ï»¿', '')
-    df.columns = [c.replace("P?blica", "Publica").replace("Pública", "Publica") for c in df.columns]
+    df.columns = [_limpa_nome_coluna(c) for c in df.columns]
     return padroniza_colunas_cronograma(df)
+
+
+def compacta_textos(df, limite=0.5):
+    """Textos repetidos ("VALOR DE AGUA", "514", "10/2026"...) passam a apontar para um único objeto na memória.
+    Os valores e o tipo da coluna não mudam; só a memória cai (cada célula deixa de ser uma cópia do texto)."""
+    n = len(df)
+    if not n:
+        return df
+    for c in df.columns:
+        if df[c].dtype == object:
+            unicos = df[c].nunique(dropna=True)
+            if unicos <= max(1000, n * limite):
+                df[c] = df[c].astype("category").astype(object)
+    return df
 
 
 def padroniza_colunas_cronograma(df):
@@ -210,7 +253,7 @@ def referencia_do_consumo(df, caminho):
 
 def processa_consumo(caminho):
     print(f"   ⚙️ Processando CONSUMO: {os.path.basename(caminho)}")
-    df = le_dataframe(caminho)
+    df = le_dataframe(caminho, colunas=COLUNAS_USADAS_CONSUMO)
     col_ligacao = acha_coluna_ligacao(df, "CONSUMO", caminho)
 
     for c in ["Leitura Atual", "Consumo Medido", "Consumo Faturado"] + COLUNAS_ECONOMIA_TODAS:
@@ -227,7 +270,7 @@ def processa_consumo(caminho):
     colunas_conflito = ["Grupo", "Situacao Ligacao", "Nome Cliente", "Categoria", col_ligacao]
     df = df.drop(columns=[c for c in colunas_conflito if c in df.columns], errors="ignore")
 
-    return df.drop_duplicates(subset=["N. Ligação_consumo", "Referência"])
+    return compacta_textos(df.drop_duplicates(subset=["N. Ligação_consumo", "Referência"]))
 
 
 def _valor_br(serie):
@@ -241,7 +284,7 @@ def processa_fatura(caminho):
 def processa_fatura_completa(caminho):
     """Devolve (linhas de água/esgoto, linhas de cancelamento) da fatura."""
     print(f"   ⚙️ Processando FATURA: {os.path.basename(caminho)}")
-    df = le_dataframe(caminho)
+    df = le_dataframe(caminho, colunas=COLUNAS_USADAS_FATURA)
     col_ligacao = acha_coluna_ligacao(df, "FATURA", caminho)
 
     df["N. da Ligacao"] = df[col_ligacao].astype(str).str.strip()
@@ -253,13 +296,14 @@ def processa_fatura_completa(caminho):
         .astype(float)
     )
     df_filter = df[df["Rubrica"].isin(RUBRICAS_VALIDAS)].copy()
+    compacta_textos(df_filter)
     df_filter["Grupo"] = df_filter["Grupo"].astype(str).str.strip()
     df_filter["Referencia de Leitura"] = padroniza_referencia(df_filter["Referencia de Leitura"])
 
     eh_canc = lambda r: (lambda k: any(k.startswith(c) if c.startswith("COFINS") else k == c for c in CHAVES_CANCELAMENTO))(chave_texto(r))
     canc = df[mapeia_unicos(df["Rubrica"], eh_canc).fillna(False).astype(bool)].copy()
     canc["Referencia de Leitura"] = padroniza_referencia(canc["Referencia de Leitura"])
-    return df_filter, canc
+    return df_filter, compacta_textos(canc)
 
 
 def processa_avulso(caminho):

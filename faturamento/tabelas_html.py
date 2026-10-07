@@ -138,7 +138,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
 
 def monta_quadro_ciclos_situacao(ctx):
     print("📊 Montando quadro ciclos (Ativa x Cortada)...")
-    df = ctx.base_final.copy()
+    df = ctx.base_final
     if "Situacao Ligacao" not in df.columns:
         html_vazio = "<div class='card'><h2>Ciclos (Ativa x Cortada)</h2><p>Coluna 'Situacao Ligacao' não encontrada</p></div>"
         return html_vazio, pd.DataFrame(columns=["Grupo","Ativa_Atual","Ativa_Ant","Cortada_Atual","Cortada_Ant"])
@@ -147,14 +147,18 @@ def monta_quadro_ciclos_situacao(ctx):
     # Filtra apenas Rubrica AGUA para não duplicar economia (AGUA + ESGOTO)
     # Mesma base usada no Comparativo Água
     # ------------------------------------------------------------------
-    df = df[df["Rubrica"].str.contains("AGUA", case=False, na=False)]
+    # só as linhas e colunas usadas (dois meses, água) — sem copiar a base inteira
+    df = df[df["Referencia de Leitura"].isin([ctx.ref_atual, ctx.ref_anterior])]
+    agua = (df["__serv"] == "A") if "__serv" in df.columns else df["Rubrica"].str.contains("AGUA", case=False, na=False)
+    df = df.loc[agua, ["Grupo", "Referencia de Leitura", "Situacao Ligacao", "Consumo Faturado", "Economias_Totais"]].copy()
 
-    df["Situacao Ligacao"] = df["Situacao Ligacao"].astype(str).str.upper()
     def norm_sit(s):
+        s = str(s).upper()
         if "ATIV" in s: return "Ativa"
         elif "CORT" in s: return "Cortada"
         return None
-    df["Situacao_Norm"] = df["Situacao Ligacao"].apply(norm_sit)
+    sit = df["Situacao Ligacao"]
+    df["Situacao_Norm"] = sit.map({v: norm_sit(v) for v in sit.dropna().unique()})   # uma vez por situação distinta
     df = df[df["Situacao_Norm"].notna()]
 
     def conta_por(referencia, sit):
@@ -285,12 +289,13 @@ def lista_sem_faturamento(ctx, merge):
 def gera_matriz_migracao_grupos(ctx):
     print("📊 Montando matriz de migração de grupos...")
 
-    df = ctx.base_final[
-        ["N. Ligação", "Grupo", "Referencia de Leitura", "Consumo Faturado", "Economias_Totais", "Rubrica"]
-    ].dropna(subset=["Grupo"]).copy()
+    base = ctx.base_final
+    base = base[base["Referencia de Leitura"].isin([ctx.ref_atual, ctx.ref_anterior])]      # só os dois meses comparados
+    df = base[["N. Ligação", "Grupo", "Referencia de Leitura", "Consumo Faturado", "Economias_Totais", "Rubrica"]
+              + (["__serv"] if "__serv" in base.columns else [])].dropna(subset=["Grupo"])
 
     # Filtra apenas Rubrica AGUA — evita duplicar economia (AGUA + ESGOTO)
-    df = df[df["Rubrica"].str.contains("AGUA", case=False, na=False)]
+    df = df[(df["__serv"] == "A") if "__serv" in df.columns else df["Rubrica"].str.contains("AGUA", case=False, na=False)].copy()
 
     df["Consumo Faturado"] = pd.to_numeric(df["Consumo Faturado"], errors="coerce").fillna(0)
     df = df[df["Consumo Faturado"] > 0]

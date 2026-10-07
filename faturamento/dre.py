@@ -95,7 +95,7 @@ def prepara(ctx):
     def marca(df, col_lig):
         if df is None or not len(df):
             return df
-        df = df.copy()
+        df = df.copy(deep=False)                          # só acrescenta colunas: não precisa duplicar os dados
         cid = df["Nome da Localidade"] if "Nome da Localidade" in df.columns else pd.Series(index=df.index, dtype=object)
         faltam = cid.isna()
         if faltam.any():
@@ -180,22 +180,29 @@ def realizado(ctx, sup, ref=None):
     return dict(cache[chave])
 
 
-def _por_mes(ctx, base):
-    """{mês: linhas da base} — a base é separada por mês uma vez só (a DRE pede cada mês × SUP)."""
-    return _cache(ctx, "_por_mes_%d" % id(base), id(base),
-                  lambda: {r: d for r, d in base.groupby("Referencia de Leitura", sort=False)})
+def _diretas_agregadas(ctx, base):
+    """Soma das diretas por mês × SUP × serviço (valor; economias e volume só com Consumo > 0), calculada uma vez.
+    Tabela pequena: a DRE de qualquer mês × SUP sai dela sem filtrar (nem copiar) a base de milhões de linhas."""
+    def calcula():
+        serv = base["__serv"] if "__serv" in base.columns else base["Rubrica"].astype(str).map(
+            lambda r: "E" if "ESGOTO" in r.upper() else "A" if "AGUA" in r.upper() else "")
+        pos = base["Consumo Faturado"] > 0
+        t = pd.DataFrame({"ref": base["Referencia de Leitura"].values, "sup": base["__sup"].values, "s": serv.values,
+                          "d": base["Valor (R$)"].values, "eco": base["Economias_Totais"].where(pos, 0).values,
+                          "vol": base["Consumo Faturado"].where(pos, 0).values})
+        return t[t["s"].isin(["A", "E"])].groupby(["ref", "sup", "s"]).sum()
+    return _cache(ctx, "_diretas_%d" % id(base), id(base), calcula)
 
 
 def _realizado(ctx, sup, ref):
-    at = _por_mes(ctx, ctx.base_final).get(ref, ctx.base_final.iloc[:0])
-    at = _filtra(at, sup)
+    agg = _diretas_agregadas(ctx, ctx.base_final)
     r = {}
-    for k, rub in (("A", "AGUA"), ("E", "ESGOTO")):
-        d = at[at["__serv"] == k] if "__serv" in at.columns else at[at["Rubrica"].str.contains(rub, case=False, na=False)]
-        pos = d[d["Consumo Faturado"] > 0]
-        r["d" + k] = float(d["Valor (R$)"].sum())
-        r["eco" + k] = float(pos["Economias_Totais"].sum())
-        r["vol" + k] = float(pos["Consumo Faturado"].sum())
+    for k in ("A", "E"):
+        sel = agg[(agg.index.get_level_values("ref") == ref) & (agg.index.get_level_values("s") == k)
+                  & ((agg.index.get_level_values("sup") == sup) if sup != TODAS else True)]
+        r["d" + k] = float(sel["d"].sum())
+        r["eco" + k] = float(sel["eco"].sum())
+        r["vol" + k] = float(sel["vol"].sum())
     avu = _filtra(ctx.avulso, sup)
     if avu is not None and len(avu):
         avu = avu[avu["Referencia"] == ref]
