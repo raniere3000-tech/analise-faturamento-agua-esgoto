@@ -460,6 +460,12 @@ def gera_matriz_migracao_grupos(ctx):
         ctx, lambda abas: f"Baixar matrículas sem faturamento ({len(abas['Sem faturamento'])})",
         f"Matriculas_Sem_Faturamento_{ctx.mes_atual.replace('/', '-')}.xlsx",
         lambda sup: {"Sem faturamento": filtra_sup(ctx, sem_fat, sup)})
+    if len(sem_fat):                              # com grupos desmarcados, o botão baixa (CSV) só os grupos marcados
+        from .situacao_lancamento import _csv_gz_b64
+        col = html.escape(f"Grupo {ctx.mes_anterior}", quote=True)
+        botao_sem_fat = (f'<span data-csv-filtrado="semfat" data-nome="Matriculas_Sem_Faturamento_{ctx.mes_atual.replace("/", "-")}">'
+                         f'{botao_sem_fat}</span><script type="application/octet-stream" id="semfat-dados" data-col-grupo="{col}">'
+                         f'{_csv_gz_b64(sem_fat)}</script>')
 
     return f"""
     <div class="card">
@@ -676,7 +682,8 @@ def gera_tabela_dados_resumo_html(df_resumo):
     """
 
 
-def gera_tabela_top100_html(df, titulo, slug, botao_extra="", aumento=False):
+def gera_tabela_top100_html(df, titulo, slug, botao_extra="", aumento=False, chave=""):
+    """chave: nome da lista em #top100-dados ("queda-agua"...) — o filtro de grupos refaz a tabela com ela no navegador."""
     tipo = "aumento" if aumento else "queda"
     prefixo = "Aumento" if aumento else "Queda"
     cabecalho = f"Top 100 clientes com maior {tipo} de consumo — {titulo}"
@@ -726,7 +733,7 @@ def gera_tabela_top100_html(df, titulo, slug, botao_extra="", aumento=False):
         {explicacao}
         <span style="color:{cor}; font-weight:700;">{cor_nome}</span> = {tipo} igual ou superior a {DESTAQUE_QUEDA_PCT_TOP100}%.
     </p>
-    <table class="tabela-top100-{slug}">
+    <table class="tabela-top100-{slug}"{f' data-top="{chave}"' if chave else ""}>
         <thead><tr>{ths}</tr></thead>
         <tbody>{linhas_html}</tbody>
     </table>

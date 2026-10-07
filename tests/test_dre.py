@@ -539,3 +539,20 @@ def test_seta_de_cada_situacao_baixa_as_ligacoes(sessao):
         d = det if sup == "TODAS" else det[det["Superintendência"] == sup]
         esperado = r[sup].set_index("Situação")["Ligações atual"]
         assert d[col].value_counts().sort_index().to_dict() == esperado[esperado > 0].sort_index().astype(int).to_dict()
+
+
+def test_dados_para_o_filtro_de_grupos_nos_downloads(sessao):
+    import json
+    import re
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    top = json.loads(re.search(r'<script type="application/json" id="top100-dados">(.*?)</script>', html, re.S).group(1))
+    q = pd.DataFrame(top["queda-agua"]["data"], columns=top["queda-agua"]["columns"])
+    assert q.groupby("Grupo").size().max() <= 100 and "Superintendência" in q.columns
+    # o Top 100 de Todas é o começo da lista de candidatos (mesma ordem)
+    assert list(q["N. Ligação"].head(100)) == list(sessao.ctx.resultados["top_agua"]["N. Ligação"])
+    sit = json.loads(re.search(r'<script type="application/json" id="sitl-agregados">(.*?)</script>', html, re.S).group(1))
+    total = sum(l[3] for l in sit["at"])
+    assert total == sessao.ctx.resultados["situacao_lancamento"]["TODAS"]["Ligações atual"].sum()
+    for tipo in ("top", "sitl", "semfat"):
+        assert f'data-csv-filtrado="{tipo}"' in html
+    assert 'id="semfat-dados"' in html and 'data-top="aumento-esgoto"' in html

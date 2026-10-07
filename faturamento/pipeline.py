@@ -8,6 +8,7 @@
 Rodando direto (`executar`), as duas fases acontecem em sequência.
 """
 import html
+import json
 import os
 
 from .analises import exporta_top100, gera_top100_aumentos, gera_top100_quedas, monta_dados_resumo_grupo
@@ -114,13 +115,27 @@ class Sessao:
             ctx.resultados.setdefault("top_sup", {})[sup] = (qa, qe, aa, ae)      # para os downloads da aba Dados
             sl = "".join(c for c in sup.lower() if c.isalnum())
             ds = html.escape(sup, quote=True)
+            # com grupos desmarcados no filtro, o botão baixa (CSV) o Top 100 refeito só com os grupos marcados
+            bq = f'<span data-csv-filtrado="top" data-tops="queda-agua,queda-esgoto" data-sup="{ds}" data-nome="Top100_Quedas_{sl}">{bq}</span>'
+            ba = f'<span data-csv-filtrado="top" data-tops="aumento-agua,aumento-esgoto" data-sup="{ds}" data-nome="Top100_Aumentos_{sl}">{ba}</span>'
             blocos_queda.append(f'<div class="sup-top-bloco" data-sup="{ds}">'
-                                + gera_tabela_top100_html(qa, "Água" + suf, "agua-" + sl, bq)
-                                + gera_tabela_top100_html(qe, "Esgoto" + suf, "esgoto-" + sl) + "</div>")
+                                + gera_tabela_top100_html(qa, "Água" + suf, "agua-" + sl, bq, chave="queda-agua")
+                                + gera_tabela_top100_html(qe, "Esgoto" + suf, "esgoto-" + sl, chave="queda-esgoto") + "</div>")
             blocos_aumento.append(f'<div class="sup-top-bloco" data-sup="{ds}">'
-                                  + gera_tabela_top100_html(aa, "Água" + suf, "aumento-agua-" + sl, ba, aumento=True)
-                                  + gera_tabela_top100_html(ae, "Esgoto" + suf, "aumento-esgoto-" + sl, aumento=True) + "</div>")
-        tabela_top100_agua_html, tabela_top100_esgoto_html = "".join(blocos_queda), ""
+                                  + gera_tabela_top100_html(aa, "Água" + suf, "aumento-agua-" + sl, ba, aumento=True, chave="aumento-agua")
+                                  + gera_tabela_top100_html(ae, "Esgoto" + suf, "aumento-esgoto-" + sl, aumento=True, chave="aumento-esgoto")
+                                  + "</div>")
+        # candidatos para o filtro de grupos: as 100 maiores de cada grupo (Todas as SUPs), embutidas uma vez
+        candidatos = {}
+        for chave, rub, aum in (("queda-agua", "AGUA", False), ("queda-esgoto", "ESGOTO", False),
+                                ("aumento-agua", "AGUA", True), ("aumento-esgoto", "ESGOTO", True)):
+            candidatos[chave] = json.loads(gera_top100_quedas(ctx.df_atual, ctx.df_anterior, rub, ctx.ref_atual, ctx.ref_anterior,
+                                                               aumento=aum, por_grupo=True).to_json(orient="split", index=False))
+        from .config import DESTAQUE_QUEDA_PCT_TOP100
+        candidatos["destaque"] = DESTAQUE_QUEDA_PCT_TOP100
+        dados_top = ('<script type="application/json" id="top100-dados">'
+                     + json.dumps(candidatos, ensure_ascii=False).replace("</", "<\\/") + "</script>")
+        tabela_top100_agua_html, tabela_top100_esgoto_html = "".join(blocos_queda) + dados_top, ""
         passo(80, "Criando tabelas: Top 100 maior aumento de consumo (água e esgoto)")
         tabela_aumento_agua_html, tabela_aumento_esgoto_html = "".join(blocos_aumento), ""
         passo(81, "Criando cards: Situação de lançamento (por que analisar cada código)")

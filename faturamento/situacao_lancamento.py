@@ -2,6 +2,7 @@
 """Aba Diretas — cards da "Situacao Lancamento" da fatura de ciclo: como cada conta foi lançada (leitura real, média,
 mínimo, estimado...), quanto pesa em ligações, volume e valor, e por que vale analisar cada situação."""
 import html
+import json
 import re
 import unicodedata
 
@@ -127,6 +128,20 @@ def _csv_gz_b64(df):
     return base64.b64encode(gzip.compress(texto.encode("utf-8"), 6)).decode("ascii")
 
 
+def _agrega_grupo(df):
+    """[[sup, grupo, situação, ligações, economias, volume, valor], ...] — uma linha por SUP × grupo × situação."""
+    lig = _por_ligacao(df)
+    if not len(lig):
+        return []
+    for c in ("__sup", "Grupo"):
+        if c not in lig.columns:
+            lig[c] = ""
+    g = lig.groupby(["__sup", "Grupo", "Situação"], observed=True).agg(
+        n=("N. Ligação", "size"), eco=("Economias", "sum"), vol=("Volume", "sum"), val=("Valor", "sum")).reset_index()
+    return [[str(a), str(b).strip(), str(c), int(n), round(float(e), 2), round(float(v), 2), round(float(x), 2)]
+            for a, b, c, n, e, v, x in g.itertuples(index=False)]
+
+
 def resumo_situacoes(df_at, df_ant):
     """Uma linha por situação: ligações, economias, volume e valor (água + esgoto) nos dois meses e as variações."""
     at, ant = _por_ligacao(df_at), _por_ligacao(df_ant)
@@ -152,21 +167,22 @@ def resumo_situacoes(df_at, df_ant):
 
 
 def _card(linha, mes, ant, sup="TODAS"):
-    def var(v, dec=0, suf=""):
+    # data-f: campos que o filtro de grupos refaz no navegador (sitlRecalcular)
+    def var(v, dec=0, suf="", f=""):
         cor = "#C2560C" if v < 0 else "#176b9c" if v > 0 else "#49668C"
         sinal = "+" if v > 0 else ""
-        return f'<span style="color:{cor};font-weight:600">{sinal}{fmt_num(v, dec)}{suf}</span>'
+        return f'<span data-f="{f}" style="color:{cor};font-weight:600">{sinal}{fmt_num(v, dec)}{suf}</span>'
     return f"""
-    <div class="sitl-card">
+    <div class="sitl-card" data-sit="{html.escape(str(linha['Situação']), quote=True)}">
       <div class="sitl-topo"><b>{html.escape(str(linha['Situação']))}{_seta(linha, sup)}</b><span>{html.escape(linha['Leitura da situação'])}</span></div>
-      <div class="sitl-num"><span>Ligações {html.escape(mes)}</span><b>{fmt_num(linha['Ligações atual'])}</b>
-        <small>{fmt_num(linha['% ligações atual'], 1)}% do total · {var(linha['Δ p.p. participação'], 1, ' p.p.')} vs {html.escape(ant)}</small></div>
+      <div class="sitl-num"><span>Ligações {html.escape(mes)}</span><b data-f="lig">{fmt_num(linha['Ligações atual'])}</b>
+        <small><span data-f="pct">{fmt_num(linha['% ligações atual'], 1)}</span>% do total · {var(linha['Δ p.p. participação'], 1, ' p.p.', 'pp')} vs {html.escape(ant)}</small></div>
       <ul class="sitl-lista">
-        <li><span>Δ ligações</span>{var(linha['Δ ligações'])}</li>
-        <li><span>Volume (m³)</span><b>{fmt_num(linha['Volume atual'])}</b></li>
-        <li><span>Vol./economia</span><b>{fmt_num(linha['Vol./economia atual'], 2)}</b> <small>({fmt_num(linha['Vol./economia anterior'], 2)})</small></li>
-        <li><span>Valor água + esgoto</span><b>R$ {fmt_num(linha['Valor atual'], 2)}</b></li>
-        <li><span>Δ valor</span>{var(linha['Δ valor'], 2)}</li>
+        <li><span>Δ ligações</span>{var(linha['Δ ligações'], f='dlig')}</li>
+        <li><span>Volume (m³)</span><b data-f="vol">{fmt_num(linha['Volume atual'])}</b></li>
+        <li><span>Vol./economia</span><b data-f="vme">{fmt_num(linha['Vol./economia atual'], 2)}</b> <small>(<span data-f="vmeant">{fmt_num(linha['Vol./economia anterior'], 2)}</span>)</small></li>
+        <li><span>Valor água + esgoto</span><b data-f="val">R$ {fmt_num(linha['Valor atual'], 2)}</b></li>
+        <li><span>Δ valor</span>{var(linha['Δ valor'], 2, f='dval')}</li>
       </ul>
       <p class="sitl-porque"><b>Por que analisar:</b> {html.escape(linha['Por que analisar'])}</p>
     </div>"""
@@ -200,6 +216,9 @@ def gera_cards_situacao_html(ctx):
         slug = "".join(c for c in sup if c.isalnum())
         botao = botao_download_xlsx(f"Baixar situações{'' if sup == TODAS else ' ' + sup} (Excel)",
                                     f"Situacao_Lancamento_{slug}.xlsx", xlsx_bytes({"Situacao Lancamento": r})) if len(r) else ""
+        if botao:                                      # com grupos desmarcados, baixa (CSV) o resumo refeito só com eles
+            botao = (f'<span data-csv-filtrado="sitl" data-sup="{html.escape(sup, quote=True)}" '
+                     f'data-nome="Situacao_Lancamento_{slug}">{botao}</span>')
         cards = "".join(_card(l, ctx.mes_atual, ctx.mes_anterior, sup) for _, l in r.iterrows()) or "<p>Sem dados</p>"
         blocos.append(f"""<div class="sup-top-bloco" data-sup="{html.escape(sup, quote=True)}">
     <div class="card">
@@ -214,4 +233,9 @@ def gera_cards_situacao_html(ctx):
     ctx.resultados["situacao_detalhe"] = det
     dados = (f'<script type="application/octet-stream" id="sitl-detalhe" data-col-sit="Situação Lançamento {html.escape(ctx.mes_atual, quote=True)}" '
              f'data-arquivo="Situacao_Lancamento_{ctx.mes_atual.replace("/", "-")}">{_csv_gz_b64(det)}</script>') if len(det) else ""
+    # totais por SUP × grupo × situação (mês atual e anterior): o filtro de grupos refaz os cards com eles
+    agregados = {"at": _agrega_grupo(ctx.df_atual), "ant": _agrega_grupo(ctx.df_anterior),
+                 "porque": {str(sit): list(classifica(sit)) for r in ctx.resultados["situacao_lancamento"].values() for sit in r.get("Situação", [])}}
+    dados += ('<script type="application/json" id="sitl-agregados">'
+              + json.dumps(agregados, ensure_ascii=False).replace("</", "<\\/") + "</script>")
     return "".join(blocos) + dados
