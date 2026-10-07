@@ -51,12 +51,18 @@ async function preparaPython() {
   return pyodide;
 }
 
+function apagaTudo(FS, caminho) {                  // apaga arquivos e subpastas da análise anterior
+  for (const nome of FS.readdir(caminho)) {
+    if (nome === "." || nome === "..") continue;
+    const c = `${caminho}/${nome}`;
+    if (FS.isDir(FS.stat(c).mode)) { apagaTudo(FS, c); FS.rmdir(c); } else FS.unlink(c);
+  }
+}
+
 function limpaPasta(pyodide) {
   const FS = pyodide.FS;
   try {
-    for (const nome of FS.readdir(PASTA)) {
-      if (nome !== "." && nome !== "..") FS.unlink(`${PASTA}/${nome}`);
-    }
+    apagaTudo(FS, PASTA);
   } catch (e) {
     FS.mkdirTree(PASTA);
   }
@@ -82,7 +88,9 @@ async function fasePreparar(arquivos) {
   avisa("etapa", { texto: "Copiando os arquivos para análise…" });
   limpaPasta(pyodide);
   for (const arq of arquivos) {
-    pyodide.FS.writeFile(`${PASTA}/${arq.nome}`, new Uint8Array(arq.conteudo));
+    const partes = arq.nome.split("/").filter((p) => p && p !== "." && p !== "..");   // mantém as subpastas
+    if (partes.length > 1) pyodide.FS.mkdirTree(`${PASTA}/${partes.slice(0, -1).join("/")}`);
+    pyodide.FS.writeFile(`${PASTA}/${partes.join("/")}`, new Uint8Array(arq.conteudo));
   }
   avisa("etapa", { texto: "Lendo e cruzando os arquivos…" });
   const preparar = pyodide.globals.get("preparar");

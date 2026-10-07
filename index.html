@@ -324,7 +324,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v29</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v30</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -409,7 +409,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v29-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v30-20261007"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -627,12 +627,18 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     document.title = "Análise de Faturamento — Água e Esgoto";
   }
 
-  async function lerPastaHandle(handle) {
+  // Lê a pasta E as subpastas. O nome enviado leva o caminho ("Leste/Consumo.csv"): arquivos com o mesmo nome em
+  // pastas diferentes não se sobrescrevem. Pastas ocultas (".algo") ficam de fora.
+  const MAX_NIVEIS = 6;
+  async function lerPastaHandle(handle, prefixo = "", nivel = 0) {
     const lidos = [];
     for await (const entrada of handle.values()) {
+      if (entrada.name.startsWith(".")) continue;
       if (entrada.kind === "file" && ehEntrada(entrada.name)) {
         const arq = await entrada.getFile();
-        lidos.push({ nome: arq.name, conteudo: await arq.arrayBuffer() });
+        lidos.push({ nome: prefixo + arq.name, conteudo: await arq.arrayBuffer() });
+      } else if (entrada.kind === "directory" && nivel < MAX_NIVEIS) {
+        lidos.push(...await lerPastaHandle(entrada, prefixo + entrada.name + "/", nivel + 1));
       }
     }
     return lidos;
@@ -642,9 +648,10 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     const lidos = [];
     for (const arq of lista) {
       const partes = (arq.webkitRelativePath || arq.name).split("/");
-      if (partes.length > 2) continue;             // ignora subpastas, como o script
+      const relativo = partes.length > 1 ? partes.slice(1) : partes;          // tira o nome da pasta escolhida
+      if (relativo.length > MAX_NIVEIS + 1 || relativo.some((p) => p.startsWith("."))) continue;
       if (!ehEntrada(arq.name)) continue;
-      lidos.push({ nome: arq.name, conteudo: await arq.arrayBuffer() });
+      lidos.push({ nome: relativo.join("/"), conteudo: await arq.arrayBuffer() });
     }
     return lidos;
   }

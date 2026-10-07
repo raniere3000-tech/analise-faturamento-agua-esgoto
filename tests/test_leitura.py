@@ -149,3 +149,51 @@ def test_cronograma_no_formato_real_com_titulo_e_dias_por_mes(tmp_path, formato)
     assert (b["Encontrado no Cronograma"] == "Sim").all()
     g1 = b[b["Grupo"] == "01"].groupby("Referencia de Leitura")["Qts. Dias"].first()
     assert g1["08/2026"] == 28 and g1["09/2026"] == 31          # dias de leitura de cada mês
+
+
+def test_subpastas_mesmo_nome_sem_duplicar(tmp_path):
+    """Pastas dentro da pasta: arquivos com o mesmo nome em pastas diferentes entram todos; cópias idênticas e linhas
+    repetidas entre arquivos contam uma vez só — o resultado tem que ser igual ao da pasta sem subpastas."""
+    from faturamento import Sessao
+    plano, sub = tmp_path / "plano", tmp_path / "sub"
+    gera_pasta(str(plano), formato_fatura="csv")
+
+    def roda(pasta):
+        s = Sessao(str(pasta), progresso=lambda p, t: None)
+        s.preparar()
+        s.continuar()
+        return s.ctx
+
+    ler = lambda n: pd.read_csv(plano / n, sep=";", dtype=str, encoding="utf-8-sig")
+    fat = ler("Fatura.csv")
+    ligs = sorted(fat["N. da Ligacao"].unique())
+    metade = set(ligs[: len(ligs) // 2])
+    for pasta, sel in (("Leste", lambda d, c: d[c].isin(metade)), ("Lagos", lambda d, c: ~d[c].isin(metade))):
+        os.makedirs(sub / pasta)
+        sel(fat, "N. da Ligacao").pipe(lambda d: fat[d]).to_csv(sub / pasta / "Fatura.csv", sep=";", index=False, encoding="utf-8-sig")
+        for n in ("Consumo 08-2026.csv", "Consumo 09-2026.csv"):
+            c = ler(n)
+            c[sel(c, "N. Ligacao")].to_csv(sub / pasta / n, sep=";", index=False, encoding="utf-8-sig")
+    (sub / "Cronograma.csv").write_bytes((plano / "Cronograma.csv").read_bytes())
+    os.makedirs(sub / "copia")
+    (sub / "copia" / "Cronograma.csv").write_bytes((plano / "Cronograma.csv").read_bytes())       # cópia idêntica
+    os.makedirs(sub / "extra")
+    fat[fat["N. da Ligacao"].isin(metade)].head(200).to_csv(sub / "extra" / "Fatura parcial.csv", sep=";", index=False,
+                                                            encoding="utf-8-sig")                # linhas sobrepostas
+    a, b = roda(plano), roda(sub)
+    assert len(b.classificacao["fatura"]) == 3 and len(b.classificacao["consumo"]) == 4
+    assert any("idêntico" in i["motivo"] for i in b.classificacao["ignorados"])
+    for comp in ("comp_agua", "comp_esgoto"):
+        x, y = getattr(a, comp), getattr(b, comp)
+        assert x["Faturamento_atual"].sum() == pytest.approx(y["Faturamento_atual"].sum())
+        assert x["Economias_atual"].sum() == pytest.approx(y["Economias_atual"].sum())
+        assert x["Volume_Faturado_anterior"].sum() == pytest.approx(y["Volume_Faturado_anterior"].sum())
+    assert any("Leste/Fatura.csv" == i["arquivo"] for i in b.bases_info)
+    assert any("contadas uma vez só" in av for av in b.avisos_base)
+
+
+def test_consumo_sem_mes_no_nome_usa_pasta_ou_colunas(tmp_path):
+    from faturamento.leitura import referencia_do_consumo
+    df = pd.DataFrame({"Mes Lancamento": ["5", "5"], "Ano Lancamento": ["2026", "2026"]})
+    assert referencia_do_consumo(df, str(tmp_path / "09-2026" / "Consumo.csv")) == "09/2026"
+    assert referencia_do_consumo(df, str(tmp_path / "geral" / "Consumo.csv")) == ["05/2026", "05/2026"]
