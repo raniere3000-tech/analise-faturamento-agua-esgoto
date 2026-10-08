@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from .analises import classifica_minimo
+from .situacao_lancamento import SEM_SITUACAO, grupo_da_situacao
 
 
 def _norm_situacao(s):
@@ -39,11 +40,18 @@ def _por_mes(ctx, ref):
     mn = classifica_minimo(agua.assign(**{"Consumo Faturado": consumo[a]}))
     mn = mn.assign(__lig=lig[a].values).drop_duplicates("__lig").set_index("__lig")
     out = desc.copy()
+    if "Situacao Lancamento" in out.columns:                 # mesma leitura dos cards: vazio = "Sem situação"
+        sit = out["Situacao Lancamento"].astype(object).where(out["Situacao Lancamento"].notna(), SEM_SITUACAO)
+        out["Situacao Lancamento"] = sit.astype(str).str.strip().replace("", SEM_SITUACAO)
     out["linhas_agua"] = lig[a].value_counts()
     out["consumo_agua"] = consumo[a].groupby(lig[a].values).sum()
     out["valor_agua"] = valor[a].groupby(lig[a].values).sum()
     e = serv == "E"
-    esg = pd.DataFrame({"consumo_esgoto": consumo[e].groupby(lig[e].values).sum(), "valor_esgoto": valor[e].groupby(lig[e].values).sum()})
+    # economias faturadas = mesma regra do Comparativo das Diretas: economias das linhas com Consumo Faturado > 0
+    eco = pd.to_numeric(b["Economias_Totais"], errors="coerce").fillna(0) if "Economias_Totais" in b.columns else consumo * 0
+    out["eco_fat_agua"] = eco[a].where(consumo[a] > 0, 0).groupby(lig[a].values).sum()
+    esg = pd.DataFrame({"consumo_esgoto": consumo[e].groupby(lig[e].values).sum(), "valor_esgoto": valor[e].groupby(lig[e].values).sum(),
+                        "eco_fat_esgoto": eco[e].where(consumo[e] > 0, 0).groupby(lig[e].values).sum()})
     out = out.join(esg, how="outer")
     out["minimo"] = mn["minimo"]
     out["conta"] = mn["conta"]
@@ -84,6 +92,9 @@ def monta_analitico(ctx):
         d[f"Ativa/Cortada {ref}"] = classe.where(consumo_pos & (classe != ""), "")      # o que a tabela ativas × cortadas conta
     for ref, x in ((rn, an), (ra, at)):
         d[f"Situação Lançamento {ref}"] = x["Situacao Lancamento"] if "Situacao Lancamento" in x.columns else np.nan
+    for ref in (rn, ra):
+        sl = d[f"Situação Lançamento {ref}"]
+        d[f"Leitura da situação {ref}"] = sl.map(lambda c: grupo_da_situacao(c) if pd.notna(c) else np.nan)
     for ref, x in ((rn, an), (ra, at)):
         d[f"Economias {ref}"] = x["Economias_Totais"] if "Economias_Totais" in x.columns else np.nan
     for ref, x in ((rn, an), (ra, at)):
@@ -92,6 +103,9 @@ def monta_analitico(ctx):
     d["Δ % consumo água"] = (d["Δ consumo água"] / d[f"Consumo água {rn}"].where(d[f"Consumo água {rn}"] > 0)) * 100
     for ref, x in ((rn, an), (ra, at)):
         d[f"Consumo esgoto {ref}"] = x.get("consumo_esgoto")
+    for serv, col in (("água", "eco_fat_agua"), ("esgoto", "eco_fat_esgoto")):
+        for ref, x in ((rn, an), (ra, at)):
+            d[f"Economias faturadas {serv} {ref}"] = x.get(col)
     for ref, x in ((rn, an), (ra, at)):
         d[f"Valor água {ref}"] = x.get("valor_agua")
         d[f"Valor esgoto {ref}"] = x.get("valor_esgoto")

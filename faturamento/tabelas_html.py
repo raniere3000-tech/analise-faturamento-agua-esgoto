@@ -12,12 +12,12 @@ from .analitico import seta_detalhe
 from .formatacao import fmt_int_br, fmt_moeda_br, fmt_num
 
 
-def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_ant=None, card_attrs=""):
+def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_ant=None, card_attrs="", detalhe=""):
     rot_atual = rot_atual or ctx.mes_atual_curto
     rot_ant = rot_ant or ctx.mes_anterior_curto
-    detalhe = {"dias-atual", "dias-anterior", "vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm"}
+    so_detalhe = {"dias-atual", "dias-anterior", "vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm"}
     def cl(campo):
-        return ' class="x-det"' if campo in detalhe else ""
+        return ' class="x-det"' if campo in so_detalhe else ""
     def td(campo, valor):
         return f'<td data-field="{campo}"{cl(campo)}>{valor}</td>'
     def deltac(campo, valor, dec=2, pct=False):
@@ -139,7 +139,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     """
     return f"""
     <div class="card"{card_attrs}>
-    <h2>{titulo}</h2>
+    <h2{' style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"' if detalhe else ""}>{titulo}{(" " + seta_detalhe(detalhe, rotulo="Baixar o analítico por matrícula desta tabela (CSV): de quais matrículas vieram as variações de economias, volume e faturamento")) if detalhe else ""}</h2>
     <table class="tabela-comparativo" id="tabela-{slug}">
         <thead>{cabecalho}</thead>
         <tbody>{linhas_html}</tbody>
@@ -484,21 +484,9 @@ def gera_matriz_migracao_grupos(ctx):
     </tr>
     """
 
-    sem_fat = lista_sem_faturamento(ctx, merge)
-    botao_sem_fat = botoes_por_sup(              # um botão por SUP (pelo grupo do mês anterior), com a contagem de cada uma
-        ctx, lambda abas: f"Baixar matrículas sem faturamento ({len(abas['Sem faturamento'])})",
-        f"Matriculas_Sem_Faturamento_{ctx.mes_atual.replace('/', '-')}.xlsx",
-        lambda sup: {"Sem faturamento": filtra_sup(ctx, sem_fat, sup)})
-    if len(sem_fat):                              # com grupos desmarcados, o botão baixa (CSV) só os grupos marcados
-        from .situacao_lancamento import _csv_gz_b64
-        col = html.escape(f"Grupo {ctx.mes_anterior}", quote=True)
-        botao_sem_fat = (f'<span data-csv-filtrado="semfat" data-nome="Matriculas_Sem_Faturamento_{ctx.mes_atual.replace("/", "-")}">'
-                         f'{botao_sem_fat}</span><script type="application/octet-stream" id="semfat-dados" data-col-grupo="{col}">'
-                         f'{_csv_gz_b64(sem_fat)}</script>')
-
     return f"""
     <div class="card">
-    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Matriz de migração de grupos — {ctx.mes_anterior} → {ctx.mes_atual} {botao_sem_fat} {seta_detalhe("matriz")}</h2>
+    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Matriz de migração de grupos — {ctx.mes_anterior} → {ctx.mes_atual} {seta_detalhe("matriz")}</h2>
     <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Cada linha mostra em quais grupos as economias que faturaram em <b>{ctx.mes_anterior}</b> estão faturando em <b>{ctx.mes_atual}</b>.<br>
         <span style="background:#F2F2F2; border:1px solid #DCE1E9; padding:2px 6px; border-radius:4px;">Cinza</span> = permaneceu no mesmo grupo &nbsp;|&nbsp;

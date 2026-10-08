@@ -89,29 +89,6 @@ def _por_ligacao(df):
     return lig.reset_index()
 
 
-def detalhe_ligacoes(df_at, df_ant, mes, mes_ant):
-    """Uma linha por ligação do mês atual (rubrica de água): a lista que as setas baixam (por código, por grupo ou inteira)."""
-    at, ant = _por_ligacao(df_at), _por_ligacao(df_ant)
-    if not len(at):
-        return pd.DataFrame()
-    ant = ant.set_index("N. Ligação")
-    d = pd.DataFrame({"N. Ligação": at["N. Ligação"]})
-    for c, nome in (("Nome Cliente", "Nome Cliente"), ("Grupo", "Grupo"), ("Categoria", "Categoria"), ("__sup", "Superintendência")):
-        if c in at.columns:
-            d[nome] = at[c].values
-    d[f"Situação Lançamento {mes}"] = at["Situação"].values
-    d[f"Leitura da situação {mes}"] = at["Situação"].map({v: grupo_da_situacao(v) for v in at["Situação"].unique()}).values
-    d[f"Situação Lançamento {mes_ant}"] = at["N. Ligação"].map(ant["Situação"]).fillna("").values if len(ant) else ""
-    d[f"Economias {mes}"] = at["Economias"].values
-    d[f"Volume {mes}"] = at["Volume"].values
-    d[f"Volume {mes_ant}"] = at["N. Ligação"].map(ant["Volume"]).values if len(ant) else None
-    d[f"Valor água + esgoto {mes}"] = at["Valor"].values
-    d[f"Valor água + esgoto {mes_ant}"] = at["N. Ligação"].map(ant["Valor"]).values if len(ant) else None
-    num = d.select_dtypes("number").columns
-    d[num] = d[num].round(2)                           # sem resto de ponto flutuante no CSV (322,67 e não 322,66999…)
-    return d.sort_values([f"Situação Lançamento {mes}", "N. Ligação"]).reset_index(drop=True)
-
-
 def _csv_gz_b64(df):
     """CSV (";" e vírgula decimal, como as bases) comprimido em gzip e em base64 — o navegador descompacta na hora de baixar."""
     import base64
@@ -192,13 +169,14 @@ def _card(linha, mes, ant, sup="TODAS", sintetico=False):
 
 
 def _seta(linha, sup, sintetico=False):
-    """Seta que baixa (CSV) as ligações desta situação — ou de todos os códigos do grupo, na sintética."""
+    """Seta ⬇≡ do card: o analítico por matrícula só desta situação (ou de todos os códigos do grupo, na sintética)."""
     if not linha["Ligações atual"]:
         return ""
-    e = lambda v: html.escape(str(v), quote=True)
+    from .analitico import seta_detalhe
     attr = "data-gsit" if sintetico else "data-sit"
-    return (f' <button type="button" class="btn-sitl-dl" {attr}="{e(linha["Situação"])}" data-sup="{e(sup)}" '
-            f'title="Baixar as matrículas de {e(linha["Situação"])} (CSV)" aria-label="Baixar as matrículas de {e(linha["Situação"])}">&#11015;</button>')
+    s = html.escape(str(linha["Situação"]), quote=True)
+    return " " + seta_detalhe("situacao", sup, f"Baixar o analítico por matrícula de {linha['Situação']} (CSV)").replace(
+        "<button ", f'<button {attr}="{s}" ', 1)
 
 
 def gera_cards_situacao_html(ctx):
@@ -222,28 +200,20 @@ def gera_cards_situacao_html(ctx):
         ctx.resultados["situacao_lancamento_sintetica"][sup] = rs
         suf = "" if sup == TODAS else f" — {_nome_sup(sup)}"
         ds = html.escape(sup, quote=True)
-        seta_base = (f'<button type="button" class="btn-sitl-dl" data-sup="{ds}" title="Baixar a base analítica com as matrículas (CSV)" '
-                     f'aria-label="Baixar a base analítica com as matrículas">&#11015;</button>') if len(r) else ""
         cards = "".join(_card(l, ctx.mes_atual, ctx.mes_anterior, sup) for _, l in r.iterrows()) or "<p>Sem dados</p>"
         cards_s = "".join(_card(l, ctx.mes_atual, ctx.mes_anterior, sup, True) for _, l in rs.iterrows()) or "<p>Sem dados</p>"
         blocos.append(f"""<div class="sup-top-bloco" data-sup="{ds}">
     <div class="card">
-    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Situação de lançamento — {html.escape(ctx.mes_atual)} × {html.escape(ctx.mes_anterior)}{html.escape(suf)} {seta_base} {seta_detalhe("situacao", sup)}
+    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Situação de lançamento — {html.escape(ctx.mes_atual)} × {html.escape(ctx.mes_anterior)}{html.escape(suf)} {seta_detalhe("situacao", sup)}
       <span class="sitl-visao" role="group" aria-label="Visão"><button type="button" data-visao="analitica" class="ativo" aria-pressed="true">Analítica</button><button type="button" data-visao="sintetica" aria-pressed="false">Sintética</button></span></h2>
     <p class="nota-secao">{POR_QUE_GERAL}</p>
     <p class="nota-secao">Contagem por ligação (rubrica de água; a situação é a da conta no mês). Volume e economias só onde Consumo Faturado &gt; 0;
     valor = água + esgoto da ligação. Variações contra o mês anterior; p.p. = pontos percentuais na participação das ligações.
-    A seta ao lado do título baixa todas as matrículas; a de cada card, só as daquela situação (ou do grupo, na sintética).</p>
+    A seta ⬇≡ ao lado do título baixa o analítico por matrícula de todas as situações; a de cada card, só o daquela situação (ou do grupo, na sintética).</p>
     <div class="sitl-grid" data-visao="analitica">{cards}</div>
     <div class="sitl-grid" data-visao="sintetica" hidden>{cards_s}</div>
     </div></div>""")
-    # lista por ligação embutida uma vez (comprimida); as setas filtram situação/grupo, SUP e grupos marcados na hora de baixar
-    det = detalhe_ligacoes(ctx.df_atual, ctx.df_anterior, ctx.mes_atual, ctx.mes_anterior)
-    ctx.resultados["situacao_detalhe"] = det
-    m = html.escape(ctx.mes_atual, quote=True)
-    dados = (f'<script type="application/octet-stream" id="sitl-detalhe" data-col-sit="Situação Lançamento {m}" '
-             f'data-col-gsit="Leitura da situação {m}" '
-             f'data-arquivo="Situacao_Lancamento_{ctx.mes_atual.replace("/", "-")}">{_csv_gz_b64(det)}</script>') if len(det) else ""
+    dados = ""
     # totais por SUP × grupo × situação (mês atual e anterior): o filtro de grupos refaz os cards com eles
     at_ag, ant_ag = _agrega_grupo(ctx.df_atual), _agrega_grupo(ctx.df_anterior)
     agregados = {"at": at_ag, "ant": ant_ag,

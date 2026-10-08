@@ -761,31 +761,9 @@ function sitlRecalcular() {
             varia('dlig', at[0] - ant[0], 0); pos('vol', fmtBR(at[2]));
             pos('vme', fmtBR(at[1] ? at[2] / at[1] : 0, 2)); pos('vmeant', fmtBR(ant[1] ? ant[2] / ant[1] : 0, 2));
             pos('val', 'R$ ' + fmtBR(at[3], 2)); varia('dval', at[3] - ant[3], 2);
-            const seta = card.querySelector('.btn-sitl-dl'); if (seta) seta.style.display = at[0] ? '' : 'none';
+            const seta = card.querySelector('.btn-detalhe'); if (seta) seta.style.display = at[0] ? '' : 'none';
         });
     });
-}
-
-// Botões Excel com alternativa: com grupos desmarcados, baixa o CSV refeito só com os grupos marcados
-async function baixarCsvFiltrado(alt) {
-    const tipo = alt.dataset.csvFiltrado, sufixo = '_grupos_filtrados.csv';
-    if (tipo === 'top') {
-        let colunas = null; const linhas = [];
-        alt.dataset.tops.split(',').forEach(k => {
-            const r = topLinhas(k, alt.dataset.sup || 'TODAS'); if (!r) return;
-            colunas = ['Lista'].concat(r.colunas);
-            r.linhas.forEach(l => linhas.push([k.endsWith('agua') ? 'Água' : 'Esgoto'].concat(l)));
-        });
-        if (colunas) baixarTexto(csvDe(colunas, linhas), alt.dataset.nome + sufixo);
-    } else if (tipo === 'semfat') {
-        const el = document.getElementById('semfat-dados'); if (!el) return;
-        const bin = atob(el.textContent.trim()), bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        const texto = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
-        const filtros = {}; filtros[el.dataset.colGrupo] = gruposFiltro();
-        const csv = filtraCsv(texto, filtros);
-        if (csv !== null) baixarTexto(csv, alt.dataset.nome + sufixo);
-    }
 }
 
 // ===== Analítico por matrícula da aba Análise (seta ⬇≡ ao lado de cada tabela) =====
@@ -838,8 +816,34 @@ function definicaoAnalitico(tipo, ra, rn) {
             [`Conta do mínimo ${ra}`], par('Acima/Abaixo do mínimo'), ['Mudança de classe']), filtro: algum(...par('Acima/Abaixo do mínimo')),
             extra: { 'Mudança de classe': (v) => { const a = v(`Acima/Abaixo do mínimo ${rn}`), b = v(`Acima/Abaixo do mínimo ${ra}`);
                 return a && b ? (a === b ? 'Manteve' : `${a} → ${b}`) : ''; } } };
-        case 'situacao': return { nome: 'Situacao_Lancamento', cols: base.concat(par('Situação Lançamento'), par('Situação Ligação'),
-            par('Economias'), par('Consumo água'), par('Valor total'), ['Δ valor total']), filtro: algum(...par('Situação Lançamento')) };
+        case 'situacao': return { nome: 'Situacao_Lancamento', cols: base.concat(par('Situação Lançamento'), par('Leitura da situação'),
+            par('Situação Ligação'), par('Economias'), par('Consumo água'), par('Valor total'), ['Δ valor total']),
+            filtro: algum(...par('Situação Lançamento')) };
+    }
+    const d = /^diretas-(agua|esgoto)$/.exec(tipo);
+    if (d) {
+        // Diretas: de quais matrículas vieram as variações de economias, volume e faturamento (maiores quedas primeiro)
+        const serv = d[1] === 'agua' ? 'água' : 'esgoto';
+        const [eAnt, eAt] = par(`Economias faturadas ${serv}`), [cAnt, cAt] = par(`Consumo ${serv}`), [vAnt, vAt] = par(`Valor ${serv}`);
+        const n = (v, c) => numBR(v(c)) || 0, dif = (a, b) => (v) => Math.round((n(v, b) - n(v, a)) * 100) / 100;
+        return { nome: `Diretas_${d[1] === 'agua' ? 'Agua' : 'Esgoto'}`, grupos: par('Grupo'),
+            cols: base.concat(par('Grupo'), ['Migração de grupo'], par('Situação Ligação'), par('Situação Lançamento'),
+                [eAnt, eAt, 'Δ economias', cAnt, cAt, 'Δ consumo', vAnt, vAt, 'Δ valor', 'Δ % valor', 'O que aconteceu']),
+            filtro: (v) => n(v, vAnt) !== 0 || n(v, vAt) !== 0 || n(v, eAnt) !== 0 || n(v, eAt) !== 0,
+            extra: {
+                'Δ economias': dif(eAnt, eAt), 'Δ consumo': dif(cAnt, cAt), 'Δ valor': dif(vAnt, vAt),
+                'Δ % valor': (v) => { const a = n(v, vAnt); return a ? Math.round((n(v, vAt) - a) / a * 1000) / 10 : null; },
+                'O que aconteceu': (v) => {
+                    const a = n(v, vAnt), b = n(v, vAt), ga = v(`Grupo ${rn}`), gb = v(`Grupo ${ra}`);
+                    if (a && !b) return 'Deixou de faturar no mês atual';
+                    if (!a && b) return 'Passou a faturar no mês atual';
+                    if (ga && gb && normGrupo(ga) !== normGrupo(gb)) return `Mudou do grupo ${ga} para o ${gb}`;
+                    if (n(v, eAt) < n(v, eAnt)) return b < a ? 'Caiu: perdeu economias' : 'Perdeu economias';
+                    if (n(v, eAt) > n(v, eAnt)) return b > a ? 'Subiu: ganhou economias' : 'Ganhou economias';
+                    return b < a ? 'Caiu: menor consumo/valor' : b > a ? 'Subiu: maior consumo/valor' : 'Igual';
+                },
+            },
+            ordem: 'Δ valor', crescente: true };
     }
     const m = /^top-(queda|aumento)-(agua|esgoto)$/.exec(tipo);
     if (!m) return null;
@@ -871,17 +875,22 @@ document.addEventListener('click', async function (e) {
         const sup = bloco ? bloco.dataset.sup : (ESTADO.sup || 'TODAS'), grupos = gruposFiltro();
         let linhas = a.linhas.filter((l) => {
             const v = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || ''));
-            return (sup === 'TODAS' || v('Superintendência') === sup) && (!grupos || grupos.has(normGrupo(v('Grupo')))) && def.filtro(v);
+            const sit = b.dataset.sit !== undefined ? v(`Situação Lançamento ${a.ra}`) === b.dataset.sit
+                : b.dataset.gsit !== undefined ? v(`Leitura da situação ${a.ra}`) === b.dataset.gsit : true;
+            return (sup === 'TODAS' || v('Superintendência') === sup) && sit && def.filtro(v)
+                && (!grupos || (def.grupos || ['Grupo']).some((c) => v(c) !== '' && grupos.has(normGrupo(v(c)))));
         }).map((l) => {
             const v = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || ''));
             return def.cols.map((c) => (def.extra && def.extra[c] ? def.extra[c](v) : c === 'Ranking' ? 0 : v(c)));
         });
         if (def.ordem) {
             const io = def.cols.indexOf(def.ordem);
-            linhas.sort((x, y) => (y[io] || 0) - (x[io] || 0));
-            linhas.forEach((l, i) => { l[0] = i + 1; });
+            linhas.sort((x, y) => (def.crescente ? (x[io] || 0) - (y[io] || 0) : (y[io] || 0) - (x[io] || 0)));
+            if (def.ranking) linhas.forEach((l, i) => { l[0] = i + 1; });
         }
-        const nome = `${def.nome}_${a.mes}${sup !== 'TODAS' ? '_' + sup.replace(/[^A-Za-z0-9]/g, '') : ''}${grupos ? '_grupos_filtrados' : ''}.csv`;
+        const sitNome = (b.dataset.sit || b.dataset.gsit || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
+        const nome = `${def.nome}${sitNome ? '_' + sitNome : ''}_${a.mes}${sup !== 'TODAS' ? '_' + sup.replace(/[^A-Za-z0-9]/g, '') : ''}${grupos ? '_grupos_filtrados' : ''}.csv`;
         baixarTexto(csvDe(def.cols, linhas), nome);
     } catch (erro) {
         alert('Não foi possível baixar o analítico neste navegador (' + erro.message + ').');
@@ -903,40 +912,6 @@ document.addEventListener('click', function (e) {
 document.addEventListener('DOMContentLoaded', function () {
     let v = null; try { v = localStorage.getItem('faturamento_sitl_visao'); } catch (e) { /* sem armazenamento */ }
     if (v === 'sintetica') sitlVisao(v);
-});
-
-// Setas da Situação de lançamento: a do título baixa todas as matrículas; a de cada card, as daquela situação (analítica)
-// ou de todos os códigos do grupo (sintética) — sempre da SUP do quadro e dos grupos marcados.
-// A lista vem embutida uma vez, em gzip (script#sitl-detalhe); o navegador descompacta na hora.
-document.addEventListener('click', async function (e) {
-    const b = e.target.closest && e.target.closest('.btn-sitl-dl');
-    if (!b) return;
-    const el = document.getElementById('sitl-detalhe');
-    if (!el) return;
-    try {
-        const bin = atob(el.textContent.trim()), bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        const fluxo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-        const texto = await new Response(fluxo).text();
-        const filtros = {};
-        if (b.dataset.sit !== undefined) filtros[el.dataset.colSit] = b.dataset.sit;
-        else if (b.dataset.gsit !== undefined) filtros[el.dataset.colGsit] = b.dataset.gsit;
-        if (b.dataset.sup && b.dataset.sup !== 'TODAS') filtros['Superintendência'] = b.dataset.sup;
-        const grupos = gruposFiltro();
-        if (grupos) filtros['Grupo'] = grupos;
-        const csv = filtraCsv(texto, filtros);
-        if (csv === null) return;
-        const partes = [b.dataset.sit || b.dataset.gsit || 'todas', b.dataset.sup && b.dataset.sup !== 'TODAS' ? b.dataset.sup : '']
-            .filter(Boolean).join('_');
-        const nome = el.dataset.arquivo + '_' + partes.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') + (grupos ? '_grupos_filtrados' : '') + '.csv';
-        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-        const a = document.createElement('a');
-        a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-    } catch (erro) {
-        alert('Não foi possível baixar a lista desta situação neste navegador (' + erro.message + ').');
-    }
 });
 
 // base64 (e gzip, com data-gz="1") embutido num <script> → bytes do arquivo
@@ -982,8 +957,6 @@ document.addEventListener('click', async function (e) {
 document.addEventListener('click', function (e) {
     const b = e.target.closest && e.target.closest('.btn-baixar');
     if (!b) return;
-    const alt = b.closest('[data-csv-filtrado]');
-    if (alt && gruposFiltro()) { baixarCsvFiltrado(alt); return; }
     const bin = atob(b.dataset.b64), bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
