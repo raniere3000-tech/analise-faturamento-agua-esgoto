@@ -10,6 +10,7 @@ import zipfile
 import numpy as np
 import pandas as pd
 
+from . import cache_arquivos
 from .config import (COLUNAS_CONSUMO, COLUNAS_CRONOGRAMA, COLUNAS_ECONOMIA_TODAS, COLUNAS_FATURA,
                      NOMES_LIGACAO, NOMES_SAIDA_LEGADOS, NOME_RELATORIO_HTML,
                      NOME_TOP100_XLSX, RUBRICAS_VALIDAS, CHAVES_CANCELAMENTO,
@@ -467,6 +468,33 @@ def _hash_arquivo(caminho):
     return h.hexdigest()
 
 
+def _classifica_um(caminho, nome):
+    """{tipo, aba} do arquivo, ou {motivo} se não for reconhecido (com erro=True quando nem deu para ler)."""
+    df_head = None
+    try:
+        if caminho.lower().endswith((".xlsx", ".xls")):
+            for aba in pd.ExcelFile(caminho).sheet_names:
+                df_head = le_dataframe(caminho, nrows=5, sheet_name=aba)
+                if df_head is None:
+                    continue
+                tipo = identifica_tipo(df_head.columns, nome)
+                if tipo != "desconhecido":
+                    return {"tipo": tipo, "aba": aba}
+        else:
+            df_head = le_dataframe(caminho, nrows=5)
+            if df_head is not None:
+                tipo = identifica_tipo(df_head.columns, nome)
+                if tipo != "desconhecido":
+                    return {"tipo": tipo, "aba": 0}
+    except Exception as exc:   # um arquivo ilegível é ignorado, mas listado com o motivo
+        print(f"   ⚠️ {nome} ignorado: não foi possível ler ({exc})")
+        return {"motivo": f"não foi possível ler: {exc}", "erro": True}
+    motivo = "colunas não correspondem a consumo, fatura ou cronograma"
+    if df_head is not None and {"Sup", "Rubrica"}.issubset(df_head.columns):
+        motivo = "planilha de orçado fora do modelo (esperado: colunas Sup, Rubrica e meses como jan/26, igual ao RF01T26)"
+    return {"motivo": motivo}
+
+
 def classifica_arquivos(pasta, progresso=None):
     """Descobre o tipo de cada arquivo. Devolve dict com listas de caminhos por tipo
     e `ignorados`: lista de {arquivo, motivo} para os que não foram reconhecidos."""
@@ -485,46 +513,28 @@ def classifica_arquivos(pasta, progresso=None):
     tamanhos = {}
     for c in arquivos:
         try:
-            tamanhos.setdefault(os.path.getsize(c), []).append(c)
+            tamanhos.setdefault(cache_arquivos.tamanho(c), []).append(c)      # o que veio do cache foi gravado vazio
         except OSError:
             pass
     suspeitos = {c for grupo in tamanhos.values() if len(grupo) > 1 for c in grupo}
     for idx, caminho in enumerate(arquivos, start=1):
         nome = nome_relativo(caminho, pasta)
-        tipo_achado = None
-        try:
-            assinatura = _hash_arquivo(caminho) if caminho in suspeitos else ("unico", caminho)
-            if assinatura in vistos:
-                ignorados.append({"arquivo": nome, "motivo": f"conteúdo idêntico a {vistos[assinatura]} (não contado duas vezes)"})
-                if progresso:
-                    progresso.etapa(idx, len(arquivos), 2, 18, f"Classificando ({idx}/{len(arquivos)})")
-                continue
+        # arquivo de uma análise anterior (guardado no navegador): não precisa do hash nem de abrir o arquivo
+        assinatura = (("cache", caminho) if cache_arquivos.em_cache(caminho)
+                      else _hash_arquivo(caminho) if caminho in suspeitos else ("unico", caminho))
+        if assinatura in vistos:
+            ignorados.append({"arquivo": nome, "motivo": f"conteúdo idêntico a {vistos[assinatura]} (não contado duas vezes)"})
+        else:
             vistos[assinatura] = nome
-            if caminho.lower().endswith((".xlsx", ".xls")):
-                for aba in pd.ExcelFile(caminho).sheet_names:
-                    df_head = le_dataframe(caminho, nrows=5, sheet_name=aba)
-                    if df_head is None:
-                        continue
-                    tipo = identifica_tipo(df_head.columns, nome)
-                    if tipo != "desconhecido":
-                        classificados.append({"caminho": caminho, "tipo": tipo, "aba": aba})
-                        tipo_achado = tipo
-                        break
+            r = cache_arquivos.carrega(caminho, "classe")
+            if r is None:
+                r = _classifica_um(caminho, nome)
+                if not r.get("erro"):                    # erro de leitura pode ser passageiro: não guarda
+                    cache_arquivos.guarda(caminho, "classe", r)
+            if r.get("tipo"):
+                classificados.append({"caminho": caminho, "tipo": r["tipo"], "aba": r.get("aba", 0)})
             else:
-                df_head = le_dataframe(caminho, nrows=5)
-                if df_head is not None:
-                    tipo = identifica_tipo(df_head.columns, nome)
-                    if tipo != "desconhecido":
-                        classificados.append({"caminho": caminho, "tipo": tipo, "aba": 0})
-                        tipo_achado = tipo
-            if tipo_achado is None:
-                motivo = "colunas não correspondem a consumo, fatura ou cronograma"
-                if df_head is not None and {"Sup", "Rubrica"}.issubset(df_head.columns):
-                    motivo = "planilha de orçado fora do modelo (esperado: colunas Sup, Rubrica e meses como jan/26, igual ao RF01T26)"
-                ignorados.append({"arquivo": nome, "motivo": motivo})
-        except Exception as exc:   # um arquivo ilegível é ignorado, mas listado com o motivo
-            print(f"   ⚠️ {nome} ignorado: não foi possível ler ({exc})")
-            ignorados.append({"arquivo": nome, "motivo": f"não foi possível ler: {exc}"})
+                ignorados.append({"arquivo": nome, "motivo": r["motivo"]})
         if progresso:
             progresso.etapa(idx, len(arquivos), 2, 18, f"Classificando ({idx}/{len(arquivos)})")
 

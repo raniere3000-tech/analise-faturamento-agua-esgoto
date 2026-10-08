@@ -5,6 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 
+from . import cache_arquivos
 from .config import COLUNAS_ECONOMIA_TODAS, COLUNAS_ECONOMIA_TOTAIS
 from .leitura import (chave_grupo, classifica_arquivos, compacta_textos, nome_relativo, processa_avulso, processa_consumo, processa_cronograma,
                       processa_fatura_completa, processa_orcado)
@@ -50,7 +51,8 @@ def _processa_lista(progresso, lista, func, ini, fin, desc):
         progresso.atualiza(fin, desc)
         return resultados
     for i, caminho in enumerate(lista, start=1):
-        resultados.append(func(caminho))
+        # arquivo de uma análise anterior: a tabela já lida vem guardada (cache_arquivos); os novos são lidos e guardados
+        resultados.append(cache_arquivos.memo(caminho, func.__name__, lambda c=caminho: func(c)))
         progresso.etapa(i, total, ini, fin, f"{desc} ({i}/{total})")
     return resultados
 
@@ -88,6 +90,7 @@ def monta_base(ctx):
     print("=" * 70)
     print("ETAPA 1/6 — VARREDURA E CLASSIFICAÇÃO DOS ARQUIVOS")
     print("=" * 70)
+    cache_arquivos.configura(ctx.pasta)            # arquivos já lidos em análises anteriores (guardados no navegador)
     ctx.classificacao = classifica_arquivos(ctx.pasta, progresso)
 
     print("=" * 70)
@@ -109,7 +112,7 @@ def monta_base(ctx):
     if not len(fatura_total):
         fatura_total = pd.DataFrame(columns=["N. da Ligacao"])
     ctx.cancelamento, rep_canc = sem_repetir_entre_arquivos([c for _, c in faturas_cc])
-    avulsos = [processa_avulso(c) for c in ctx.classificacao["avulso"]]
+    avulsos = [cache_arquivos.memo(c, "processa_avulso", lambda c=c: processa_avulso(c)) for c in ctx.classificacao["avulso"]]
     ctx.avulso, rep_av = sem_repetir_entre_arquivos(avulsos)
     for qtd, tipo in ((rep_fat, "fatura"), (rep_canc, "cancelamento"), (rep_av, "serviço avulso")):
         if qtd:
@@ -121,7 +124,7 @@ def monta_base(ctx):
         nome = os.path.splitext(os.path.basename(caminho))[0].replace("_", " ").strip()
         if nome in ctx.orcado and ctx.orcado[nome]["arquivo"] != arquivo:     # mesmo nome em outra pasta: inclui a pasta
             nome = os.path.splitext(arquivo)[0].replace("_", " ").strip()
-        longo = processa_orcado(caminho, aba)
+        longo = cache_arquivos.memo(caminho, f"processa_orcado_{aba}", lambda c=caminho, a=aba: processa_orcado(c, a))
         if not len(longo):
             print(f"   ⚠️ {arquivo}: orçado sem valores (planilha vazia); ignorado.")
             continue
@@ -153,6 +156,9 @@ def monta_base(ctx):
         if cronogramas else pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma"])
     )
     print(f"✅ Cronogramas: {len(cronograma_total)} linhas")
+    r = cache_arquivos.resumo()
+    if r["reaproveitados"]:
+        print(f"♻️ Lidos do arquivo agora: {r['lidos']} · reaproveitados (já lidos antes): {r['reaproveitados']}")
     ctx.grupo_localidade = localidade_por_grupo(cronograma_total)
     if ctx.classificacao["cronograma"] and not len(cronograma_total):
         ctx.avisos_base.append("O cronograma foi encontrado, mas nenhuma linha válida foi lida (são necessárias as colunas Grupo, "
