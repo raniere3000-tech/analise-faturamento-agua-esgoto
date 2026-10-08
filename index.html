@@ -126,11 +126,29 @@ body.relatorio-aberto { overflow: hidden; }
 
 /* ===== Conferência do Top 20 ===== */
 .etapa-top20 { position: fixed; inset: 0; z-index: 9; background: linear-gradient(135deg, var(--preto) 0%, var(--marinho) 55%, var(--azul) 100%); overflow: hidden; padding: 12px 16px; display: flex; justify-content: center; align-items: stretch; }
-.painel-top20 { width: 100%; max-width: 1120px; min-height: 0; display: flex; flex-direction: column; background: #fff; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.25); padding: 12px 18px 10px; }
+.painel-top20 { width: 100%; max-width: 1560px; min-height: 0; display: flex; flex-direction: column; background: #fff; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.25); padding: 12px 18px 10px; }
 .painel-top20 h2 { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--marinho); }
 .painel-top20 .badge { margin: 0 8px 0 0; font-size: 11px; padding: 2px 9px; vertical-align: middle; }
 .painel-top20 .lead { margin: 2px 0 8px; font-size: .8rem; line-height: 1.35; }
 .tabela-rolagem { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+/* etapa 2: tabela de clientes + quadro com os totais por grupo de leitura ao lado */
+.corpo-top20 { flex: 1 1 auto; min-height: 0; display: flex; gap: 12px; }
+.corpo-top20 > .tabela-rolagem { min-width: 0; }
+.quadro-grupos { flex: 0 0 360px; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: #F7F9FC; }
+.quadro-grupos h3 { margin: 0; font-size: .9rem; color: var(--marinho); }
+.quadro-grupos p { margin: 2px 0 6px; font-size: .72rem; color: var(--muted); line-height: 1.3; }
+.quadro-grupos .rolagem-grupos { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.tabela-grupos { width: 100%; border-collapse: collapse; font-size: .78rem; font-variant-numeric: tabular-nums; }
+.tabela-grupos th { position: sticky; top: 0; background: var(--marinho); color: #fff; font-weight: 600; padding: 4px 6px; text-align: left; white-space: nowrap; }
+.tabela-grupos th.num, .tabela-grupos td.num { text-align: right; }
+.tabela-grupos td { padding: 3px 6px; border-top: 1px solid var(--line); white-space: nowrap; }
+.tabela-grupos tr.alterado td { background: #FFF4EA; }
+.tabela-grupos tr.alterado td:first-child { box-shadow: inset 3px 0 0 var(--laranja); font-weight: 700; }
+.tabela-grupos tfoot td { position: sticky; bottom: 0; background: var(--marinho); color: #fff; font-weight: 700; }
+.tabela-grupos .neg { color: var(--laranja-texto); }
+.tabela-grupos tfoot .neg { color: #FFB37A; }
+.tabela-top20 td.ant { color: var(--muted); }
+@media (max-width: 1100px) { .corpo-top20 { flex-direction: column; } .quadro-grupos { flex: 0 0 auto; max-height: 40vh; } }
 .tabela-top20 { width: 100%; border-collapse: collapse; font-size: .84rem; }
 .tabela-top20 th { position: sticky; top: 0; z-index: 1; background: var(--marinho); color: #fff; font-weight: 600; text-align: left; padding: 6px 10px; white-space: nowrap; }
 .tabela-top20 th.num, .tabela-top20 td.num { text-align: right; }
@@ -328,7 +346,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v47</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v48</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -397,15 +415,31 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       <input type="search" id="buscaTop20" placeholder="Filtrar por ligação, cliente ou grupo…" aria-label="Filtrar clientes">
       <label class="sup-top20">Superintendência <select id="supTop20" aria-label="Filtrar por superintendência"><option value="">Todas</option></select></label>
     </div>
+    <div class="corpo-top20">
     <div class="tabela-rolagem">
       <table class="tabela-top20">
         <thead><tr>
           <th>#</th><th>Ligação</th><th>Grupo</th><th>SUP</th><th>Cliente</th><th>Categoria</th><th>Situação conta</th>
           <th class="num" title="Quantidade de economias da ligação no mês">Economias</th>
-          <th class="num ordenavel" data-ordem="consumo" tabindex="0" title="Ordenar">Consumo Faturado (m³) <span class="seta"></span></th><th class="num ordenavel" data-ordem="valor" tabindex="0" title="Ordenar">Valor total (R$) <span class="seta"></span></th>
+          <th class="num" id="thConsumoAnt" title="Consumo Faturado no mês anterior">Consumo mês ant.</th>
+          <th class="num ordenavel" data-ordem="consumo" tabindex="0" title="Ordenar">Consumo Faturado (m³) <span class="seta"></span></th>
+          <th class="num" id="thValorAnt" title="Valor total no mês anterior">Valor mês ant.</th>
+          <th class="num ordenavel" data-ordem="valor" tabindex="0" title="Ordenar">Valor total (R$) <span class="seta"></span></th>
         </tr></thead>
         <tbody id="corpoTop20"></tbody>
       </table>
+    </div>
+    <aside class="quadro-grupos" aria-label="Totais por grupo de leitura">
+      <h3>Totais por grupo de leitura</h3>
+      <p id="notaGrupos">Soma de todas as ligações de cada grupo no mês, já com as alterações feitas na tabela (grupo alterado em laranja).</p>
+      <div class="rolagem-grupos">
+        <table class="tabela-grupos">
+          <thead><tr><th>Grupo</th><th class="num">Consumo (m³)</th><th class="num">Valor (R$)</th><th class="num" id="thDeltaGrupo" title="Valor do mês contra o mês anterior">Δ vs ant.</th></tr></thead>
+          <tbody id="corpoGrupos"></tbody>
+          <tfoot id="totalGrupos"></tfoot>
+        </table>
+      </div>
+    </aside>
     </div>
     <div class="acoes-top20">
       <button type="button" class="btn btn-principal" id="btnAplicar">Aplicar alterações e gerar relatório</button>
@@ -418,7 +452,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v47-20261008"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v48-20261008"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -755,8 +789,14 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     return /^-?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : NaN;
   }
 
-  function mostraTop20({ refAtual, linhas, colunaSituacao }) {
+  let gruposTop20 = [];
+  function mostraTop20({ refAtual, refAnterior, linhas, colunaSituacao, grupos }) {
     linhasTop20 = linhas;
+    gruposTop20 = grupos || [];
+    const mesAnt = refAnterior ? nomeMes(refAnterior) : "mês anterior";
+    $("thConsumoAnt").textContent = `Consumo ${mesAnt}`;
+    $("thValorAnt").textContent = `Valor ${mesAnt}`;
+    $("thDeltaGrupo").title = `Valor do mês contra ${mesAnt}`;
     progresso.hidden = true;
     $("top20TituloTexto").textContent = colunaSituacao
       ? `Clientes em análise — ${nomeMes(refAtual)} (${linhas.length})`
@@ -775,8 +815,10 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       const celCliente = cel(l.cliente, "cli");
       celCliente.title = l.cliente;                            // nome inteiro ao passar o mouse (a célula corta nomes longos)
       tr.append(cel(i + 1), cel(l.ligacao), cel(l.grupo), cel(l.sup || "—"), celCliente, cel(l.categoria), cel(l.situacao || "—"),
-        cel(l.economias == null ? "—" : fmtNum(l.economias, 0), "num"));
+        cel(l.economias == null ? "—" : fmtNum(Math.abs(l.economias) < 0.5 ? 0 : l.economias, 0), "num"));
+      const ant = { consumo: l.consumo_ant == null ? "—" : fmtNum(l.consumo_ant, 0), valor: l.valor_ant == null ? "—" : fmtNum(l.valor_ant, 2) };
       [["consumo", 0], ["valor", 2]].forEach(([campo, dec]) => {
+        tr.appendChild(cel(ant[campo], "num ant"));                 // mês anterior, ao lado do campo editável
         const td = document.createElement("td");
         td.className = "num";
         const inp = document.createElement("input");
@@ -807,6 +849,9 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   }
 
   // Lê a tabela; devolve { ajustes, invalido }
+  // alterado = diferente do original COMO ELE APARECE no campo (54,7 m³ aparece 55: deixar 55 não é alteração)
+  const alterou = (n, original, dec) => Math.abs(n - Number(original.toFixed(dec))) > (dec ? 0.004 : 1e-9);
+
   function leAjustes() {
     const mapa = new Map();
     let invalido = false;
@@ -815,7 +860,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       const n = lerNumero(inp.value);
       inp.classList.remove("alterado", "invalido");
       if (Number.isNaN(n) || n < 0) { inp.classList.add("invalido"); invalido = true; return; }
-      if (Math.abs(n - l[campo]) > (campo === "valor" ? 0.004 : 1e-9)) {
+      if (alterou(n, l[campo], +inp.dataset.dec)) {
         inp.classList.add("alterado");
         const aj = mapa.get(l.ligacao) || { ligacao: l.ligacao, consumo: null, valor: null };
         aj[campo] = n;
@@ -859,9 +904,47 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     });
   }
   $("buscaTop20").addEventListener("input", filtraTop20);
-  $("supTop20").addEventListener("change", filtraTop20);
+  $("supTop20").addEventListener("change", () => { filtraTop20(); atualizaGrupos(); });
+
+  // Quadro ao lado: totais de cada grupo de leitura + a diferença das alterações feitas na tabela (respeita a SUP escolhida)
+  function atualizaGrupos() {
+    const delta = new Map();                                       // grupo -> [Δ consumo, Δ valor]
+    document.querySelectorAll("#corpoTop20 input").forEach((inp) => {
+      const l = linhasTop20[+inp.dataset.indice], campo = inp.dataset.campo, n = lerNumero(inp.value);
+      if (Number.isNaN(n) || n < 0 || !alterou(n, l[campo], +inp.dataset.dec)) return;
+      const d = delta.get(l.grupo) || [0, 0];
+      d[campo === "consumo" ? 0 : 1] += n - l[campo];
+      delta.set(l.grupo, d);
+    });
+    const sup = $("supTop20").value, corpo = $("corpoGrupos");
+    corpo.innerHTML = "";
+    const tot = { consumo: 0, valor: 0, valor_ant: 0 };
+    const pct = (a, b) => (b ? (a / b - 1) * 100 : null);
+    const celDelta = (p) => { const td = document.createElement("td"); td.className = "num" + (p != null && p < 0 ? " neg" : "");
+      td.textContent = p == null ? "—" : (p > 0 ? "+" : "") + fmtNum(p, 1) + "%"; return td; };
+    gruposTop20.filter((g) => !sup || (g.sup || "SEM SUP") === sup).forEach((g) => {
+      const d = delta.get(g.grupo) || [0, 0], alterado = Math.abs(d[0]) > 1e-9 || Math.abs(d[1]) > 0.004;
+      const consumo = g.consumo + d[0], valor = g.valor + d[1];
+      tot.consumo += consumo; tot.valor += valor; tot.valor_ant += g.valor_ant;
+      const tr = document.createElement("tr");
+      if (alterado) { tr.className = "alterado"; tr.title = `Original: ${fmtNum(g.consumo, 0)} m³ · R$ ${fmtNum(g.valor, 2)}`; }
+      [[g.grupo, ""], [fmtNum(consumo, 0), "num"], [fmtNum(valor, 2), "num"]].forEach(([t, c]) => {
+        const td = document.createElement("td"); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
+      tr.appendChild(celDelta(pct(valor, g.valor_ant)));
+      corpo.appendChild(tr);
+    });
+    const ft = $("totalGrupos");
+    ft.innerHTML = "";
+    const tr = document.createElement("tr");
+    [["Total", ""], [fmtNum(tot.consumo, 0), "num"], [fmtNum(tot.valor, 2), "num"]].forEach(([t, c]) => {
+      const td = document.createElement("td"); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
+    tr.appendChild(celDelta(pct(tot.valor, tot.valor_ant)));
+    ft.appendChild(tr);
+    $("notaGrupos").hidden = false;
+  }
 
   function atualizaContador() {
+    atualizaGrupos();
     const { ajustes, invalido } = leAjustes();
     $("contadorTop20").innerHTML = invalido
       ? "Há valores inválidos (use apenas números)."

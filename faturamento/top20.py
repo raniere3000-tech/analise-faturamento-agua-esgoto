@@ -43,10 +43,9 @@ def calcula_top20_maior_consumo(ctx, n=20):
     ordenadas por Consumo Faturado. Sem a coluna Situacao Conta, devolve só o Top n.
     Valor = água + esgoto da ligação no mês atual."""
     ref = _ref_atual_base(ctx)
-    mes = ctx.base_final[ctx.base_final["Referencia de Leitura"] == ref].copy()
-    mes["Consumo Faturado"] = pd.to_numeric(mes["Consumo Faturado"], errors="coerce").fillna(0)
-    mes["Valor (R$)"] = pd.to_numeric(mes["Valor (R$)"], errors="coerce").fillna(0)
-    valor_total = mes.groupby("N. Ligação")["Valor (R$)"].sum()
+    ref_ant = (pd.to_datetime(ref, format="%m/%Y") - pd.DateOffset(months=1)).strftime("%m/%Y")
+    mes, valor_total, consumo_lig = _mes_por_ligacao(ctx, ref)
+    _, valor_ant, consumo_ant = _mes_por_ligacao(ctx, ref_ant)
     agua = mes[mes["Rubrica"].str.contains("AGUA", case=False, na=False)]
     col_sit = _coluna_situacao_conta(ctx)
     if col_sit:
@@ -67,8 +66,61 @@ def calcula_top20_maior_consumo(ctx, n=20):
             "economias": _numero(r.get("Economias_Totais")),          # economias da ligação no mês (do consumo)
             "consumo": float(r["Consumo Faturado"]),
             "valor": round(float(valor_total.get(r["N. Ligação"], 0)), 2),
+            # mês anterior (só para conferência; None = a ligação não faturou no mês anterior)
+            "consumo_ant": _ou_none(consumo_ant.get(r["N. Ligação"])),
+            "valor_ant": _ou_none(valor_ant.get(r["N. Ligação"]), 2),
         })
-    return {"refAtual": ref, "linhas": linhas, "colunaSituacao": col_sit or ""}
+    return {"refAtual": ref, "refAnterior": ref_ant, "linhas": linhas, "colunaSituacao": col_sit or "",
+            "grupos": _totais_por_grupo(ctx, mes, valor_total, consumo_lig, valor_ant, consumo_ant)}
+
+
+def _ou_none(v, casas=None):
+    if v is None or pd.isna(v):
+        return None
+    return round(float(v), casas) if casas is not None else float(v)
+
+
+def _mes_por_ligacao(ctx, ref):
+    """(linhas do mês, valor total por ligação, consumo por ligação). Consumo = maior Consumo Faturado das linhas de água
+    da ligação (o mesmo número que a conferência mostra e altera)."""
+    mes = ctx.base_final[ctx.base_final["Referencia de Leitura"] == ref].copy()
+    mes["Consumo Faturado"] = pd.to_numeric(mes["Consumo Faturado"], errors="coerce").fillna(0)
+    mes["Valor (R$)"] = pd.to_numeric(mes["Valor (R$)"], errors="coerce").fillna(0)
+    valor = mes.groupby("N. Ligação")["Valor (R$)"].sum()
+    agua = mes[mes["Rubrica"].str.contains("AGUA", case=False, na=False)]
+    consumo = agua.groupby("N. Ligação")["Consumo Faturado"].max()
+    return mes, valor, consumo
+
+
+def _totais_por_grupo(ctx, mes, valor, consumo, valor_ant, consumo_ant):
+    """Totais de cada grupo de leitura (todas as ligações do grupo, não só as da conferência): consumo e valor no mês
+    atual e no anterior. O site soma a diferença das alterações feitas na tabela a esses totais."""
+    from .comparativo import _sup_dos_grupos
+    from .leitura import chave_grupo
+    if not len(mes):
+        return []
+    grupo_lig = mes.drop_duplicates("N. Ligação").set_index("N. Ligação")["Grupo"].astype(str)
+    t = pd.DataFrame({"grupo": grupo_lig, "valor": valor.reindex(grupo_lig.index).fillna(0),
+                      "consumo": consumo.reindex(grupo_lig.index).fillna(0),
+                      "valor_ant": valor_ant.reindex(grupo_lig.index), "consumo_ant": consumo_ant.reindex(grupo_lig.index)})
+    g = t.groupby("grupo").agg(valor=("valor", "sum"), consumo=("consumo", "sum"), valor_ant=("valor_ant", "sum"),
+                               consumo_ant=("consumo_ant", "sum"), ligacoes=("valor", "size"))
+    # mês anterior do grupo inteiro (inclusive ligações que não faturaram neste mês)
+    base = ctx.base_final
+    sup_grupo = _sup_dos_grupos(ctx, base)
+    ant = base[base["Referencia de Leitura"] == (pd.to_datetime(mes["Referencia de Leitura"].iloc[0], format="%m/%Y")
+                                                    - pd.DateOffset(months=1)).strftime("%m/%Y")]
+    if len(ant):
+        ga = ant.drop_duplicates("N. Ligação").set_index("N. Ligação")["Grupo"].astype(str)
+        g["valor_ant"] = valor_ant.groupby(ga.reindex(valor_ant.index)).sum().reindex(g.index).fillna(0)
+        g["consumo_ant"] = consumo_ant.groupby(ga.reindex(consumo_ant.index)).sum().reindex(g.index).fillna(0)
+    def chave(x):
+        n = chave_grupo(x)
+        return (0, int(n)) if n.isdigit() else (1, n)
+    return [{"grupo": grp, "sup": sup_grupo.get(chave_grupo(grp), "SEM SUP"), "ligacoes": int(r.ligacoes),
+             "consumo": round(float(r.consumo), 2), "valor": round(float(r.valor), 2),
+             "consumo_ant": round(float(r.consumo_ant), 2), "valor_ant": round(float(r.valor_ant), 2)}
+            for grp, r in sorted(g.iterrows(), key=lambda x: chave(x[0]))]
 
 
 def aplica_ajustes_top20(ctx, ajustes):
