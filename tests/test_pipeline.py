@@ -192,6 +192,17 @@ def test_dias_uteis_e_forecast_das_indiretas():
     assert dias_uteis_do_mes("10/2026", dt.date(2026, 9, 1))["uteis_decorridos"] == 0
 
 
+def test_painel_dias_uteis():
+    import datetime as dt
+    import re
+    from faturamento.previsao import painel_dias_uteis_html
+    h = painel_dias_uteis_html("10/2026", dt.date(2026, 10, 7))
+    nums = re.findall(r'<b>(\d+)</b>(já passaram|faltam|no mês)', h)
+    assert nums == [("5", "já passaram"), ("16", "faltam"), ("21", "no mês"), ("4", "já passaram"), ("12", "faltam"), ("16", "no mês")]
+    assert h.count('class="du-util du-passou') == 5 + 1          # 5 no calendário + 1 na legenda
+    assert h.count("du-feriado") >= 2 and "07/10/2026" in h
+
+
 def test_top100_aumento_de_consumo_com_download(analise):
     import base64, io, re
     html = open(analise.caminho_html, encoding="utf-8").read()
