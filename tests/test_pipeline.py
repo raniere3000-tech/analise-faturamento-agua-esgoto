@@ -244,3 +244,25 @@ def test_etapa2_mostra_economias_das_ligacoes(tmp_path):
     assert linhas and all("economias" in l for l in linhas)
     assert sum(l["economias"] for l in linhas) > 0
     json.dumps(linhas, allow_nan=False)                       # vai em JSON para o site: sem NaN
+
+
+def test_etapa2_mes_anterior_e_totais_por_grupo(tmp_path):
+    import json
+    from dados_sinteticos import gera_pasta
+    from faturamento import Sessao
+    gera_pasta(str(tmp_path))
+    s = Sessao(str(tmp_path), progresso=lambda p, t: None)
+    info = s.preparar()
+    json.dumps(info, allow_nan=False)
+    assert info["refAnterior"] == "08/2026"
+    assert all("consumo_ant" in l and "valor_ant" in l for l in info["linhas"])
+    assert any(l["valor_ant"] for l in info["linhas"])
+    grupos = {g["grupo"]: g for g in info["grupos"]}
+    assert grupos and all(g["valor"] > 0 and g["ligacoes"] > 0 for g in grupos.values())
+    # cada ligação da conferência está dentro do total do seu grupo
+    for l in info["linhas"]:
+        assert grupos[l["grupo"]]["valor"] >= l["valor"] - 0.01
+    # total dos grupos = valor do mês inteiro (todas as ligações)
+    b = s.ctx.base_final
+    mes = b[b["Referencia de Leitura"] == info["refAtual"]]
+    assert sum(g["valor"] for g in grupos.values()) == pytest.approx(pd.to_numeric(mes["Valor (R$)"]).sum(), rel=1e-6)
