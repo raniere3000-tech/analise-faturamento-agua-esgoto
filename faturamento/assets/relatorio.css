@@ -316,6 +316,8 @@ td.num { text-align:right; }
 .val-filtro::before { content:"Filtro: "; font-weight:600; color:var(--marinho); }
 .btn-baixar-base { margin-left:0; padding:2px 9px; font-size:13px; line-height:20px; }
 .nome-base { font-weight:600; margin:0 4px; }
+.btn-detalhe { margin-left:0; padding:2px 8px; font-size:13px; line-height:20px; letter-spacing:-1px; }   /* ⬇≡ analítico por matrícula */
+@media print { .btn-detalhe { display:none !important; } }
 
 /* Indiretas: duas tabelas (água / esgoto e total) com forecast editável; gráfico de evolução embaixo, largura inteira */
 .tabela-previsao tr.prev-oculta { display:none; }

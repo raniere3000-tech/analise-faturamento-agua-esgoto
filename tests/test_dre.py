@@ -615,3 +615,43 @@ def test_base_fatura_traz_o_consumo_minimo(sessao):
     com_minimo = atual["Mínimo da matrícula (m³)"].notna()
     assert atual.loc[com_minimo, "Conta do mínimo"].str.contains("=").all()
     assert atual.loc[~com_minimo, "Conta do mínimo"].str.contains("sem mínimo cadastrado").all()
+
+
+def test_analitico_por_matricula_bate_com_as_tabelas(sessao):
+    import base64
+    import gzip
+    import io
+    import re
+    ctx = sessao.ctx
+    ra, rn = ctx.ref_atual, ctx.ref_anterior
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    analise = html[html.index('id="view-analise"'):]
+    for tipo in ("ativas", "matriz", "minimo", "situacao", "top-queda-agua", "top-queda-esgoto", "top-aumento-agua", "top-aumento-esgoto"):
+        assert f'data-detalhe="{tipo}"' in analise, tipo
+    b64 = re.search(r'id="analitico-dados" data-gz="1"[^>]*>([^<]+)</script>', html).group(1)
+    d = pd.read_csv(io.BytesIO(gzip.decompress(base64.b64decode(b64))), sep=";", decimal=",", dtype={"N. Ligação": str, "Grupo": str,
+                    f"Grupo {ra}": str, f"Grupo {rn}": str}, encoding="utf-8-sig")
+    assert d["N. Ligação"].is_unique
+    # ativas × cortadas: soma das economias por grupo e mês bate com a tabela
+    ciclos = ctx.resultados["ciclos"].set_index("Grupo")
+    for ref, suf in ((ra, "Atual"), (rn, "Ant")):
+        for classe in ("Ativa", "Cortada"):
+            x = d[d[f"Ativa/Cortada {ref}"] == classe].groupby(f"Grupo {ref}")[f"Economias {ref}"].sum()
+            for g, v in x.items():
+                assert ciclos.loc[g, f"{classe}_{suf}"] == pytest.approx(v), (ref, classe, g)
+    # acima × abaixo do mínimo
+    m = ctx.df_minimo_por_grupo.set_index("Grupo")
+    for ref, suf in ((ra, "Atual"), (rn, "Ant")):
+        for classe in ("Acima", "Abaixo"):
+            x = d[d[f"Acima/Abaixo do mínimo {ref}"] == classe].groupby(f"Grupo {ref}")[f"Economias {ref}"].sum()
+            for g, v in x.items():
+                assert m.loc[g, f"{classe}_{suf}"] == pytest.approx(v), (ref, classe, g)
+    # matriz: quem faturou no anterior e não no atual = lista de sem faturamento
+    sem = ctx.resultados["sem_faturamento"]
+    assert set(d.loc[d["Migração de grupo"] == "Sem faturamento atual", "N. Ligação"]) == set(sem["N. Ligação"].astype(str))
+    # top 100: as 100 primeiras quedas de água do ranking completo são as do relatório
+    q = d[d[f"Consumo água {rn}"].notna() & d[f"Consumo água {ra}"].notna()]
+    q = q.assign(queda=q[f"Consumo água {rn}"] - q[f"Consumo água {ra}"])
+    q = q[q["queda"] > 0].sort_values("queda", ascending=False)
+    top = ctx.resultados["top_agua"]
+    assert list(q["queda"].head(len(top)).round(2)) == list(top["Queda_Consumo"].round(2))
