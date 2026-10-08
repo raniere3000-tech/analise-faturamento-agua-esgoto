@@ -106,7 +106,8 @@ def gera_tabelas_orcado_ciclo_html(ctx):
                 continue
             slug = "orc-" + rub.lower() + "-" + "".join(c for c in f.lower() if c.isalnum())
             tabelas += gera_tabela(ctx, comp, f"{rotulo} por ciclo — Realizado × Orçado {html.escape(f)} ({ctx.mes_atual})", slug,
-                                   com_dias=False, rot_atual="Realizado", rot_ant="Orçado")
+                                   com_dias=False, rot_atual="Realizado", rot_ant="Orçado",
+                                   detalhe="diretas-esgoto" if "ESGOTO" in rub.upper() else "diretas-agua")
         if tabelas:
             blocos.append((f, tabelas))
     if not blocos:
