@@ -40,8 +40,11 @@ class Sessao:
 
     # ---- fase 1 ----
     def preparar(self):
+        from . import cache_arquivos
         monta_base(self.ctx)
-        return calcula_top20_maior_consumo(self.ctx)
+        resultado = calcula_top20_maior_consumo(self.ctx)
+        resultado["leitura"] = cache_arquivos.resumo()          # o site mostra quantos arquivos foram lidos / reaproveitados
+        return resultado
 
     # ---- fase 2 ----
     def continuar(self, ajustes=None, texto_justificativa=None):

@@ -107,6 +107,7 @@ code { font-family: Consolas, "Courier New", monospace; font-size: .9em; backgro
 
 .rodape { margin-top: 18px; text-align: center; font-size: .8rem; color: var(--muted); }
 .rodape a { color: var(--muted); }
+.link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--muted); text-decoration: underline; cursor: pointer; }
 
 /* ===== Relatório em tela cheia ===== */
 .visualizador { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--cinza); z-index: 10; }
@@ -346,7 +347,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v48</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v49</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -400,7 +401,8 @@ body.relatorio-aberto .conteudo { min-height: 0; }
         <li><b>Serviço avulso</b> (nome com "avulso") para as indiretas; <b>RF</b> (ex.: <code>RF01T26.xlsx</code>) e <b>RF SUP</b> para o orçado.</li>
         <li>Tudo é processado no seu navegador; nenhum arquivo é enviado para servidor. Na primeira vez, o carregamento leva cerca de 1 minuto.</li>
       </ul>
-      <p class="rodape"><a href="acompanhamento_faturamento.py" download>Baixar o script Python</a></p>
+      <p class="rodape"><a href="acompanhamento_faturamento.py" download>Baixar o script Python</a> ·
+        <button type="button" class="link-btn" id="btnLimparCache" title="Os arquivos já lidos ficam guardados no navegador para a próxima análise ser mais rápida. Apagar força a leitura completa.">Limpar arquivos guardados</button></p>
     </div>
   </div>
   <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto" hidden></iframe>
@@ -410,6 +412,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   <div class="painel-top20">
     <h2 id="top20Titulo"><span class="badge">Etapa 2 · Conferência</span><span id="top20TituloTexto"></span></h2>
     <p class="lead"><span id="textoFiltro"></span>Maiores <b>Consumo Faturado</b> do mês atual. Se quiser, altere o consumo ou o valor total (água + esgoto) de algum cliente. Ao aplicar, toda a análise e a comparação usam os valores alterados. Os arquivos da pasta não são modificados.</p>
+    <p class="nota" id="notaLeitura" hidden style="flex:none;margin:0 0 6px;font-size:.78rem;color:var(--muted);"></p>
     <p class="nota" id="avisoTop20" hidden style="flex:none;color:var(--laranja-texto);font-weight:600;font-size:.8rem;margin:0 0 6px;">A coluna "Situacao Conta" não foi encontrada nos arquivos, então abaixo aparece o Top 20 de maior consumo de todas as contas.</p>
     <div class="filtros-top20">
       <input type="search" id="buscaTop20" placeholder="Filtrar por ligação, cliente ou grupo…" aria-label="Filtrar clientes">
@@ -452,7 +455,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v48-20261008"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v49-20261008"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -590,6 +593,21 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     btnAtualizar.disabled = sim;
   }
 
+  // resumo da leitura: quantos arquivos foram lidos agora e quantos vieram de análises anteriores (guardados no navegador)
+  let ultimaLeitura = "";
+  function mostraLeitura(l) {
+    if (!l) return;
+    const partes = [`Lidos do arquivo agora: ${l.lidos || 0}`];
+    if (l.reaproveitados) partes.push(`reaproveitados (já lidos antes): ${l.reaproveitados}`);
+    if (l.guardadoMB != null) partes.push(`${String(l.guardadoMB).replace(".", ",")} MB guardados no navegador`);
+    const texto = partes.join(" · ");
+    ultimaLeitura = texto;
+    $("statusNota").textContent = texto;
+    $("notaLeitura").textContent = "♻️ " + texto + (l.reaproveitados ? " — só os arquivos novos ou alterados foram abertos." : "");
+    $("notaLeitura").hidden = false;
+    $("logExecucao").textContent += "\n" + texto;
+  }
+
   function mostraErro(resumo, detalhe) {
     fechaRelatorio();
     progresso.hidden = false;
@@ -610,7 +628,8 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       log.scrollTop = log.scrollHeight;
     }
     else if (msg.tipo === "erro") { paraEta(); mostraErro(msg.resumo, msg.detalhe); }
-    else if (msg.tipo === "top20") { salvaEta(); mostraTop20(msg.dados); }
+    else if (msg.tipo === "top20") { salvaEta(); mostraLeitura(msg.dados.leitura); mostraTop20(msg.dados); }
+    else if (msg.tipo === "cacheLimpo") { $("statusNota").textContent = "Arquivos guardados apagados: a próxima análise lê todos os arquivos de novo."; }
     else if (msg.tipo === "concluido") { salvaEta(); abreRelatorio(msg); }
   }
 
@@ -679,7 +698,8 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       if (entrada.name.startsWith(".")) continue;
       if (entrada.kind === "file" && ehEntrada(entrada.name)) {
         const arq = await entrada.getFile();
-        lidos.push({ nome: prefixo + arq.name, conteudo: await arq.arrayBuffer() });
+        // o conteúdo só é lido no worker, e só para arquivos novos/alterados (os já lidos antes vêm do navegador)
+        lidos.push({ nome: prefixo + arq.name, arquivo: arq, tamanho: arq.size, modificado: arq.lastModified });
       } else if (entrada.kind === "directory" && nivel < MAX_NIVEIS) {
         lidos.push(...await lerPastaHandle(entrada, prefixo + entrada.name + "/", nivel + 1));
       }
@@ -694,7 +714,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       const relativo = partes.length > 1 ? partes.slice(1) : partes;          // tira o nome da pasta escolhida
       if (relativo.length > MAX_NIVEIS + 1 || relativo.some((p) => p.startsWith("."))) continue;
       if (!ehEntrada(arq.name)) continue;
-      lidos.push({ nome: relativo.join("/"), conteudo: await arq.arrayBuffer() });
+      lidos.push({ nome: relativo.join("/"), arquivo: arq, tamanho: arq.size, modificado: arq.lastModified });
     }
     return lidos;
   }
@@ -726,8 +746,8 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       tag.textContent = a.nome;
       lista.appendChild(tag);
     });
-    $("statusNota").textContent = `${arquivos.length} arquivo(s) lido(s) de "${nomePasta}".`;
-    pegaWorker().postMessage({ fase: "preparar", arquivos }, arquivos.map((a) => a.conteudo));
+    $("statusNota").textContent = `${arquivos.length} arquivo(s) encontrado(s) em "${nomePasta}".`;
+    pegaWorker().postMessage({ fase: "preparar", arquivos });
   }
 
   // Guarda a pasta conectada no navegador (IndexedDB) para reabri-la sozinho nas próximas visitas
@@ -956,7 +976,8 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     $("etapaTop20").hidden = true;
     progresso.hidden = false;
     progresso.classList.remove("erro");
-    $("statusNota").textContent = ajustes.length ? `Usando ${ajustes.length} cliente(s) com valores alterados.` : "Usando os valores originais.";
+    $("statusNota").textContent = (ajustes.length ? `Usando ${ajustes.length} cliente(s) com valores alterados.` : "Usando os valores originais.")
+      + (ultimaLeitura ? " " + ultimaLeitura + "." : "");
     limpaEtapas();
     iniciaEta("f2");
     setStatus("Processando…", 52);
@@ -1094,6 +1115,10 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   quadro().addEventListener("load", () => { if (quadro().srcdoc) montaFiltros(); });
 
   btnPasta.addEventListener("click", escolhePasta);
+  $("btnLimparCache").addEventListener("click", () => {
+    if (!confirm("Apagar os arquivos já lidos guardados neste navegador? A próxima análise vai ler todos os arquivos de novo.")) return;
+    pegaWorker().postMessage({ fase: "limparCache" });
+  });
   btnAtualizar.addEventListener("click", atualiza);
   $("btnCopiarLog").addEventListener("click", () => {
     const texto = $("logExecucao").textContent;
