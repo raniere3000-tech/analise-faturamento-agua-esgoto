@@ -582,3 +582,36 @@ def test_executivo_imprime_documento_leve(sessao):
         assert secao in trecho
     # o documento do PDF não leva a classe que esconde os filhos do <body> (o quadro do html2canvas ficava em branco)
     assert "(telaComoImpressao ? '<body>' : '<body class=\"modo-executivo\">')" in html
+
+
+def test_base_fatura_traz_o_consumo_minimo(sessao):
+    from faturamento import validacao
+    ctx = sessao.ctx
+    validacao.monta_bases(ctx)
+    fat = validacao.BASES["fatura"]["df"]
+    ra, rn = ctx.ref_atual, ctx.ref_anterior
+    cols = ["Mínimo por economia da categoria (m³)", "Mínimo da matrícula (m³)", "Conta do mínimo", "Acima/Abaixo do mínimo",
+            f"Consumo Faturado mês anterior ({rn})", f"Acima/Abaixo do mínimo mês anterior ({rn})"]
+    assert set(cols) <= set(fat.columns)
+    agua = fat["Rubrica"].str.contains("AGUA", case=False)
+    esgoto = fat["Rubrica"].str.contains("ESGOTO", case=False)
+    assert fat.loc[esgoto, "Acima/Abaixo do mínimo"].isna().all()            # só nas linhas de água
+    assert fat.loc[agua, "Acima/Abaixo do mínimo"].notna().all()
+    assert set(fat.loc[agua, "Acima/Abaixo do mínimo"]) <= {"Acima", "Abaixo", "Fora: consumo 0", "Fora: sem economia",
+                                                           "Fora: categoria sem mínimo"}
+    # bate com a tabela Acima × Abaixo do relatório (economias por grupo e mês)
+    m = ctx.df_minimo_por_grupo.set_index("Grupo")
+    a = fat[agua]
+    for ref, sufixo in ((ra, "Atual"), (rn, "Ant")):
+        x = a[a["Referencia de Leitura"] == ref]
+        for classe in ("Acima", "Abaixo"):
+            soma = x[x["Acima/Abaixo do mínimo"] == classe].groupby("Grupo")["Economias_Totais"].sum()
+            for g, v in soma.items():
+                assert m.loc[str(g), f"{classe}_{sufixo}"] == pytest.approx(v)
+    # mês anterior só nas linhas de água do mês atual; mista mostra a conta somando os tipos
+    assert fat.loc[agua & (fat["Referencia de Leitura"] == rn), f"Consumo Faturado mês anterior ({rn})"].isna().all()
+    atual = a[a["Referencia de Leitura"] == ra]
+    assert atual[f"Acima/Abaixo do mínimo mês anterior ({rn})"].notna().all()
+    com_minimo = atual["Mínimo da matrícula (m³)"].notna()
+    assert atual.loc[com_minimo, "Conta do mínimo"].str.contains("=").all()
+    assert atual.loc[~com_minimo, "Conta do mínimo"].str.contains("sem mínimo cadastrado").all()

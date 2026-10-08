@@ -147,6 +147,30 @@ def _sup(df):
     return df.rename(columns={"__sup": "Superintendência", "__cidade": "Cidade (SUP)"})
 
 
+def _colunas_minimo(fat, completa, eh_agua, ctx):
+    """Consumo mínimo na base detalhada (só nas linhas de água, como a tabela Acima × Abaixo): mínimo por economia da
+    categoria, mínimo da matrícula, a conta, Acima/Abaixo (ou o motivo de ficar fora) e, nas linhas do mês atual,
+    o consumo e o Acima/Abaixo do mês anterior da mesma matrícula."""
+    from .analises import classifica_minimo
+    agua = completa[eh_agua]
+    cls = classifica_minimo(agua)
+    rn = ctx.ref_anterior
+    col_ant, col_cls_ant = f"Consumo Faturado mês anterior ({rn})", f"Acima/Abaixo do mínimo mês anterior ({rn})"
+    novas = {"Mínimo por economia da categoria (m³)": cls["minimo_economia"], "Mínimo da matrícula (m³)": cls["minimo"],
+             "Conta do mínimo": cls["conta"], "Acima/Abaixo do mínimo": cls["classe"]}
+    for nome, serie in novas.items():
+        fat[nome] = serie.reindex(fat.index)                      # linhas de esgoto ficam em branco
+    ant = agua[agua["Referencia de Leitura"] == rn]
+    lig_ant = ant["N. Ligação"].astype(str).str.strip()
+    consumo_ant = pd.to_numeric(ant["Consumo Faturado"], errors="coerce").groupby(lig_ant.values).first()
+    classe_ant = cls.loc[ant.index, "classe"].groupby(lig_ant.values).first()
+    atual_agua = fat.index.isin(agua.index) & (fat["Referencia de Leitura"] == ctx.ref_atual).to_numpy()
+    lig = fat["N. Ligação"].astype(str).str.strip()
+    fat[col_ant] = lig.map(consumo_ant).where(atual_agua)
+    fat[col_cls_ant] = lig.map(classe_ant).where(atual_agua)
+    fat.loc[atual_agua & fat[col_cls_ant].isna().to_numpy(), col_cls_ant] = "sem fatura no mês anterior"
+
+
 def monta_bases(ctx):
     """Prepara as bases que alimentam os cálculos, no formato para conferência."""
     from .dre import linha_do_orcado
@@ -157,8 +181,11 @@ def monta_bases(ctx):
     fat = fat[(fat["__serv"] != "") if "__serv" in fat.columns else fat["Rubrica"].str.contains("AGUA|ESGOTO", case=False, na=False)]
     cols = [c for c in COLUNAS_BASE + COLUNAS_ECONOMIA_TODAS + ["Situacao Conta", "Nome da Localidade", "__sup"] if c in fat.columns]
     total_fat = len(fat)
+    eh_agua = (fat["__serv"] == "A") if "__serv" in fat.columns else fat["Rubrica"].str.contains("AGUA", case=False, na=False)
+    completa = fat
     fat = _sup(fat[list(dict.fromkeys(cols))].head(LIMITE_BASE)).copy()      # só as linhas que vão para o CSV
     fat["Entra em economias/volume"] = (fat["Consumo Faturado"] > 0).map({True: "Sim", False: "Não"})
+    _colunas_minimo(fat, completa, eh_agua, ctx)
     BASES["fatura"] = {"df": fat, "truncada": total_fat > LIMITE_BASE, "total": total_fat}
 
     comp = getattr(ctx, "base_completa", None)
@@ -242,7 +269,10 @@ def _secao_bases(ctx):
 
 DESCRICAO_BASES = {
     "fatura": "Uma linha por ligação × rubrica (VALOR DE AGUA / VALOR DE ESGOTO) × mês, já cruzada com o consumo (Consumo Faturado, "
-              "economias) e o cronograma (Qts. Dias), só grupos até o último faturado. Alimenta Resumo, Diretas e o realizado das diretas na DRE.",
+              "economias) e o cronograma (Qts. Dias), só grupos até o último faturado. Alimenta Resumo, Diretas e o realizado das diretas na DRE. "
+              "Nas linhas de água traz o consumo mínimo usado na tabela Acima × Abaixo: mínimo por economia da categoria, mínimo da "
+              "matrícula, a conta (ligação mista soma cada tipo), Acima/Abaixo (ou o motivo de ficar fora) e, no mês atual, o consumo "
+              "e o Acima/Abaixo do mês anterior da mesma matrícula.",
     "fatura_mensal": "Soma por mês, grupo, serviço e superintendência (valor, volume e economias só onde Consumo Faturado &gt; 0), "
                      "com todos os meses e grupos. Alimenta o orçado por ciclo e o forecast das diretas.",
     "avulso": "Lançamentos do serviço avulso com a classe da rubrica (CORTE, RELIGAÇÃO, LNA, SANÇÃO, OUTROS, LNE). Alimenta a aba Indiretas, "
@@ -762,8 +792,10 @@ def gera_validacao_html(ctx):
                 "Acima = consumo faturado maior que o mínimo; Abaixo = igual ou menor", "Diferença = mês atual − mês anterior"],
                ["<b>Categoria</b>, <b>Consumo Faturado</b>, quantidades de economia por tipo (Qtd. Economia …), <b>Grupo</b>"],
                lambda sup: {"Minimo": filtra_sup(ctx, r.get("minimo"), sup)}, "minimo", ctx=ctx,
-               bases=[("fatura", f"{f_atual_ant}; Serviço = Água; compare Consumo Faturado com o mínimo da Categoria (regras.json)")],
-               montagem=["Uma linha por grupo: acima e abaixo nos dois meses e as diferenças; linha Total"]),
+               bases=[("fatura", f"{f_atual_ant}; Serviço = Água; a coluna 'Acima/Abaixo do mínimo' já traz a classificação de cada "
+                                 "matrícula (com o mínimo e a conta); some Economias_Totais por Grupo e classificação")],
+               montagem=["Uma linha por grupo: acima e abaixo nos dois meses e as diferenças; linha Total",
+                         "Fica fora (e a base diz o motivo): consumo 0, sem economia ou categoria sem mínimo cadastrado"]),
         _bloco("Cards — Situação de lançamento",
                "o que aconteceu com a conta depois de emitida (coluna Situacao Lancamento da fatura de ciclo: entregue, retida, "
                "consolidada, não entregue...). Visão analítica: um card por código; visão sintética: um card por leitura da situação "

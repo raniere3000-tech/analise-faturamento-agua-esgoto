@@ -160,6 +160,47 @@ def exporta_top100(df_atual, df_anterior, ref_atual, ref_anterior, caminho_saida
     return top_agua_df, top_esg_df
 
 
+def classifica_minimo(agua):
+    """Para linhas de ÁGUA: o mesmo cálculo da tabela Acima × Abaixo do mínimo, linha a linha, para a base detalhada.
+    Devolve DataFrame (mesmo índice) com: minimo_economia (m³ por economia da categoria; vazio na mista), minimo
+    (mínimo da matrícula), conta (texto da conta) e classe (Acima / Abaixo / Fora: motivo)."""
+    tipos = list(MINIMO_POR_TIPO_ECONOMIA)
+    d = pd.DataFrame(index=agua.index)
+    qtds = pd.DataFrame({c: pd.to_numeric(agua[c], errors="coerce").fillna(0) if c in agua.columns else 0.0 for c in tipos},
+                        index=agua.index)
+    consumo = pd.to_numeric(agua.get("Consumo Faturado", 0), errors="coerce").fillna(0)
+    economias = qtds.sum(axis=1)
+    cats = agua["Categoria"].fillna("") if "Categoria" in agua.columns else pd.Series("", index=agua.index)
+    base = qtds.assign(Categoria=cats)
+    base["Minimo_Matricula"] = minimo_matricula_vetorizado(base) if len(base) else pd.Series(dtype=float)
+    mista = (qtds > 0).sum(axis=1) > 1
+    min_cat = cats.map({c: CONSUMO_MINIMO_POR_CATEGORIA.get(normaliza_texto(c)) for c in cats.unique()}).astype(float)
+    d["minimo_economia"] = min_cat.where(~mista)
+    d["minimo"] = base["Minimo_Matricula"]
+
+    def conta(chave):                                  # texto calculado uma vez por combinação (categoria + quantidades)
+        cat, *qs = chave
+        partes = [(q, c) for q, c in zip(qs, tipos) if q > 0]
+        if len(partes) > 1:
+            total = sum(q * MINIMO_POR_TIPO_ECONOMIA[c] for q, c in partes)
+            nome = lambda c: c.replace("Qtd. Economia ", "")
+            return " + ".join(f"{q:g} {nome(c)} × {MINIMO_POR_TIPO_ECONOMIA[c]:g}" for q, c in partes) + f" = {total:g} m³"
+        m = CONSUMO_MINIMO_POR_CATEGORIA.get(normaliza_texto(cat))
+        n = sum(qs)
+        if m is None:
+            return f"categoria {cat or '(vazia)'} sem mínimo cadastrado"
+        return f"{n:g} economia(s) × {m:g} ({cat}) = {m * n:g} m³"
+    chaves = list(zip(cats, *[qtds[c] for c in tipos]))
+    textos = {k: conta(k) for k in set(chaves)}
+    d["conta"] = [textos[k] for k in chaves]
+    classe = (consumo > d["minimo"]).map({True: "Acima", False: "Abaixo"})
+    classe = classe.where(d["minimo"].notna(), "Fora: categoria sem mínimo")
+    classe = classe.where(economias > 0, "Fora: sem economia")
+    classe = classe.where(consumo > 0, "Fora: consumo 0")
+    d["classe"] = classe
+    return d
+
+
 def minimo_matricula_vetorizado(df):
     """Mesma regra de `calcula_minimo_matricula`, para a tabela inteira de uma vez (NaN = categoria sem mínimo)."""
     tipos = list(MINIMO_POR_TIPO_ECONOMIA)
