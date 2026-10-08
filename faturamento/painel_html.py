@@ -75,7 +75,7 @@ def gera_grafico_faturamento_html(ctx, df_resumo):
     return f"""
     <div class="card">
     <h2>Faturamento total por grupo — {ctx.mes_atual} vs {ctx.mes_anterior}</h2>
-    <p class="nota-secao">Barras do mês atual em laranja indicam queda acima de 40%; em azul médio, crescimento acima de 40%. Passe o mouse sobre as barras para ver os valores.</p>
+    <p class="nota-secao">Barras do mês atual em laranja indicam queda acima de 40%; em azul médio, crescimento acima de 40%. Rótulos nas duas barras (mês anterior e atual); passe o mouse para ver o valor exato.</p>
     <div class="grafico-area"><canvas id="graficoFaturamento"></canvas></div>
     <script>
     (function() {{
@@ -100,29 +100,34 @@ def gera_grafico_faturamento_html(ctx, df_resumo):
         }}
 
         // ------------------------------------------------------------
-        // Plugin customizado: rótulo apenas no dataset "atual", compacto
+        // Plugin customizado: rótulo compacto nas duas barras (anterior e atual).
+        // Barra estreita: o rótulo fica na vertical para não encostar no vizinho.
         // ------------------------------------------------------------
         const plugRotulos = {{
             id: 'rotulosBarras',
             afterDatasetsDraw(chart) {{
                 const {{ ctx }} = chart;
-                const alturaMinima = chart.chartArea.height * 0.08;
                 ctx.save();
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'bottom';
-
-                const dataset = chart.data.datasets[1]; // apenas mês atual
-                const meta = chart.getDatasetMeta(1);
-                meta.data.forEach((bar, i) => {{
-                    const valor = dataset.data[i];
-                    if (!valor) return;
-
-                    const alturaBarra = chart.chartArea.bottom - bar.y;
-                    if (alturaBarra < alturaMinima) return;
-
-                    ctx.fillStyle = '#1A2740';
-                    ctx.font = "600 11px 'IBM Plex Sans Condensed', 'Segoe UI', Arial, sans-serif";
-                    ctx.fillText(formatoCompacto(valor), bar.x, bar.y - 4);
+                ctx.font = "600 10px 'IBM Plex Sans Condensed', 'Segoe UI', Arial, sans-serif";
+                chart.data.datasets.forEach((dataset, k) => {{
+                    const meta = chart.getDatasetMeta(k);
+                    if (meta.hidden) return;
+                    meta.data.forEach((bar, i) => {{
+                        const valor = dataset.data[i];
+                        if (!valor) return;
+                        const texto = formatoCompacto(valor);
+                        ctx.fillStyle = k === 0 ? '#5B6B85' : '#1A2740';
+                        if (ctx.measureText(texto).width + 2 <= bar.width) {{
+                            ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+                            ctx.fillText(texto, bar.x, bar.y - 3);
+                        }} else {{
+                            ctx.save();
+                            ctx.translate(bar.x, bar.y - 3); ctx.rotate(-Math.PI / 2);
+                            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+                            ctx.fillText(texto, 0, 0);
+                            ctx.restore();
+                        }}
+                    }});
                 }});
                 ctx.restore();
             }}
@@ -157,7 +162,7 @@ def gera_grafico_faturamento_html(ctx, df_resumo):
                 responsive: true,
                 maintainAspectRatio: false,
                 layout: {{
-                    padding: {{ top: 28 }}
+                    padding: {{ top: 44 }}
                 }},
                 plugins: {{
                     legend: {{

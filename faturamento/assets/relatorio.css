@@ -364,3 +364,23 @@ td.num { text-align:right; }
     #view-executivo .kpi-valor { font-size:12px; }
     #view-executivo .kpi-delta { font-size:7.5px; white-space:normal; }
 }
+
+/* dias úteis do mês (Forecast, Indiretas, DRE) */
+.dias-uteis { border:1px solid #dfe6ef; background:#f8fafc; border-radius:8px; padding:10px 12px; margin:8px 0 12px; }
+.du-linha { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin-bottom:6px; }
+.du-rot { font-weight:700; color:#1A2740; min-width:230px; }
+.du-rot small { font-weight:400; color:#64748b; }
+.du-num { display:inline-flex; align-items:baseline; gap:4px; color:#394D73; }
+.du-num b { font-size:1.25em; color:#1A2740; }
+.du-barra { flex:1 1 120px; max-width:260px; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; }
+.du-barra > span { display:block; height:100%; background:#1A2740; }
+.du-cal { display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
+.du-cal > span { width:28px; text-align:center; font-size:11px; line-height:1.1; padding:2px 0; border-radius:4px; border:1px solid transparent; }
+.du-cal i { display:block; font-style:normal; font-size:9px; opacity:.75; }
+.du-util { background:#fff; border-color:#1A2740 !important; color:#1A2740; }
+.du-util.du-passou { background:#1A2740; color:#fff; }
+.du-util:not(.du-corte) { border-style:dashed !important; }
+.du-feriado { background:#fde7d3; color:#9a3412; }
+.du-fds { background:#eef1f5; color:#94a3b8; }
+.du-legenda { font-size:11px; color:#64748b; margin:6px 0 0; }
+.du-legenda > span { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-left:8px; border:1px solid transparent; }
