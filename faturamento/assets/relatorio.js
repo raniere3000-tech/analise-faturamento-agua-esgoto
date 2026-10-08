@@ -788,6 +788,106 @@ async function baixarCsvFiltrado(alt) {
     }
 }
 
+// ===== Analítico por matrícula da aba Análise (seta ⬇≡ ao lado de cada tabela) =====
+// O analítico vem embutido uma vez (script#analitico-dados, CSV em gzip): uma linha por ligação, mês anterior e atual
+// lado a lado. Cada seta baixa as colunas e as linhas da sua tabela, com os filtros de Superintendência e Grupo.
+let analiticoCache = null;
+async function lerAnalitico() {
+    if (analiticoCache) return analiticoCache;
+    const el = document.getElementById('analitico-dados');
+    if (!el) return null;
+    const texto = new TextDecoder('utf-8').decode(await bytesEmbutidos(el));
+    const registros = [];
+    let ini = 0, aspas = false, t = texto.charCodeAt(0) === 0xFEFF ? texto.slice(1) : texto;
+    for (let i = 0; i < t.length; i++) {
+        const c = t.charCodeAt(i);
+        if (c === 34) aspas = !aspas;
+        else if (c === 10 && !aspas) { registros.push(t.slice(ini, i)); ini = i + 1; }
+    }
+    if (ini < t.length) registros.push(t.slice(ini));
+    const campos = (r) => {
+        const out = []; let atual = '', q = false;
+        for (let i = 0; i < r.length; i++) {
+            const c = r[i];
+            if (c === '"') { if (q && r[i + 1] === '"') { atual += '"'; i++; } else q = !q; }
+            else if (c === ';' && !q) { out.push(atual); atual = ''; }
+            else if (c !== '\r' || q) atual += c;
+        }
+        out.push(atual);
+        return out;
+    };
+    const cab = campos(registros[0]);
+    const linhas = registros.slice(1).filter(Boolean).map(campos);
+    analiticoCache = { cab, linhas, ra: el.dataset.refAtual, rn: el.dataset.refAnterior, mes: el.dataset.mes };
+    return analiticoCache;
+}
+
+const numBR = (v) => (v === '' || v == null ? null : parseFloat(String(v).replace(',', '.')));
+
+// colunas e linhas de cada tabela; "top-…": ranking completo calculado aqui (todas as ligações com queda/aumento)
+function definicaoAnalitico(tipo, ra, rn) {
+    const base = ['N. Ligação', 'Nome Cliente', 'Categoria', 'Superintendência', 'Grupo'];
+    const par = (nome) => [`${nome} ${rn}`, `${nome} ${ra}`];
+    const algum = (...cols) => (v) => cols.some((c) => v(c) !== '');
+    switch (tipo) {
+        case 'ativas': return { nome: 'Ativas_x_Cortadas', cols: base.concat(par('Grupo'), par('Situação Ligação'), par('Ativa/Cortada'),
+            par('Economias'), par('Consumo água')), filtro: algum(...par('Ativa/Cortada')) };
+        case 'matriz': return { nome: 'Migracao_de_Grupos', cols: base.concat(par('Grupo'), ['Migração de grupo'], par('Economias'), par('Consumo água')),
+            filtro: (v) => v('Migração de grupo') !== 'Sem consumo nos dois meses' };
+        case 'minimo': return { nome: 'Consumo_Minimo', cols: base.concat(par('Economias'), par('Consumo água'), par('Mínimo da matrícula'),
+            [`Conta do mínimo ${ra}`], par('Acima/Abaixo do mínimo'), ['Mudança de classe']), filtro: algum(...par('Acima/Abaixo do mínimo')),
+            extra: { 'Mudança de classe': (v) => { const a = v(`Acima/Abaixo do mínimo ${rn}`), b = v(`Acima/Abaixo do mínimo ${ra}`);
+                return a && b ? (a === b ? 'Manteve' : `${a} → ${b}`) : ''; } } };
+        case 'situacao': return { nome: 'Situacao_Lancamento', cols: base.concat(par('Situação Lançamento'), par('Situação Ligação'),
+            par('Economias'), par('Consumo água'), par('Valor total'), ['Δ valor total']), filtro: algum(...par('Situação Lançamento')) };
+    }
+    const m = /^top-(queda|aumento)-(agua|esgoto)$/.exec(tipo);
+    if (!m) return null;
+    const serv = m[2] === 'agua' ? 'água' : 'esgoto', queda = m[1] === 'queda', P = queda ? 'Queda' : 'Aumento';
+    const cAnt = `Consumo ${serv} ${rn}`, cAt = `Consumo ${serv} ${ra}`;
+    return { nome: `Ranking_${P}_${m[2] === 'agua' ? 'Agua' : 'Esgoto'}`, ranking: true,
+        cols: ['Ranking'].concat(base, [`Grupo ${ra}`], par('Situação Lançamento'), [`Situação Ligação ${ra}`], par('Economias'),
+            [cAnt, cAt, `${P} de consumo`, `${P} %`], par(`Valor ${serv}`), [`${P} de valor`], par('Acima/Abaixo do mínimo')),
+        filtro: (v) => v(cAnt) !== '' && v(cAt) !== '' && (queda ? numBR(v(cAnt)) - numBR(v(cAt)) : numBR(v(cAt)) - numBR(v(cAnt))) > 0,
+        extra: {
+            [`${P} de consumo`]: (v) => Math.round((queda ? numBR(v(cAnt)) - numBR(v(cAt)) : numBR(v(cAt)) - numBR(v(cAnt))) * 100) / 100,
+            [`${P} %`]: (v) => { const a = numBR(v(cAnt)); if (!a) return null; return Math.round(Math.abs(numBR(v(cAt)) - a) / a * 1000) / 10; },
+            [`${P} de valor`]: (v) => { const a = numBR(v(`Valor ${serv} ${rn}`)) || 0, b = numBR(v(`Valor ${serv} ${ra}`)) || 0;
+                return Math.round((queda ? a - b : b - a) * 100) / 100; },
+        },
+        ordem: `${P} de consumo` };
+}
+
+document.addEventListener('click', async function (e) {
+    const b = e.target.closest && e.target.closest('.btn-detalhe');
+    if (!b) return;
+    try {
+        const a = await lerAnalitico();
+        if (!a) return;
+        const def = definicaoAnalitico(b.dataset.detalhe, a.ra, a.rn);
+        if (!def) return;
+        const idx = Object.fromEntries(a.cab.map((c, i) => [c, i]));
+        const bloco = b.closest('.sup-top-bloco');
+        const sup = bloco ? bloco.dataset.sup : (ESTADO.sup || 'TODAS'), grupos = gruposFiltro();
+        let linhas = a.linhas.filter((l) => {
+            const v = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || ''));
+            return (sup === 'TODAS' || v('Superintendência') === sup) && (!grupos || grupos.has(normGrupo(v('Grupo')))) && def.filtro(v);
+        }).map((l) => {
+            const v = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || ''));
+            return def.cols.map((c) => (def.extra && def.extra[c] ? def.extra[c](v) : c === 'Ranking' ? 0 : v(c)));
+        });
+        if (def.ordem) {
+            const io = def.cols.indexOf(def.ordem);
+            linhas.sort((x, y) => (y[io] || 0) - (x[io] || 0));
+            linhas.forEach((l, i) => { l[0] = i + 1; });
+        }
+        const nome = `${def.nome}_${a.mes}${sup !== 'TODAS' ? '_' + sup.replace(/[^A-Za-z0-9]/g, '') : ''}${grupos ? '_grupos_filtrados' : ''}.csv`;
+        baixarTexto(csvDe(def.cols, linhas), nome);
+    } catch (erro) {
+        alert('Não foi possível baixar o analítico neste navegador (' + erro.message + ').');
+    }
+});
+
 // Situação de lançamento: botão Analítica / Sintética (vale para os quadros de todas as SUPs; lembra a última escolha)
 function sitlVisao(visao) {
     document.querySelectorAll('.sitl-grid[data-visao]').forEach(g => { g.hidden = g.dataset.visao !== visao; });

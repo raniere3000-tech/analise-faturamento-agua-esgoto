@@ -205,6 +205,7 @@ def gera_cards_situacao_html(ctx):
     """Um quadro por superintendência (o filtro Superintendência mostra o escolhido), com a visão analítica (um card por
     código) e a sintética (um card por leitura da situação); o botão Analítica/Sintética troca as duas em todos os quadros."""
     from .dre import TODAS, _nome_sup, lista_sups
+    from .analitico import seta_detalhe
     ctx.resultados["situacao_lancamento"] = {}
     ctx.resultados["situacao_lancamento_sintetica"] = {}
     if COLUNA not in ctx.df_atual.columns and COLUNA not in ctx.df_anterior.columns:
@@ -227,7 +228,7 @@ def gera_cards_situacao_html(ctx):
         cards_s = "".join(_card(l, ctx.mes_atual, ctx.mes_anterior, sup, True) for _, l in rs.iterrows()) or "<p>Sem dados</p>"
         blocos.append(f"""<div class="sup-top-bloco" data-sup="{ds}">
     <div class="card">
-    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Situação de lançamento — {html.escape(ctx.mes_atual)} × {html.escape(ctx.mes_anterior)}{html.escape(suf)} {seta_base}
+    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Situação de lançamento — {html.escape(ctx.mes_atual)} × {html.escape(ctx.mes_anterior)}{html.escape(suf)} {seta_base} {seta_detalhe("situacao", sup)}
       <span class="sitl-visao" role="group" aria-label="Visão"><button type="button" data-visao="analitica" class="ativo" aria-pressed="true">Analítica</button><button type="button" data-visao="sintetica" aria-pressed="false">Sintética</button></span></h2>
     <p class="nota-secao">{POR_QUE_GERAL}</p>
     <p class="nota-secao">Contagem por ligação (rubrica de água; a situação é a da conta no mês). Volume e economias só onde Consumo Faturado &gt; 0;

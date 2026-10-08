@@ -6,7 +6,7 @@ const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSAO}/full/`;
 const PASTA = "/dados";
 // Arquivos do pacote Python que o site copia para o Pyodide (caminho no site -> pasta virtual /app)
 const ARQUIVOS_PY = [
-  "faturamento/__init__.py", "faturamento/analises.py", "faturamento/base.py", "faturamento/cache_arquivos.py", "faturamento/comparativo.py",
+  "faturamento/__init__.py", "faturamento/analises.py", "faturamento/analitico.py", "faturamento/base.py", "faturamento/cache_arquivos.py", "faturamento/comparativo.py",
   "faturamento/dre.py", "faturamento/dados.py",
   "faturamento/config.py", "faturamento/contexto.py", "faturamento/formatacao.py", "faturamento/leitura.py",
   "faturamento/origem.py", "faturamento/orcado_ciclo.py", "faturamento/previsao.py", "faturamento/projecao_grupos.py", "faturamento/validacao.py", "faturamento/painel_html.py", "faturamento/pipeline.py", "faturamento/progresso.py",

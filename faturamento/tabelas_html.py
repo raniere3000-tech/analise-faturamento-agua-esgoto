@@ -8,6 +8,7 @@ import pandas as pd
 
 from .analises import calcula_minimo_matricula, minimo_matricula_vetorizado
 from .config import DESTAQUE_QUEDA_PCT_TOP100, MINIMO_POR_TIPO_ECONOMIA
+from .analitico import seta_detalhe
 from .formatacao import fmt_int_br, fmt_moeda_br, fmt_num
 
 
@@ -260,7 +261,7 @@ def monta_quadro_ciclos_situacao(ctx):
     """
     html_tabela = f"""
     <div class="card">
-    <h2>Economias faturadas por ciclo — ativas x cortadas</h2>
+<h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Economias faturadas por ciclo — ativas x cortadas {seta_detalhe("ativas")}</h2>
     <table class="tabela-ativa-cortada">{cab}{linhas_html}</table>
     </div>
     """
@@ -497,7 +498,7 @@ def gera_matriz_migracao_grupos(ctx):
 
     return f"""
     <div class="card">
-    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Matriz de migração de grupos — {ctx.mes_anterior} → {ctx.mes_atual} {botao_sem_fat}</h2>
+    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Matriz de migração de grupos — {ctx.mes_anterior} → {ctx.mes_atual} {botao_sem_fat} {seta_detalhe("matriz")}</h2>
     <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Cada linha mostra em quais grupos as economias que faturaram em <b>{ctx.mes_anterior}</b> estão faturando em <b>{ctx.mes_atual}</b>.<br>
         <span style="background:#F2F2F2; border:1px solid #DCE1E9; padding:2px 6px; border-radius:4px;">Cinza</span> = permaneceu no mesmo grupo &nbsp;|&nbsp;
@@ -663,7 +664,7 @@ def gera_tabela_acima_abaixo_minimo(ctx):
 
     html_tabela = f"""
     <div class="card">
-    <h2>Economias acima x abaixo do consumo mínimo — {ctx.mes_atual} vs {ctx.mes_anterior}</h2>
+<h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">Economias acima x abaixo do consumo mínimo — {ctx.mes_atual} vs {ctx.mes_anterior} {seta_detalhe("minimo")}</h2>
     <p style="font-size:0.8em; color:#49668C; margin-top:-6px;">
         Mínimo da matrícula = consumo mínimo da categoria × quantidade de economias. Acima: consumo faturado maior que o mínimo; abaixo: faturado igual ou menor que o mínimo.
     </p>
