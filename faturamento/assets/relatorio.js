@@ -1058,7 +1058,7 @@ function gerarExecutivo(libs) {
         ['Orçado x Realizado', qa('#view-tabelas .orc-ciclo-bloco:not([hidden]) > .card')],
         ['Faturamento Mês a Mês', [card('#tabela-agua'), card('#tabela-esgoto')]],
         ['Indiretas', qa(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .prev-card`)],
-        [null, [q('#card-justificativa')]],
+        ['Análise de Ciclo', [q('#card-justificativa')]],         // título só no PDF, em cima das justificativas
     ];
     secoes.forEach(([nome, els]) => {
         const copias = els.map(clona).filter(Boolean);

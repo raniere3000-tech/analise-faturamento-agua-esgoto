@@ -578,7 +578,7 @@ def test_executivo_imprime_documento_leve(sessao):
     assert "querySelectorAll('script').forEach(x => x.remove())" in trecho
     # PDF gerado direto (arquivo .pdf), com as seções pedidas, cada uma começando página
     assert "gerarPdfDireto(cont" in trecho
-    for secao in ("'DRE - Forecast'", "'Orçado x Realizado'", "'Faturamento Mês a Mês'", "'Indiretas'"):
+    for secao in ("'DRE - Forecast'", "'Orçado x Realizado'", "'Faturamento Mês a Mês'", "'Indiretas'", "'Análise de Ciclo'"):
         assert secao in trecho
     # o documento do PDF não leva a classe que esconde os filhos do <body> (o quadro do html2canvas ficava em branco)
     assert "(telaComoImpressao ? '<body>' : '<body class=\"modo-executivo\">')" in html
