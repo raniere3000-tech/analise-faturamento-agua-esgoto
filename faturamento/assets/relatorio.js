@@ -1105,6 +1105,7 @@ function gerarExecutivo(libs) {
             catch (e) { copias[i].remove(); }
         });
         c.querySelectorAll('script').forEach(x => x.remove());          // só o conteúdo: nada roda no documento do PDF
+        c.querySelectorAll('.dias-uteis').forEach(x => x.remove());     // no PDF vai só a tabela do forecast (sem o painel de dias úteis)
         c.querySelectorAll('[contenteditable]').forEach(x => x.removeAttribute('contenteditable'));
         c.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
         c.removeAttribute('id');
