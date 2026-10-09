@@ -87,3 +87,9 @@ def test_bibliotecas_do_pdf_no_site():
         assert os.path.getsize(os.path.join(raiz, arq)) > 100000, arq
     site = open(os.path.join(raiz, "index.html"), encoding="utf-8").read()
     assert '"lib/jspdf.umd.min.js", "lib/html2canvas.min.js"' in site and "w.gerarExecutivo(await libsPdf())" in site
+
+
+def test_consumo_minimo_do_publico_e_15():
+    from faturamento.config import CONSUMO_MINIMO_POR_CATEGORIA, MINIMO_POR_TIPO_ECONOMIA
+    assert CONSUMO_MINIMO_POR_CATEGORIA["PUBLICA"] == 15 and CONSUMO_MINIMO_POR_CATEGORIA["PUB. ESTADUAL"] == 15
+    assert MINIMO_POR_TIPO_ECONOMIA["Qtd. Economia Publica"] == 15

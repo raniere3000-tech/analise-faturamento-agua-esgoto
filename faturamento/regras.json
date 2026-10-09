@@ -8,8 +8,8 @@
   "consumo_minimo_por_categoria": {
     "COMERCIAL": 20,
     "PEQ. COMERCIO": 10,
-    "PUB. ESTADUAL": 10,
-    "PUBLICA": 10,
+    "PUB. ESTADUAL": 15,
+    "PUBLICA": 15,
     "RESIDENCIAL": 15,
     "SOCIAL": 15,
     "SOCIAL ESPECIAL": 15,
