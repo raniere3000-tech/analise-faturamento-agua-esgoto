@@ -18,6 +18,7 @@ class Contexto:
     cancelamento: pd.DataFrame = None      # linhas da fatura com rubricas de cancelamento
     avulso: pd.DataFrame = None            # serviços avulsos (receita indireta)
     orcado: dict = field(default_factory=dict)   # {"rf": {arquivo, dados}, "sup": {...}} (None se não houver)
+    orcado_eventos: pd.DataFrame = None    # eventos faturados do orçado SUP: Sup, Rubrica, Referencia, Valor (quantidade), Arquivo
 
     # Meses comparados (preenchidos em `define_referencias`)
     ref_atual: str = ""

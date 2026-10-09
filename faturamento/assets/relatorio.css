@@ -389,3 +389,9 @@ td.num { text-align:right; }
 .sit-lis { background:#dbeafe; color:#1e40af; }
 .sit-aguardando { background:#eef1f5; color:#64748b; }
 tr.linha-pendente td { background:#fafbfc; }
+.sit-grupo[data-sit-grupo] { cursor:pointer; }
+.sit-grupo[data-sit-grupo]:hover, .sit-grupo[data-sit-grupo]:focus-visible { outline:2px solid #94a3b8; outline-offset:1px; }
+.sit-manual { box-shadow:inset 0 0 0 1px currentColor; }
+.sit-escolha { font:inherit; font-size:11px; padding:1px 2px; border:1px solid #94a3b8; border-radius:6px; }
+#view-executivo .sit-lapis { display:none; }
+@media print { .sit-lapis { display:none; } }

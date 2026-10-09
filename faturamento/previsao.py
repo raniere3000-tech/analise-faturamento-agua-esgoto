@@ -349,6 +349,35 @@ def _soma_ev(d):
     return d
 
 
+# rubricas da planilha de eventos do orçado SUP (chave_texto) → linha das Indiretas; a linha de total é ignorada (soma das classes)
+RUBRICA_EVENTO = {
+    "CORTE": "ri_CORTE", "CORTES": "ri_CORTE", "CORTERECORTE": "ri_CORTE", "RICORTESRECORTE": "ri_CORTE",
+    "RELIGACAO": "ri_RELIGAÇÃO", "RELIGACOES": "ri_RELIGAÇÃO", "RIRELIGACOES": "ri_RELIGAÇÃO",
+    "LNA": "ri_LNA", "RILIGACOESAGUA": "ri_LNA", "LIGACOESAGUA": "ri_LNA",
+    "SANCAO": "ri_SANÇÃO", "SANCOES": "ri_SANÇÃO", "FISCALIZACAO": "ri_SANÇÃO", "RIFISCALIZACAO": "ri_SANÇÃO",
+    "OUTROS": "ri_OUTROS", "RIOUTROSAGUA": "ri_OUTROS", "OUTROSAGUA": "ri_OUTROS",
+    "LNE": "iE", "ESGOTOINDIRETO": "iE", "FATDEESGOTOINDIRETOLNE": "iE", "FATBRUTODEESGOTOINDIRETO": "iE",
+}
+
+
+def eventos_orcados(ctx, sup, ref):
+    """{linha: quantidade} da planilha de eventos do orçado SUP no mês (TODAS soma as superintendências)."""
+    from .config import chave_texto
+    from .dre import _sup_orcado
+    d = getattr(ctx, "orcado_eventos", None)
+    if d is None or not len(d):
+        return {}
+    d = d[d["Referencia"] == ref]
+    if sup != TODAS:
+        d = d[d["Sup"].map(_sup_orcado) == _sup_orcado(sup)]
+    r = {}
+    for rub, v in zip(d["Rubrica"].map(chave_texto), d["Valor"]):
+        k = RUBRICA_EVENTO.get(rub)
+        if k and pd.notna(v):
+            r[k] = r.get(k, 0.0) + float(v)
+    return r
+
+
 def eventos_indiretas(ctx, sup, ref):
     """Eventos faturados (lançamentos do serviço avulso) por classe: realizado, ticket médio dos 3 meses fechados
     anteriores, orçado em eventos (orçado R$ ÷ ticket) e forecast (mesmo método do Forecast: ritmo por dia útil)."""
@@ -364,6 +393,12 @@ def eventos_indiretas(ctx, sup, ref):
     orc_r = _orcados_do_mes(ctx, sup, ref, fontes)
     orc_ev = {f: _soma_ev({"ev_" + k: (orc_r[f][k] / ticket[k]) if orc_r[f].get(k) is not None and ticket[k] else None
                            for k in CLASSE_DA_LINHA}) for f in fontes}
+    # orçado SUP: a planilha de eventos (quantidade informada) manda; classe sem número fica com R$ ÷ ticket
+    informados = eventos_orcados(ctx, sup, ref)
+    if informados:
+        for f in fontes:
+            if (ctx.orcado.get(f) or {}).get("tipo") == "sup":
+                orc_ev[f] = _soma_ev({**orc_ev[f], **{"ev_" + k: v for k, v in informados.items()}})
     falta = {}
     if mes_com_forecast(ctx, ref):
         falta = falta_por_dia_util(real, dias_uteis_do_mes(ref, data_corte(ctx)), CLASSE_DA_LINHA, "ev_")

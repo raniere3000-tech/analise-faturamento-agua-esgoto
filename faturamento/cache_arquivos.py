@@ -14,7 +14,7 @@ import json
 import os
 import pickle
 
-VERSAO = "2"            # mude quando a leitura dos arquivos mudar: o que foi guardado com outra versão é descartado
+VERSAO = "3"            # mude quando a leitura dos arquivos mudar: o que foi guardado com outra versão é descartado
 CACHE_DIR = os.environ.get("FATURAMENTO_CACHE", "/cache")
 
 _estado = {"pasta": None, "meta": {}, "lidos": set(), "reaproveitados": set()}

@@ -131,6 +131,13 @@ def monta_base(ctx):
         tipo = "sup" if "SUP" in nome.upper() else "rf"
         if nome not in ctx.orcado or len(longo) > len(ctx.orcado[nome]["dados"]):
             ctx.orcado[nome] = {"arquivo": arquivo, "tipo": tipo, "dados": longo}
+    # eventos faturados do orçado SUP (quantidade por Sup × classe × mês): substituem o orçado (R$) ÷ ticket médio
+    eventos = []
+    for caminho, aba in ctx.classificacao.get("orcado_eventos", []):
+        longo = cache_arquivos.memo(caminho, f"processa_orcado_{aba}", lambda c=caminho, a=aba: processa_orcado(c, a))
+        if len(longo):
+            eventos.append(longo.assign(Arquivo=nome_relativo(caminho, ctx.pasta)))
+    ctx.orcado_eventos = pd.concat(eventos, ignore_index=True) if eventos else None
     print(f"✅ Fatura: {len(fatura_total)} linhas")
     if len(fatura_total) and "Referencia de Leitura" in fatura_total.columns:
         sem_ref = int(fatura_total["Referencia de Leitura"].isna().sum())
@@ -170,6 +177,9 @@ def monta_base(ctx):
                         "periodo": periodo(d["Referencia Cronograma"]) if "Referencia Cronograma" in d else "",
                         "extra": f"{d['Grupo'].nunique()} grupos" if len(d) else "nenhuma linha válida"}
                        for c, d in zip(ctx.classificacao["cronograma"], cronogramas)]
+    if ctx.orcado_eventos is not None:
+        for arq, d in ctx.orcado_eventos.groupby("Arquivo"):
+            ctx.bases_info.append({"tipo": "Orçado SUP — eventos", "arquivo": arq, "linhas": len(d), "periodo": periodo(d["Referencia"])})
     for nome, info in ctx.orcado.items():
         ctx.bases_info.append({"tipo": "Orçado SUP" if info["tipo"] == "sup" else "Orçado RF", "arquivo": info["arquivo"],
                                "linhas": len(info["dados"]), "periodo": periodo(info["dados"]["Referencia"])})

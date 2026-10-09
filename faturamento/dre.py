@@ -485,7 +485,7 @@ def grafico_evolucao(ctx, sup, ref, meses):
 
 
 def gera_aba_indiretas_html(ctx):
-    from .previsao import data_corte, indiretas_previsao_html, painel_dias_uteis_html
+    from .previsao import data_corte, eventos_orcados, indiretas_previsao_html, painel_dias_uteis_html
     prepara(ctx)
     if not len(ctx.avulso):
         return '<div class="card"><h2>Indiretas</h2><p>Nenhum arquivo de serviço avulso encontrado na pasta (o nome precisa conter "avulso").</p></div>'
@@ -502,6 +502,10 @@ def gera_aba_indiretas_html(ctx):
             fc = (" <b>Clique em um valor da coluna Forecast ✎ para editar.</b>" if no_mes
                   else " Mês fechado: o fechamento é o próprio realizado (sem forecast).")
             meses_tk = ", ".join(nome_mes(m) for m in ev["meses_ticket"])
+            arq_ev = sorted(set(ctx.orcado_eventos.loc[ctx.orcado_eventos["Referencia"] == ref, "Arquivo"])) \
+                if getattr(ctx, "orcado_eventos", None) is not None and eventos_orcados(ctx, sup, ref) else []
+            nota_ev = (f'; no orçado SUP, as classes informadas em {html.escape(", ".join(arq_ev))} usam a quantidade da planilha'
+                       if arq_ev else "")
             blocos.append(_bloco(sup, ref, (
                 (f'<div class="card">{painel_dias_uteis_html(ref, data_corte(ctx))}</div>' if no_mes else "") +
                 f'<div class="card prev-card"><h2 class="prev-titulo">Indiretas — financeiro (R$) — {nome} — {nome_mes(ref)}{acoes}</h2>'
@@ -510,7 +514,7 @@ def gera_aba_indiretas_html(ctx):
                 f'{fc}</p>{fin}</div>'
                 f'<div class="card prev-card"><h2 class="prev-titulo">Indiretas — eventos faturados — {nome} — {nome_mes(ref)}{acoes}</h2>'
                 f'<p class="nota-secao prev-nota">Eventos = quantidade de lançamentos do serviço avulso. Orçado em eventos = orçado (R$) ÷ '
-                f'ticket médio da classe nos 3 meses fechados anteriores ({meses_tk}). Forecast = eventos até D-1 ÷ dias úteis '
+                f'ticket médio da classe nos 3 meses fechados anteriores ({meses_tk}){nota_ev}. Forecast = eventos até D-1 ÷ dias úteis '
                 f'decorridos × dias úteis que faltam (Cortes pelos dias de corte).{fc}</p>{eventos}</div>'
                 f'<div class="card"><h2>Evolução mensal por classe — {nome}</h2>{grafico_evolucao(ctx, sup, ref, meses_av)}</div>')))
     return "".join(blocos)

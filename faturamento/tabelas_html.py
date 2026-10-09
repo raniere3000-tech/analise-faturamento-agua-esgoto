@@ -19,11 +19,18 @@ _CAMPOS_TABELA = ["fat-atual", "fat-anterior", "delta-fat", "delta-pct-fat", "ec
                   "tar-atual", "tar-anterior", "delta-tar", "delta-pct-tar", "tic-atual", "tic-anterior", "delta-tic", "delta-pct-tic"]
 
 
-def selo_situacao(sit):
-    """Selo colorido da Situação do grupo (Liberado / Em Análise / LIS / Aguardando)."""
+def selo_situacao(sit, grupo="", ref=""):
+    """Selo colorido da Situação do grupo (Liberado / Em Análise / LIS / Aguardando). Com o grupo, o selo é editável no
+    relatório (clique → lista): a escolha manual vale para o grupo em todas as tabelas e fica guardada no navegador."""
     if not sit:
         return ""
-    return f'<span class="sit-grupo {_CLASSE_SITUACAO.get(sit, "")}">{html.escape(sit)}</span>'
+    if not grupo:
+        return f'<span class="sit-grupo {_CLASSE_SITUACAO.get(sit, "")}">{html.escape(sit)}</span>'
+    from .leitura import chave_grupo
+    e = lambda v: html.escape(str(v), quote=True)
+    return (f'<span class="sit-grupo {_CLASSE_SITUACAO.get(sit, "")}" role="button" tabindex="0" data-sit-auto="{e(sit)}" '
+            f'data-sit-grupo="{e(chave_grupo(grupo))}" data-sit-ref="{e(ref)}" '
+            f'title="Situação automática — clique para alterar">{html.escape(sit)}</span>')
 
 
 def linhas_pendentes(ctx, comp, com_dias):
@@ -50,7 +57,7 @@ def linhas_pendentes(ctx, comp, com_dias):
         det = ' class="x-det"'
         vazias = "".join(f'<td data-field="{c}"{det if c in so_det else ""} style="color:#94a3b8;">–</td>' for c in campos)
         out.append(f'<tr class="linha-pendente" data-grupo="{e}"><td data-field="grupo">{e}</td>'
-                   f'<td data-field="situacao">{selo_situacao(sit[chave_grupo(g)])}</td>{vazias}</tr>')
+                   f'<td data-field="situacao">{selo_situacao(sit[chave_grupo(g)], g, ctx.ref_atual)}</td>{vazias}</tr>')
     return "".join(out)
 
 
@@ -93,7 +100,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
         return f"""
         <tr class="{classe}" data-grupo="{g_attr}" {attrs}>
             {td("grupo", html.escape(str(grupo), quote=True))}
-            {td("situacao", "" if is_media else selo_situacao(situacao(ctx, grupo)))}
+            {td("situacao", "" if is_media else selo_situacao(situacao(ctx, grupo), grupo, ctx.ref_atual))}
             {td("dias-atual", fmt_num(d["Dias_Leitura_atual"],1)) + td("dias-anterior", fmt_num(d["Dias_Leitura_anterior"],1)) if com_dias else ""}
             {td("fat-atual", fmt_num(d["Faturamento_atual"]))}
             {td("fat-anterior", fmt_num(d["Faturamento_anterior"]))}
@@ -152,7 +159,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     cabecalho = f"""
     <tr class="header-grupo">
         <th rowspan="2">Grupo</th>
-        <th rowspan="2" title="LIS = em leitura hoje · Aguardando = ainda não lido · Em Análise = ao menos uma conta EM ANALISE · Liberado = todas LIBERADA">Situação</th>
+        <th rowspan="2" title="LIS = em leitura hoje · Aguardando = ainda não lido · Em Análise = ao menos uma conta EM ANALISE · Liberado = todas LIBERADA. Clique no selo para alterar manualmente.">Situação</th>
         {th_dias}
         <th colspan="2">Faturamento</th>
         <th colspan="2">Δ Fat.</th>
