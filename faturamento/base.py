@@ -179,6 +179,14 @@ def monta_base(ctx):
     print("=" * 70)
     progresso.atualiza(47, "Merge base final")
 
+    # Situação do grupo (aba Diretas): Situacao Conta por grupo × mês na fatura de ciclo e no consumo, mais as datas de leitura
+    from .situacao_grupo import resumo_situacao_conta
+    ctx.situacao_conta_resumo = pd.concat([resumo_situacao_conta(fatura_total, "Grupo", "Referencia de Leitura"),
+                                           resumo_situacao_conta(consumo_total, "Grupo_consumo", "Referência")], ignore_index=True)
+    ctx.cronograma_leitura = cronograma_total[[c for c in ("Grupo", "Data da Leitura", "Referencia Cronograma")
+                                               if c in cronograma_total.columns]].copy()
+    ctx.situacao_grupo = None
+
     colunas_conflito = ["Grupo", "Situacao Ligacao", "Situacao Lancamento", "Nome Cliente", "Categoria"]
     # a fatura manda; a coluna do consumo só fica se a fatura não tiver (ex.: Situacao Lancamento só no consumo)
     consumo_total = consumo_total.drop(columns=[c for c in colunas_conflito if c in consumo_total.columns

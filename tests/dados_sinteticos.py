@@ -56,7 +56,7 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
             "cliente": f"CLIENTE {i:04d}",
             "categoria": rnd.choice(categorias),
             "situacao": rnd.choice(["ATIVA"] * 8 + ["CORTADA"]),
-            "conta": "EM ANALISE" if rnd.random() < 0.05 else "NORMAL",
+            "conta": "EM ANALISE" if rnd.random() < 0.05 else "LIBERADA",
             "eco": tipo_eco,
             "n_eco": rnd.choice([1, 1, 1, 2, 3]),
             "base": rnd.uniform(6, 60),
@@ -105,7 +105,7 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
             if falta_no_mes:
                 continue
             linhas_consumo.append({
-                "N. Ligacao": l["lig"], "Leitura Atual": leitura,
+                "N. Ligacao": l["lig"], "Grupo": l["grupo"], "Situacao Conta": l["conta"], "Leitura Atual": leitura,
                 "Consumo Medido": round(consumo, 1), "Consumo Faturado": round(consumo, 1), **eco,
             })
         consumos[(mm, aa)] = pd.DataFrame(linhas_consumo)
