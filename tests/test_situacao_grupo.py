@@ -57,3 +57,12 @@ def test_grupo_lido_so_no_consumo_usa_a_situacao_do_consumo():
                          "Situacao Conta": ["LIBERADA", "EM ANALISE", "LIBERADA"]})
     r = resumo_situacao_conta(cons, "Grupo_consumo", "Referência").set_index("g")
     assert bool(r.loc["9", "em_analise"]) and not bool(r.loc["10", "em_analise"]) and bool(r.loc["10", "liberada"])
+
+
+def test_selo_manual_sem_sombra_interna():
+    """O html2canvas pinta o selo inteiro com box-shadow inset (no PDF ficava um borrão sem texto): usa borda."""
+    import os
+    import re
+    css = open(os.path.join(os.path.dirname(__file__), "..", "faturamento", "assets", "relatorio.css"), encoding="utf-8").read()
+    regra = re.search(r"\.sit-manual \{([^}]*)\}", css).group(1)
+    assert "inset" not in regra and "border:" in regra
