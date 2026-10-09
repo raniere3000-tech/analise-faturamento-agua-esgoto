@@ -1306,3 +1306,57 @@ function imprimirDocumentoLeve(cont) {
         setTimeout(() => { if (document.body.contains(fr)) fr.remove(); }, 120000);   // garantia, se afterprint não vier
     });
 }
+
+// ===== Situação do grupo (aba Diretas): o selo é editável — a escolha manual vale para o grupo em todas as tabelas =====
+// Guardada no navegador por mês (como as edições do forecast); "Automático" volta à regra (LIS / Aguardando / Em Análise / Liberado).
+const SIT_LS = 'faturamento_situacao_grupo';
+const SIT_OPCOES = ['Liberado', 'Em Análise', 'LIS', 'Aguardando'];
+const SIT_CLASSE = { 'Liberado': 'sit-liberado', 'Em Análise': 'sit-analise', 'LIS': 'sit-lis', 'Aguardando': 'sit-aguardando' };
+let sitManuais = {};
+try { sitManuais = JSON.parse(localStorage.getItem(SIT_LS) || '{}') || {}; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
+function sitSalvar() { try { localStorage.setItem(SIT_LS, JSON.stringify(sitManuais)); } catch (e) { /* ignora */ } }
+function sitAplicar(el) {
+    const auto = el.dataset.sitAuto, man = (sitManuais[el.dataset.sitRef] || {})[el.dataset.sitGrupo];
+    const v = man || auto;
+    el.className = 'sit-grupo ' + (SIT_CLASSE[v] || '') + (man ? ' sit-manual' : '');
+    el.textContent = v;
+    if (man) { const l = document.createElement('span'); l.className = 'sit-lapis'; l.textContent = ' ✎'; el.appendChild(l); }
+    el.title = man ? `Alterada manualmente (automática: ${auto}) — clique para mudar` : 'Situação automática — clique para alterar';
+}
+function sitAplicarGrupo(ref, grupo) {
+    document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach(el => {
+        if (el.dataset.sitRef === ref && el.dataset.sitGrupo === grupo) sitAplicar(el);
+    });
+}
+document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach(sitAplicar);
+function sitEditar(el) {
+    if (el.nextElementSibling && el.nextElementSibling.classList.contains('sit-escolha')) return;
+    const ref = el.dataset.sitRef, grupo = el.dataset.sitGrupo, man = (sitManuais[ref] || {})[grupo] || '';
+    const sel = document.createElement('select');
+    sel.className = 'sit-escolha';
+    sel.setAttribute('aria-label', 'Situação do grupo ' + grupo);
+    [['', `Automático (${el.dataset.sitAuto})`]].concat(SIT_OPCOES.map(o => [o, o])).forEach(([v, t]) => {
+        const op = document.createElement('option'); op.value = v; op.textContent = t; if (v === man) op.selected = true; sel.appendChild(op);
+    });
+    let fechada = false;
+    const fecha = () => { if (fechada) return; fechada = true; sel.remove(); el.style.display = ''; };
+    sel.addEventListener('change', () => {
+        const m = sitManuais[ref] = sitManuais[ref] || {};
+        if (sel.value) m[grupo] = sel.value; else delete m[grupo];
+        if (!Object.keys(m).length) delete sitManuais[ref];
+        sitSalvar(); sitAplicarGrupo(ref, grupo); fecha();
+    });
+    sel.addEventListener('blur', fecha);
+    sel.addEventListener('keydown', ev => { if (ev.key === 'Escape') fecha(); });
+    el.style.display = 'none';
+    el.after(sel);
+    sel.focus();
+}
+document.addEventListener('click', e => {
+    const el = e.target.closest && e.target.closest('.sit-grupo[data-sit-grupo]');
+    if (el) sitEditar(el);
+});
+document.addEventListener('keydown', e => {
+    const el = e.target.closest && e.target.closest('.sit-grupo[data-sit-grupo]');
+    if (el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); sitEditar(el); }
+});

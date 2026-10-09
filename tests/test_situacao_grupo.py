@@ -42,8 +42,10 @@ def test_coluna_situacao_nas_tabelas_de_diretas(sessao):
     linhas = re.findall(r'<tr class="([^"]*)" data-grupo="([^"]*)"', tab)
     pend = [g for c, g in linhas if c == "linha-pendente"]
     assert pend == ["06", "07", "08"]                          # LIS e Aguardando aparecem sem valores
-    assert re.search(r'data-grupo="07"><td data-field="grupo">07</td><td data-field="situacao"><span class="sit-grupo sit-lis">LIS</span>', tab)
-    assert 'sit-liberado">Liberado</span>' in tab and 'sit-analise">Em Análise</span>' in tab
+    assert re.search(r'data-grupo="07"><td data-field="grupo">07</td><td data-field="situacao"><span class="sit-grupo sit-lis" '
+                     r'role="button" tabindex="0" data-sit-auto="LIS" data-sit-grupo="7" data-sit-ref="09/2026"[^>]*>LIS</span>', tab)
+    assert re.search(r'sit-liberado"[^>]*data-sit-auto="Liberado"[^>]*>Liberado</span>', tab)
+    assert re.search(r'sit-analise"[^>]*data-sit-auto="Em Análise"[^>]*>Em Análise</span>', tab)
     # linha pendente não tem valores: o total do JS continua só com os grupos comparados
     p = tab[tab.index('class="linha-pendente"'):]
     assert "data-fat-atual" not in p[:p.index("</tr>")]

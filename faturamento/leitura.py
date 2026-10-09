@@ -196,6 +196,9 @@ def colunas_de_mes(colunas):
 
 def identifica_tipo(colunas, nome=""):
     colunas = set(colunas)
+    # eventos faturados do orçado SUP (quantidades): Sup, Rubrica e um ou mais meses, com "evento" no nome do arquivo
+    if {"Sup", "Rubrica"}.issubset(colunas) and colunas_de_mes(colunas) and "EVENTO" in chave_texto(nome):
+        return "orcado_eventos"
     if {"Sup", "Rubrica"}.issubset(colunas) and len(colunas_de_mes(colunas)) >= 3:
         return "orcado"
     # O serviço avulso tem as mesmas colunas da fatura (inclusive endereço e localidade),
@@ -493,7 +496,9 @@ def _classifica_um(caminho, nome):
         print(f"   ⚠️ {nome} ignorado: não foi possível ler ({exc})")
         return {"motivo": f"não foi possível ler: {exc}", "erro": True}
     motivo = "colunas não correspondem a consumo, fatura ou cronograma"
-    if df_head is not None and {"Sup", "Rubrica"}.issubset(df_head.columns):
+    if df_head is not None and "EVENTO" in chave_texto(nome) and "Rubrica" in df_head.columns:
+        motivo = "eventos do orçado SUP fora do modelo (esperado: colunas Sup, Rubrica e um mês por coluna, como out/26)"
+    elif df_head is not None and {"Sup", "Rubrica"}.issubset(df_head.columns):
         motivo = "planilha de orçado fora do modelo (esperado: colunas Sup, Rubrica e meses como jan/26, igual ao RF01T26)"
     return {"motivo": motivo}
 
@@ -544,10 +549,12 @@ def classifica_arquivos(pasta, progresso=None):
     resultado = {t: [c["caminho"] for c in classificados if c["tipo"] == t]
                  for t in ("consumo", "fatura", "cronograma", "avulso")}
     resultado["orcado"] = [(c["caminho"], c["aba"]) for c in classificados if c["tipo"] == "orcado"]
+    resultado["orcado_eventos"] = [(c["caminho"], c["aba"]) for c in classificados if c["tipo"] == "orcado_eventos"]
     resultado["ignorados"] = ignorados
     print(f"📁 Consumo: {len(resultado['consumo'])} | Fatura: {len(resultado['fatura'])} | "
           f"Cronograma: {len(resultado['cronograma'])} | "
-          f"Serviço avulso: {len(resultado['avulso'])} | Orçado: {len(resultado['orcado'])}")
+          f"Serviço avulso: {len(resultado['avulso'])} | Orçado: {len(resultado['orcado'])} | "
+          f"Eventos do orçado SUP: {len(resultado['orcado_eventos'])}")
     for ig in ignorados:
         print(f"   ⚠️ Ignorado: {ig['arquivo']} — {ig['motivo']}")
 
