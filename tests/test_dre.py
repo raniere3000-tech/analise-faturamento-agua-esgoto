@@ -578,6 +578,7 @@ def test_executivo_imprime_documento_leve(sessao):
     trecho = html[ini:html.index("function imprimirDocumentoLeve")]
     assert "imprimirDocumentoLeve(cont)" in trecho and "window.print()" not in trecho   # a impressão leve fica como reserva
     assert "querySelectorAll('script').forEach(x => x.remove())" in trecho
+    assert "querySelectorAll('.dias-uteis').forEach(x => x.remove())" in html     # no PDF só a tabela do forecast
     # PDF gerado direto (arquivo .pdf), com as seções pedidas, cada uma começando página
     assert "gerarPdfDireto(cont" in trecho
     for secao in ("'DRE - Forecast'", "'Orçado x Realizado'", "'Faturamento Mês a Mês'", "'Indiretas'", "'Análise de Ciclo'"):
