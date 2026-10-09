@@ -1199,21 +1199,40 @@ async function gerarPdfDireto(cont, libs, nome) {
         let y = M, primeira = true;
         const novaPagina = () => { pdf.addPage(); y = M; };
         const raiz = doc.getElementById('view-executivo') || doc.body.firstElementChild;
-        // uma única "foto" do Executivo inteiro (rápido); depois cada quadro é recortado dela pela posição na tela
+        // uma única "foto" do Executivo inteiro (rápido); depois cada quadro é recortado dela pela posição.
+        // As posições são medidas na CÓPIA que o html2canvas desenha (onclone), não no documento original: em alguns
+        // computadores (barra de rolagem, escala do Windows, fontes) a cópia quebra o texto diferente, os quadros ficam
+        // com outra altura e o recorte "escorregava" — o título da seção seguinte ia parar no fim da página anterior.
         const ESC = 2;
+        let medidas = null;
         const foto = await w.html2canvas(raiz, { scale: ESC, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 3000,
-            windowWidth: largura, width: raiz.scrollWidth, height: raiz.scrollHeight });
+            windowWidth: largura, windowHeight: Math.max(800, Math.ceil(raiz.scrollHeight) + 100),
+            onclone: (d) => {
+                d.documentElement.style.overflow = 'hidden'; d.body.style.overflow = 'hidden';     // sem barra de rolagem na cópia
+                const rc = d.getElementById('view-executivo') || d.body.firstElementChild, b0 = rc.getBoundingClientRect();
+                medidas = { altura: b0.height, itens: Array.from(rc.children).map(el => {
+                    const r = el.getBoundingClientRect(); return { topo: r.top - b0.top, alt: r.height }; }) };
+            } });
         const r0 = raiz.getBoundingClientRect();
+        const filhos = Array.from(raiz.children);
+        // px da cópia → px da foto (a foto tem a altura da cópia × escala)
+        const kFoto = medidas && medidas.altura ? foto.height / medidas.altura : ESC;
+        const posicao = (el, i) => {
+            const m = medidas && medidas.itens.length === filhos.length ? medidas.itens[i] : null;
+            if (m) return { topo: m.topo * kFoto, altPx: m.alt * kFoto };
+            const r = el.getBoundingClientRect();
+            return { topo: (r.top - r0.top) * ESC, altPx: r.height * ESC };
+        };
         const recorte = (topoPx, altPx) => {
             const c = document.createElement('canvas'); c.width = foto.width; c.height = Math.max(1, Math.round(altPx));
             c.getContext('2d').drawImage(foto, 0, Math.round(topoPx), foto.width, c.height, 0, 0, foto.width, c.height);
             return c.toDataURL('image/jpeg', 0.92);
         };
         const mmPorPx = LW / foto.width;
-        for (const el of Array.from(raiz.children)) {
-            const r = el.getBoundingClientRect();
-            if (!r.height) continue;
-            const topo = (r.top - r0.top) * ESC, altPx = r.height * ESC, alt = altPx * mmPorPx;
+        for (const [i, el] of filhos.entries()) {
+            const { topo, altPx } = posicao(el, i);
+            if (!altPx) continue;
+            const alt = altPx * mmPorPx;
             if (el.classList.contains('exec-secao') && !primeira && y > M) novaPagina();
             if (alt <= LH) {
                 if (y + alt > M + LH) novaPagina();
@@ -1255,7 +1274,8 @@ function montaDocumentoExecutivo(cont, telaComoImpressao) {
     let estilos = Array.from(document.querySelectorAll('style')).map(s => s.textContent).join('\n');
     // PDF direto: o documento é desenhado na tela, então as regras de impressão do Executivo passam a valer na tela também
     if (telaComoImpressao) estilos = estilos.replace(/@media\s+print/g, '@media all') +
-        '\n#view-executivo .card, #view-executivo .tabela-wrap { overflow: visible !important; }';   // nada cortado na foto
+        '\n#view-executivo .card, #view-executivo .tabela-wrap { overflow: visible !important; }' +   // nada cortado na foto
+        '\nhtml, body { overflow: hidden !important; }';            // sem barra de rolagem: a largura não muda entre documento e foto
     const fontes = telaComoImpressao ? '' : Array.from(document.querySelectorAll('link[rel="stylesheet"], link[rel="preconnect"]')).map(l => l.outerHTML).join('');
     return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>' +
         (document.title || 'Relatório Executivo').replace(/</g, '&lt;') + ' — Executivo</title>' + fontes +
