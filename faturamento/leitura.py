@@ -45,7 +45,7 @@ COLUNAS_USADAS_FATURA = set(NOMES_LIGACAO) | {"Grupo", "Rubrica", "Valor Parcela
                                               "Nome Cliente", "Categoria", "Situacao Ligacao", "Situacao Conta", "Nome da Localidade",
                                               "Situacao Lancamento"}
 COLUNAS_USADAS_CONSUMO = set(NOMES_LIGACAO) | {"Leitura Atual", "Consumo Medido", "Consumo Faturado", "Mes Lancamento",
-                                               "Ano Lancamento", "Situacao Conta", "Nome da Localidade", "Situacao Lancamento"} | set(COLUNAS_ECONOMIA_TODAS)          # para achar o cabeçalho e o tipo do arquivo basta o começo
+                                               "Ano Lancamento", "Situacao Conta", "Grupo", "Nome da Localidade", "Situacao Lancamento"} | set(COLUNAS_ECONOMIA_TODAS)          # para achar o cabeçalho e o tipo do arquivo basta o começo
 
 
 def mapeia_unicos(serie, funcao):
@@ -303,7 +303,10 @@ def processa_consumo(caminho):
 
     df["N. Ligação_consumo"] = df[col_ligacao].astype(str).str.strip()
 
-    colunas_conflito = ["Grupo", "Situacao Ligacao", "Nome Cliente", "Categoria", col_ligacao]
+    # o grupo do consumo só serve para a Situação do grupo (grupo lido e ainda sem fatura); no cruzamento manda o da fatura
+    if "Grupo" in df.columns:
+        df = df.rename(columns={"Grupo": "Grupo_consumo"})
+    colunas_conflito = ["Situacao Ligacao", "Nome Cliente", "Categoria", col_ligacao]
     df = df.drop(columns=[c for c in colunas_conflito if c in df.columns], errors="ignore")
 
     return compacta_textos(df.drop_duplicates(subset=["N. Ligação_consumo", "Referência"]))

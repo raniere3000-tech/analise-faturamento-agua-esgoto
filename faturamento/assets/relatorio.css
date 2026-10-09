@@ -381,3 +381,11 @@ td.num { text-align:right; }
 .du-fds { background:#eef1f5; color:#94a3b8; }
 .du-legenda { font-size:11px; color:#64748b; margin:6px 0 0; }
 .du-legenda > span { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-left:8px; border:1px solid transparent; }
+
+/* Situação do grupo (aba Diretas) */
+.sit-grupo { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; white-space:nowrap; }
+.sit-liberado { background:#dcfce7; color:#166534; }
+.sit-analise { background:#ffedd5; color:#9a3412; }
+.sit-lis { background:#dbeafe; color:#1e40af; }
+.sit-aguardando { background:#eef1f5; color:#64748b; }
+tr.linha-pendente td { background:#fafbfc; }

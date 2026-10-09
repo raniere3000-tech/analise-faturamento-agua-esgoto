@@ -166,8 +166,8 @@ class Sessao:
         if texto_justificativa is None:
             texto_justificativa = TEXTO_JUSTIFICATIVA_PADRAO
         passo(86, "Criando tabelas: Comparativo Água e Esgoto mês a mês")
-        tabela_agua_html = gera_tabela(ctx, ctx.comp_agua, "Comparativo Água Mês a Mês", "agua", detalhe="diretas-agua")
-        tabela_esgoto_html = gera_tabela(ctx, ctx.comp_esgoto, "Comparativo Esgoto Mês a Mês", "esgoto", detalhe="diretas-esgoto")
+        tabela_agua_html = gera_tabela(ctx, ctx.comp_agua, "Comparativo Água Mês a Mês", "agua", detalhe="diretas-agua", pendentes=True)
+        tabela_esgoto_html = gera_tabela(ctx, ctx.comp_esgoto, "Comparativo Esgoto Mês a Mês", "esgoto", detalhe="diretas-esgoto", pendentes=True)
         passo(87, "Criando tabelas: Orçado por ciclo (água e esgoto)")
         tabelas_orcado_ciclo_html = gera_tabelas_orcado_ciclo_html(ctx)
         passo(88, "Criando aba DRE: tabela realizado × orçado por superintendência e mês")

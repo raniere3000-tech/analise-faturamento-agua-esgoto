@@ -9,10 +9,52 @@ import pandas as pd
 from .analises import calcula_minimo_matricula, minimo_matricula_vetorizado
 from .config import DESTAQUE_QUEDA_PCT_TOP100, MINIMO_POR_TIPO_ECONOMIA
 from .analitico import seta_detalhe
+from .situacao_grupo import AGUARDANDO, EM_ANALISE, LIBERADO, LIS, situacao, situacao_dos_grupos
 from .formatacao import fmt_int_br, fmt_moeda_br, fmt_num
 
 
-def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_ant=None, card_attrs="", detalhe=""):
+_CLASSE_SITUACAO = {LIS: "sit-lis", AGUARDANDO: "sit-aguardando", EM_ANALISE: "sit-analise", LIBERADO: "sit-liberado"}
+_CAMPOS_TABELA = ["fat-atual", "fat-anterior", "delta-fat", "delta-pct-fat", "eco-atual", "eco-anterior", "delta-eco", "delta-pct-eco",
+                  "vol-atual", "vol-anterior", "delta-vol", "delta-pct-vol", "vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm",
+                  "tar-atual", "tar-anterior", "delta-tar", "delta-pct-tar", "tic-atual", "tic-anterior", "delta-tic", "delta-pct-tic"]
+
+
+def selo_situacao(sit):
+    """Selo colorido da Situação do grupo (Liberado / Em Análise / LIS / Aguardando)."""
+    if not sit:
+        return ""
+    return f'<span class="sit-grupo {_CLASSE_SITUACAO.get(sit, "")}">{html.escape(sit)}</span>'
+
+
+def linhas_pendentes(ctx, comp, com_dias):
+    """Grupos do mês vigente que ainda não entram na comparação (em leitura hoje = LIS, ou ainda não lidos = Aguardando):
+    aparecem só com a Situação, sem valores (não entram no total)."""
+    from .leitura import chave_grupo
+    sit = situacao_dos_grupos(ctx)
+    na_tabela = {chave_grupo(g) for g in comp["Grupo"].dropna()}
+    fat = getattr(ctx, "fatura_total", None)
+    if fat is None or "Grupo" not in fat.columns:
+        return ""
+    vistos, grupos = set(), []
+    for g in fat["Grupo"].dropna().astype(str).str.strip().unique():
+        k = chave_grupo(g)
+        if g in ("", "nan", "None") or k in na_tabela or k in vistos or sit.get(k) not in (LIS, AGUARDANDO):
+            continue
+        vistos.add(k); grupos.append(g)
+    grupos.sort(key=lambda g: (int(chave_grupo(g)) if chave_grupo(g).isdigit() else 10**9, g))
+    campos = (["dias-atual", "dias-anterior"] if com_dias else []) + _CAMPOS_TABELA
+    so_det = {"dias-atual", "dias-anterior", "vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm"}
+    out = []
+    for g in grupos:
+        e = html.escape(g, quote=True)
+        det = ' class="x-det"'
+        vazias = "".join(f'<td data-field="{c}"{det if c in so_det else ""} style="color:#94a3b8;">–</td>' for c in campos)
+        out.append(f'<tr class="linha-pendente" data-grupo="{e}"><td data-field="grupo">{e}</td>'
+                   f'<td data-field="situacao">{selo_situacao(sit[chave_grupo(g)])}</td>{vazias}</tr>')
+    return "".join(out)
+
+
+def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_ant=None, card_attrs="", detalhe="", pendentes=False):
     rot_atual = rot_atual or ctx.mes_atual_curto
     rot_ant = rot_ant or ctx.mes_anterior_curto
     so_detalhe = {"dias-atual", "dias-anterior", "vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm"}
@@ -51,6 +93,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
         return f"""
         <tr class="{classe}" data-grupo="{g_attr}" {attrs}>
             {td("grupo", html.escape(str(grupo), quote=True))}
+            {td("situacao", "" if is_media else selo_situacao(situacao(ctx, grupo)))}
             {td("dias-atual", fmt_num(d["Dias_Leitura_atual"],1)) + td("dias-anterior", fmt_num(d["Dias_Leitura_anterior"],1)) if com_dias else ""}
             {td("fat-atual", fmt_num(d["Faturamento_atual"]))}
             {td("fat-anterior", fmt_num(d["Faturamento_anterior"]))}
@@ -81,6 +124,8 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     linhas_html = ""
     for _, r in comp.iterrows():
         linhas_html += linha(r["Grupo"], r)
+    if pendentes:
+        linhas_html += linhas_pendentes(ctx, comp, com_dias)
     media = {
         "Dias_Leitura_atual": media_dias(comp["Dias_Leitura_atual"]) if len(comp) else 0,      # só grupos com leitura no mês
         "Dias_Leitura_anterior": media_dias(comp["Dias_Leitura_anterior"]) if len(comp) else 0,
@@ -107,6 +152,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     cabecalho = f"""
     <tr class="header-grupo">
         <th rowspan="2">Grupo</th>
+        <th rowspan="2" title="LIS = em leitura hoje · Aguardando = ainda não lido · Em Análise = ao menos uma conta EM ANALISE · Liberado = todas LIBERADA">Situação</th>
         {th_dias}
         <th colspan="2">Faturamento</th>
         <th colspan="2">Δ Fat.</th>
