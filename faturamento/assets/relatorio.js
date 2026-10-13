@@ -972,7 +972,9 @@ const PREV_EV_RI = PREV_CLASSES_RI.map(k => 'ev_' + k);          // aba Indireta
 PREV_BASICAS.push(...PREV_EV_RI, 'ev_iE');
 const PREV_CHAVE_LS = 'faturamento_previsao_v2';
 let prevEdicoes = {}, prevOculta = false, prevOcultaInd = false;     // "Ocultar forecast": um para a aba Forecast, outro para a Indiretas
-try { const salvo = JSON.parse(localStorage.getItem(PREV_CHAVE_LS) || '{}'); prevEdicoes = salvo.edicoes || {}; prevOculta = !!salvo.oculta; prevOcultaInd = !!salvo.ocultaInd; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
+try { const salvo = JSON.parse(localStorage.getItem(PREV_CHAVE_LS) || '{}'); prevEdicoes = salvo.edicoes || {};
+    // a SUP LAGOS passou a se chamar INTERIOR: as edições guardadas com o nome antigo continuam valendo
+    Object.keys(prevEdicoes).filter(c => c.includes('|LAGOS|')).forEach(c => { const n = c.replace('|LAGOS|', '|INTERIOR|'); if (!(n in prevEdicoes)) prevEdicoes[n] = prevEdicoes[c]; delete prevEdicoes[c]; }); prevOculta = !!salvo.oculta; prevOcultaInd = !!salvo.ocultaInd; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
 function prevSalvar() { try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta, ocultaInd: prevOcultaInd })); } catch (e) { /* ignora */ } }
 
 const prevN = (v, d) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });

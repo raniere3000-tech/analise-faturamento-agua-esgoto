@@ -56,7 +56,7 @@ def test_bruto_e_soma_de_diretas_e_indiretas(sessao):
 
 def test_sups_somam_o_total(sessao):
     sups = dre.lista_sups(sessao.ctx)
-    assert sups[0] == dre.TODAS and {"LAGOS", "LESTE"} <= set(sups)
+    assert sups[0] == dre.TODAS and {"INTERIOR", "LESTE"} <= set(sups)
     total = dre.realizado(sessao.ctx, dre.TODAS)
     for chave in ("bruto", "iA", "iE", "canc", "ecoA", "volA"):
         assert sum(dre.realizado(sessao.ctx, s)[chave] for s in sups[1:]) == pytest.approx(total[chave])
@@ -75,11 +75,11 @@ def test_orcado_rf_e_sup(sessao):
     assert set(ctx.orcado) == {"RF01T26", "RF3T25", "RF SUP"}
     rf = dre.orcado(ctx, "RF01T26", dre.TODAS)
     sup_total = dre.orcado(ctx, "RF SUP", dre.TODAS)
-    lagos, leste = (dre.orcado(ctx, "RF SUP", s) for s in ("LAGOS", "LESTE"))
+    lagos, leste = (dre.orcado(ctx, "RF SUP", s) for s in ("INTERIOR", "LESTE"))
     assert rf["bruto"] == pytest.approx(1000 * 10 * 9)           # coluna set/26 = 9º mês
     assert sup_total["bruto"] == pytest.approx(lagos["bruto"] + leste["bruto"])
-    # no orçado, "Interior" é a superintendência LAGOS
-    assert dre.orcado(ctx, "RF01T26", "LAGOS")["bruto"] == pytest.approx(rf["bruto"])
+    # no orçado, "Interior" é a superintendência INTERIOR
+    assert dre.orcado(ctx, "RF01T26", "INTERIOR")["bruto"] == pytest.approx(rf["bruto"])
     assert not any(v is not None for v in dre.orcado(ctx, "RF01T26", "LESTE").values())
 
 
@@ -98,7 +98,7 @@ def test_opcoes_de_referencia_comparam_rf_com_rf_sup(sessao):
 def test_relatorio_tem_abas_e_nao_tem_download(sessao):
     with open(sessao.caminho_html, encoding="utf-8") as f:
         html = f.read()
-    for trecho in ('id="btn-dre"', ">Diretas</button>", 'id="btn-indiretas"', 'data-sup="LAGOS"', "Orçado<br>RF SUP", "Orçado<br>RF3T25"):
+    for trecho in ('id="btn-dre"', ">Diretas</button>", 'id="btn-indiretas"', 'data-sup="INTERIOR"', "Orçado<br>RF SUP", "Orçado<br>RF3T25"):
         assert trecho in html
     assert "RUBRICA NOVA SEM CLASSE" in html                      # aviso de rubrica fora da relação
 
@@ -114,7 +114,7 @@ def test_blocos_por_mes_e_sup(sessao):
     with open(sessao.caminho_html, encoding="utf-8") as f:
         html = f.read()
     for mes in ("08/2026", "09/2026"):
-        for sup in ("TODAS", "LAGOS", "LESTE"):
+        for sup in ("TODAS", "INTERIOR", "LESTE"):
             assert f'data-sup="{sup}" data-mes="{mes}"' in html
     # linhas sem cidade herdam a SUP do grupo: não sobra "SEM SUP"
     assert 'data-sup="SEM SUP" data-mes="09/2026"' not in html
@@ -288,7 +288,7 @@ def test_aba_dados_no_fim_e_forecast_explicado(sessao):
     assert html.index('id="btn-forecast"') < html.index('id="btn-dados"')
     dados = html[html.index('id="view-dados"'):]
     for trecho in ("Em resumo", "Os três métodos", "Passo a passo", "Método 1", "Método 2", "Método 3", "Dias de corte",
-                   "Data de corte (D-1)", "validacao_forecast_todas.xlsx", 'data-fc-sup="LAGOS"'):
+                   "Data de corte (D-1)", "validacao_forecast_todas.xlsx", 'data-fc-sup="INTERIOR"'):
         assert trecho in dados
     # a explicação longa saiu da aba Forecast (fica só em Dados)
     fc = html[html.index('id="view-forecast"'):html.index('id="view-dados"')]
@@ -345,7 +345,7 @@ def test_progresso_avisa_cada_grafico_tabela_e_kpi(tmp_path):
     textos = [t for _, t in msgs]
     for t in ("Criando KPIs do Resumo (8 cards)", "Criando gráfico: Faturamento total por grupo",
               "Criando tabela: Matriz de migração de grupos", "Criando aba Indiretas: orçado × realizado, gráfico de evolução e ticket médio",
-              "Criando aba Forecast: LAGOS", "Criando aba Dados: bases para download"):
+              "Criando aba Forecast: INTERIOR", "Criando aba Dados: bases para download"):
         assert t in textos, t
     pcts = [p for p, _ in msgs]
     assert pcts == sorted(pcts)                          # a barra só avança
@@ -404,18 +404,18 @@ def test_sup_dos_grupos_pelo_cronograma(tmp_path):
     s.preparar()
     s.continuar()
     ctx = s.ctx
-    assert ctx.grupo_sup["1"] == "LESTE" and ctx.grupo_sup["2"] == "LAGOS"
+    assert ctx.grupo_sup["1"] == "LESTE" and ctx.grupo_sup["2"] == "INTERIOR"
     b = ctx.base_final
-    assert set(b.loc[b["Grupo"] == "01", "__sup"]) == {"LESTE"} and set(b.loc[b["Grupo"] == "02", "__sup"]) == {"LAGOS"}
+    assert set(b.loc[b["Grupo"] == "01", "__sup"]) == {"LESTE"} and set(b.loc[b["Grupo"] == "02", "__sup"]) == {"INTERIOR"}
     html = open(s.caminho_html, encoding="utf-8").read()
-    assert '"grupoSup": {"01": "LESTE", "02": "LAGOS"' in html
+    assert '"grupoSup": {"01": "LESTE", "02": "INTERIOR"' in html
 
 
 def test_destaques_um_quadro_por_superintendencia(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     resumo = html[html.index('id="view-resumo"'):html.index('id="view-dre"')]
-    assert 'class="card sup-dest" data-sup="LAGOS"' in resumo and 'class="card sup-dest" data-sup="LESTE"' in resumo
-    assert "Destaques do mês — Setembro/2026 — LAGOS" in resumo and "Destaques do mês — Setembro/2026 — LESTE" in resumo
+    assert 'class="card sup-dest" data-sup="INTERIOR"' in resumo and 'class="card sup-dest" data-sup="LESTE"' in resumo
+    assert "Destaques do mês — Setembro/2026 — INTERIOR" in resumo and "Destaques do mês — Setembro/2026 — LESTE" in resumo
 
 
 def test_downloads_seguem_o_filtro_de_superintendencia(sessao):
@@ -427,22 +427,23 @@ def test_downloads_seguem_o_filtro_de_superintendencia(sessao):
     ctx = sessao.ctx
     html = open(sessao.caminho_html, encoding="utf-8").read()
     # um Excel por SUP em cada tabela da aba Dados; fora de Todas, começa escondido (o filtro mostra o da SUP escolhida)
-    for sup in ("LAGOS", "LESTE"):
+    for sup in ("INTERIOR", "LESTE"):
         assert f'<span class="sup-dl" data-sup="{sup}" style="display:none">' in html
         assert f'data-arquivo="validacao_dre_{sup}.xlsx"' in html
     assert '<span class="sup-dl" data-sup="TODAS"><button' in html
-    # o Excel da DRE de LAGOS traz o realizado de LAGOS
-    b64 = re.search(r'data-arquivo="validacao_dre_LAGOS.xlsx" [^>]*data-b64="([^"]+)"', html).group(1)
+    # o Excel da DRE de INTERIOR traz o realizado de INTERIOR
+    b64 = re.search(r'data-arquivo="validacao_dre_INTERIOR.xlsx" [^>]*data-b64="([^"]+)"', html).group(1)
     dre_lagos = pd.read_excel(io.BytesIO(base64.b64decode(b64))).set_index("Rubrica")
-    assert dre_lagos.loc["Faturamento Bruto", "Realizado"] == pytest.approx(dre.realizado(ctx, "LAGOS", ctx.ref_atual)["bruto"])
+    assert dre_lagos.loc["Faturamento Bruto", "Realizado"] == pytest.approx(dre.realizado(ctx, "INTERIOR", ctx.ref_atual)["bruto"])
     # tabelas por grupo: só os grupos da SUP
     resumo = filtra_sup(ctx, ctx.resultados["resumo"], "LESTE")
     assert len(resumo) and all(ctx.grupo_sup[str(int(g))] == "LESTE" for g in resumo["Grupo"])
     assert filtra_sup(ctx, ctx.resultados["resumo"], "TODAS") is ctx.resultados["resumo"]
-    # bases CSV: a coluna Superintendência (orçado padronizado: Interior → LAGOS) é a usada pelo filtro no navegador
+    # bases CSV: a coluna Superintendência (orçado padronizado: Interior → INTERIOR) é a usada pelo filtro no navegador
     validacao.monta_bases(ctx)                    # BASES é do último relatório gerado: refaz com esta sessão
     assert "Superintendência" in validacao.BASES["orcado"]["df"].columns
-    assert "INTERIOR" not in set(validacao.BASES["orcado"]["df"]["Superintendência"])
+    sups_orc = set(validacao.BASES["orcado"]["df"]["Superintendência"])
+    assert "LAGOS" not in sups_orc and "INTERIOR" in sups_orc          # "Lagos" do arquivo vira INTERIOR
     assert "Superintendência" in validacao.BASES["fatura"]["df"].columns
 
 
@@ -454,8 +455,8 @@ def test_filtro_do_csv_por_superintendencia_no_navegador(tmp_path):
     js = open(os.path.join(os.path.dirname(__file__), "..", "faturamento", "assets", "relatorio.js"), encoding="utf-8").read()
     ini = js.index("function filtraCsvPorSup")
     fim = js.index("\n}\n", ini) + 3
-    csv = '﻿A;Superintendência;B\n1;LAGOS;"x;y"\n2;LESTE;"linha\nquebrada"\n3;LAGOS;"aspas ""z"""\n'
-    prog = js[ini:fim] + "\nprocess.stdout.write(JSON.stringify([filtraCsvPorSup(require('fs').readFileSync(process.argv[2], 'utf8'), 'LAGOS'), filtraCsvPorSup('A;B\\n1;2\\n', 'LAGOS')]));"
+    csv = '﻿A;Superintendência;B\n1;INTERIOR;"x;y"\n2;LESTE;"linha\nquebrada"\n3;INTERIOR;"aspas ""z"""\n'
+    prog = js[ini:fim] + "\nprocess.stdout.write(JSON.stringify([filtraCsvPorSup(require('fs').readFileSync(process.argv[2], 'utf8'), 'INTERIOR'), filtraCsvPorSup('A;B\\n1;2\\n', 'INTERIOR')]));"
     arq = tmp_path / "t.js"
     arq.write_text(prog, encoding="utf-8")
     dados = tmp_path / "base.csv"
@@ -463,7 +464,7 @@ def test_filtro_do_csv_por_superintendencia_no_navegador(tmp_path):
     import json
     saida = subprocess.run(["node", str(arq), str(dados)], capture_output=True, check=True).stdout.decode("utf-8")
     lagos, sem_coluna = json.loads(saida)
-    assert lagos == '﻿A;Superintendência;B\n1;LAGOS;"x;y"\n3;LAGOS;"aspas ""z"""\n'
+    assert lagos == '﻿A;Superintendência;B\n1;INTERIOR;"x;y"\n3;INTERIOR;"aspas ""z"""\n'
     assert sem_coluna is None
 
 
@@ -474,8 +475,8 @@ def test_ultimo_grupo_por_superintendencia_e_dias_de_leitura():
     from faturamento.comparativo import limita_ao_ultimo_grupo
     from faturamento.config import sup_da_localidade
     from faturamento.painel_html import media_dias
-    assert sup_da_localidade("Lagos") == "LAGOS" and sup_da_localidade("Leste") == "LESTE"
-    assert sup_da_localidade("Interior") == "LAGOS" and sup_da_localidade("Maricá") == "LESTE"
+    assert sup_da_localidade("Interior") == "INTERIOR" and sup_da_localidade("Leste") == "LESTE"
+    assert sup_da_localidade("Interior") == "INTERIOR" and sup_da_localidade("Maricá") == "LESTE"
     assert sup_da_localidade("Rio Centro-Sul") is None
     linhas = []
     for g in list(range(401, 406)) + list(range(501, 506)):
@@ -483,10 +484,10 @@ def test_ultimo_grupo_por_superintendencia_e_dias_de_leitura():
         if g in (401, 402, 501, 502, 503):                       # já faturados em outubro
             linhas.append({"Grupo": str(g), "Referencia de Leitura": "10/2026", "Valor (R$)": 100.0})
     ctx = SimpleNamespace(base_final=pd.DataFrame(linhas), ref_atual="10/2026",
-                          grupo_localidade={str(g): ("Leste" if g < 500 else "Lagos") for g in list(range(401, 406)) + list(range(501, 506))})
+                          grupo_localidade={str(g): ("Leste" if g < 500 else "Interior") for g in list(range(401, 406)) + list(range(501, 506))})
     limita_ao_ultimo_grupo(ctx)
     assert sorted(ctx.base_final["Grupo"].unique()) == ["401", "402", "501", "502", "503"]
-    assert ctx.ultimo_grupo == "503 (LAGOS), 402 (LESTE)"
+    assert ctx.ultimo_grupo == "503 (INTERIOR), 402 (LESTE)"
     assert len(ctx.base_completa) == len(linhas)                # o forecast continua vendo todos os grupos
     assert media_dias(pd.Series([30.0, 31.0, 0.0, 0.0])) == pytest.approx(30.5)
     assert media_dias(pd.Series([0.0])) == 0.0
@@ -511,7 +512,7 @@ def test_situacao_lancamento_no_top100_e_nos_cards(sessao):
     assert r["Ligações atual"].sum() == at["N. Ligação"].nunique()
     assert r["% ligações atual"].sum() == pytest.approx(100)
     assert r.iloc[0]["Situação"] == "01-3EM MAOS"                  # a mais frequente primeiro
-    lagos = ctx.resultados["situacao_lancamento"]["LAGOS"]
+    lagos = ctx.resultados["situacao_lancamento"]["INTERIOR"]
     assert 0 < lagos["Ligações atual"].sum() < r["Ligações atual"].sum()
     html = open(sessao.caminho_html, encoding="utf-8").read()
     diretas = html[html.index('id="view-tabelas"'):]
@@ -541,14 +542,14 @@ def test_seta_de_cada_situacao_baixa_as_ligacoes(sessao):
     # só a seta ⬇≡ (analítico detalhado): a de cada card filtra a situação; a simples saiu
     assert 'class="btn-sitl-dl"' not in html and 'id="sitl-detalhe"' not in html
     assert re.search(r'<button data-sit="50-EMITIDO - RETIDA" type="button" class="btn-just btn-detalhe" data-detalhe="situacao" '
-                     r'data-sup="LAGOS"', html)
+                     r'data-sup="INTERIOR"', html)
     assert 'data-gsit="Entregue" type="button" class="btn-just btn-detalhe"' in html
     b64 = re.search(r'id="analitico-dados" data-gz="1"[^>]*>([^<]+)</script>', html).group(1)
     det = pd.read_csv(io.BytesIO(gzip.decompress(base64.b64decode(b64))), sep=";", decimal=",", dtype={"N. Ligação": str},
                       encoding="utf-8-sig")
     col = f"Situação Lançamento {ctx.ref_atual}"
     r = ctx.resultados["situacao_lancamento"]
-    for sup in ("TODAS", "LAGOS"):
+    for sup in ("TODAS", "INTERIOR"):
         d = det if sup == "TODAS" else det[det["Superintendência"] == sup]
         esperado = r[sup].set_index("Situação")["Ligações atual"]
         assert d[col].value_counts().sort_index().to_dict() == esperado[esperado > 0].sort_index().astype(int).to_dict()

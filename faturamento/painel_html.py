@@ -326,7 +326,7 @@ def gera_cards_insights_html(ctx, comp_agua, comp_esgoto, df_ciclos, top_agua_df
 
 
 def gera_destaques_html(ctx, df_ciclos, top_agua_df, top_esg_df, top_por_sup):
-    """Destaques do mês: um quadro por superintendência (LAGOS, LESTE...), cada um só com os dados dela.
+    """Destaques do mês: um quadro por superintendência (INTERIOR, LESTE...), cada um só com os dados dela.
     O filtro Superintendência mostra o quadro escolhido (Todas: todos os quadros). Sem SUP identificada, um quadro geral."""
     from .comparativo import monta_comparativo
     from .dre import SEM_SUP, TODAS, _nome_sup, lista_sups

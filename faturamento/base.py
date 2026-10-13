@@ -57,6 +57,16 @@ def _processa_lista(progresso, lista, func, ini, fin, desc):
     return resultados
 
 
+def _padroniza_sup(longo):
+    """Nome antigo da superintendência no orçado ("Lagos") → nome atual ("INTERIOR"); os demais ficam como estão."""
+    from .config import ALIAS_SUP, chave_texto
+    if "Sup" not in longo.columns:
+        return longo
+    unicos = longo["Sup"].dropna().unique()
+    mapa = {v: ALIAS_SUP[chave_texto(v)] for v in unicos if chave_texto(v) in ALIAS_SUP}
+    return longo.assign(Sup=longo["Sup"].replace(mapa)) if mapa else longo
+
+
 def _cruza_cronograma(base, crono):
     """Dias de leitura de cada linha: pelo grupo E mês (Data da Leitura do cronograma = mês da Referencia de Leitura);
     sem esse mês no cronograma, usa a última linha do grupo."""
@@ -128,6 +138,7 @@ def monta_base(ctx):
         if not len(longo):
             print(f"   ⚠️ {arquivo}: orçado sem valores (planilha vazia); ignorado.")
             continue
+        longo = _padroniza_sup(longo)
         tipo = "sup" if "SUP" in nome.upper() else "rf"
         if nome not in ctx.orcado or len(longo) > len(ctx.orcado[nome]["dados"]):
             ctx.orcado[nome] = {"arquivo": arquivo, "tipo": tipo, "dados": longo}
@@ -136,7 +147,7 @@ def monta_base(ctx):
     for caminho, aba in ctx.classificacao.get("orcado_eventos", []):
         longo = cache_arquivos.memo(caminho, f"processa_orcado_{aba}", lambda c=caminho, a=aba: processa_orcado(c, a))
         if len(longo):
-            eventos.append(longo.assign(Arquivo=nome_relativo(caminho, ctx.pasta)))
+            eventos.append(_padroniza_sup(longo).assign(Arquivo=nome_relativo(caminho, ctx.pasta)))
     ctx.orcado_eventos = pd.concat(eventos, ignore_index=True) if eventos else None
     print(f"✅ Fatura: {len(fatura_total)} linhas")
     if len(fatura_total) and "Referencia de Leitura" in fatura_total.columns:

@@ -159,7 +159,7 @@ def sup_por_grupo(ctx):
     from .leitura import chave_grupo
     mapa = {}
     for g, cidade in (getattr(ctx, "grupo_localidade", None) or {}).items():
-        sup = sup_da_localidade(cidade)               # cidade ou o próprio nome da SUP ("Lagos", "Leste")
+        sup = sup_da_localidade(cidade)               # cidade ou o próprio nome da SUP ("Interior", "Leste")
         if sup:
             mapa[chave_grupo(g)] = sup
     base = getattr(ctx, "base_completa", None)
@@ -441,7 +441,7 @@ def _avisos_html(ctx):
 
 
 def _nome_sup(sup):
-    return "Todas as superintendências (Interior)" if sup == TODAS else sup
+    return "Todas as superintendências" if sup == TODAS else sup
 
 
 def _bloco(sup, ref, conteudo):
