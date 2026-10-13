@@ -66,3 +66,9 @@ def test_selo_manual_sem_sombra_interna():
     css = open(os.path.join(os.path.dirname(__file__), "..", "faturamento", "assets", "relatorio.css"), encoding="utf-8").read()
     regra = re.search(r"\.sit-manual \{([^}]*)\}", css).group(1)
     assert "inset" not in regra and "border:" in regra
+
+
+def test_pdf_sem_contorno_no_selo_manual():
+    import os
+    css = open(os.path.join(os.path.dirname(__file__), "..", "faturamento", "assets", "relatorio.css"), encoding="utf-8").read()
+    assert "#view-executivo .sit-manual { border-color:transparent; }" in css
