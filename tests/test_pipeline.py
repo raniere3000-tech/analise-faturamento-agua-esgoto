@@ -278,8 +278,13 @@ def test_justificativas_compartilhadas_na_pasta(analise):
     html = open(analise.caminho_html, encoding="utf-8").read()
     assert 'id="statusJust"' in html and "justCompartilhada()" in html and "comp.gravar(CHAVE_JUSTIFICATIVA" in html
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
-    assert 'const ARQ_JUST = "justificativas_relatorio.json"' in site and "window.justificativasCompartilhadas" in site
+    # arquivo único: as justificativas vão para ajustes_relatorio.json (o arquivo antigo é migrado)
+    assert 'const ARQ_AJUSTES = "ajustes_relatorio.json", ARQ_JUST_ANTIGO = "justificativas_relatorio.json";' in site
+    assert "window.justificativasCompartilhadas" in site and "d.justificativas[chave] = { html, atualizado }" in site
     assert 'requestPermission({ mode: "readwrite" })' in site
+    # nuvem ao lado da versão: clicar sincroniza tudo
+    assert 'id="nuvem"' in site and "window.estadoNuvem" in site and "w.sincronizarTudo" in site
+    assert "window.sincronizarTudo = async function" in html and "marcaNuvem(" in html
 
 
 def test_ajustes_compartilhados_forecast_situacao_e_etapa2(analise):

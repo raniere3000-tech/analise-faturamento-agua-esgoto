@@ -282,6 +282,18 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 .top h1 { font-size: 15px; margin: 0; line-height: 1.25; }
 .eyebrow { font-size: 10px; letter-spacing: 1.2px; }
 .versao { font-size: 9.5px; padding: 0 7px; margin-left: 6px; }
+/* nuvem ao lado da versão: ✓ = alterações salvas na pasta do SharePoint · ✕ = não salvas (clique para sincronizar) */
+.versao-nuvem { white-space: nowrap; display: inline-flex; align-items: center; }
+.nuvem { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; margin-left: 6px; width: 30px; height: 20px;
+         padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; color: #fff; }
+.nuvem:hover, .nuvem:focus-visible { background: rgba(255,255,255,.18); outline: none; }
+.nuvem svg { width: 26px; height: 18px; display: block; }
+.nuvem .marca-ok { color: #86efac; } .nuvem .marca-erro { color: #fca5a5; }
+.nuvem.girando svg { animation: nuvemPulsa 1s ease-in-out infinite; }
+@keyframes nuvemPulsa { 50% { opacity: .45; } }
+#avisoSite { display: none; position: fixed; right: 16px; bottom: 16px; z-index: 9999; background: #1A2740; color: #fff; padding: 9px 14px;
+             border-radius: 8px; font-size: 12.5px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.2); max-width: 420px; }
+#avisoSite.erro { background: #9a3412; }
 .btn-top { padding: 5px 10px; font-size: 12px; }
 .filtros { margin-top: 6px; gap: 6px 14px; align-items: center; }
 .fsel { flex-direction: row; align-items: center; gap: 6px; font-size: 9.5px; }
@@ -351,7 +363,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v65</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v66</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -484,7 +496,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v65-20261013"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v66-20261013"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -502,23 +514,11 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   let pastaHandle = null;
   let rodando = false;
 
-  // ===== Justificativas compartilhadas: arquivo dentro da pasta conectada (sincronizada com o SharePoint pelo OneDrive) =====
-  // O relatório (iframe na mesma página) chama window.justificativasCompartilhadas: quem abrir a mesma pasta vê o que os
-  // outros escreveram. Cada mês é uma chave do arquivo; ao gravar, o arquivo é relido para não apagar os outros meses.
-  const ARQ_JUST = "justificativas_relatorio.json";
-  async function lerArquivoJust(handle) {
-    try {
-      const arq = await (await handle.getFileHandle(ARQ_JUST)).getFile();
-      const texto = await arq.text();
-      return texto.trim() ? JSON.parse(texto) : {};
-    } catch (e) {
-      if (e && e.name === "NotFoundError") return {};
-      throw e;
-    }
-  }
-  // Ajustes compartilhados (etapa 2, forecast editado e Situação dos grupos): ajustes_relatorio.json na mesma pasta.
+  // ===== Tudo o que é editado no relatório fica num arquivo só da pasta conectada (sincronizada com o SharePoint):
+  // ajustes_relatorio.json — justificativas, forecast editado, Situação dos grupos e ajustes da etapa 2.
+  // O arquivo antigo das justificativas (justificativas_relatorio.json) é lido e incorporado na primeira vez.
   // As gravações passam por uma fila: duas alterações seguidas não se atropelam.
-  const ARQ_AJUSTES = "ajustes_relatorio.json";
+  const ARQ_AJUSTES = "ajustes_relatorio.json", ARQ_JUST_ANTIGO = "justificativas_relatorio.json";
   let filaGravacao = Promise.resolve();
   async function permissaoGravar() {
     let perm = await pastaHandle.queryPermission({ mode: "readwrite" });
@@ -534,6 +534,14 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       throw e;
     }
   }
+  async function lerUnificado() {
+    const d = await lerJson(ARQ_AJUSTES);
+    if (!d.justificativas) {
+      const antigo = await lerJson(ARQ_JUST_ANTIGO).catch(() => ({}));
+      if (Object.keys(antigo).length) d.justificativas = antigo;
+    }
+    return d;
+  }
   window.arquivoCompartilhado = {
     disponivel: () => !!pastaHandle,
     pasta: () => (pastaHandle ? pastaHandle.name : ""),
@@ -541,7 +549,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       if (!pastaHandle) return null;
       try {
         if ((await pastaHandle.queryPermission({ mode: "read" })) !== "granted") return null;
-        return await lerJson(ARQ_AJUSTES);
+        return await lerUnificado();
       } catch (e) { console.warn("Ajustes compartilhados: leitura falhou", e); return null; }
     },
     // altera(dados) muda o objeto lido do arquivo; o resultado é gravado de volta. Devolve { ok, dados | motivo }.
@@ -550,7 +558,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
         if (!pastaHandle) return { ok: false, motivo: "nenhuma pasta conectada pelo botão de pasta (Chrome/Edge)" };
         try {
           if (!(await permissaoGravar())) return { ok: false, motivo: "sem permissão para gravar na pasta" };
-          const dados = await lerJson(ARQ_AJUSTES);
+          const dados = await lerUnificado();
           altera(dados);
           const w = await (await pastaHandle.getFileHandle(ARQ_AJUSTES, { create: true })).createWritable();
           await w.write(JSON.stringify(dados, null, 2));
@@ -569,31 +577,55 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   window.justificativasCompartilhadas = {
     disponivel: () => !!pastaHandle,
     pasta: () => (pastaHandle ? pastaHandle.name : ""),
-    async ler() {
-      if (!pastaHandle) return null;
-      try {
-        if ((await pastaHandle.queryPermission({ mode: "read" })) !== "granted") return null;
-        return await lerArquivoJust(pastaHandle);
-      } catch (e) { console.warn("Justificativas compartilhadas: leitura falhou", e); return null; }
-    },
+    async ler() { const d = await window.arquivoCompartilhado.ler(); return d ? (d.justificativas || {}) : null; },
     async gravar(chave, html) {
-      if (!pastaHandle) return { ok: false, motivo: "nenhuma pasta conectada pelo botão de pasta (Chrome/Edge)" };
-      try {
-        let perm = await pastaHandle.queryPermission({ mode: "readwrite" });
-        if (perm !== "granted") perm = await pastaHandle.requestPermission({ mode: "readwrite" });
-        if (perm !== "granted") return { ok: false, motivo: "sem permissão para gravar na pasta" };
-        const dados = await lerArquivoJust(pastaHandle);
-        dados[chave] = { html, atualizado: new Date().toISOString() };
-        const w = await (await pastaHandle.getFileHandle(ARQ_JUST, { create: true })).createWritable();
-        await w.write(JSON.stringify(dados, null, 2));
-        await w.close();
-        return { ok: true, atualizado: dados[chave].atualizado };
-      } catch (e) {
-        console.warn("Justificativas compartilhadas: gravação falhou", e);
-        return { ok: false, motivo: String((e && e.message) || e) };
-      }
+      const atualizado = new Date().toISOString();
+      const r = await window.arquivoCompartilhado.atualizar((d) => { d.justificativas = d.justificativas || {}; d.justificativas[chave] = { html, atualizado }; });
+      return r.ok ? { ok: true, atualizado } : r;
     },
   };
+  // ===== Nuvem ao lado da versão: ✓ tudo salvo na pasta do SharePoint · ✕ alterações não salvas / sem pasta =====
+  // Clicar sincroniza: grava de novo tudo o que está na tela (justificativas, forecast, Situação, ajustes da etapa 2) e relê a pasta.
+  const SVG_NUVEM = (ok) => '<svg viewBox="0 0 26 18" aria-hidden="true"><path d="M7.2 16.2h12.3a4.4 4.4 0 0 0 .5-8.8 6 6 0 0 0-11.5-1.6A5.2 5.2 0 0 0 7.2 16.2z" '
+    + 'fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>'
+    + (ok ? '<path class="marca-ok" d="M9.8 10.9l2.3 2.3 4.4-4.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+          : '<path class="marca-erro" d="M10.6 8.6l4.8 4.8M15.4 8.6l-4.8 4.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>')
+    + '</svg>';
+  const nuvem = $("nuvem");
+  let etapa2Pendente = null;                      // ajustes da etapa 2 que não chegaram à pasta (o clique na nuvem tenta de novo)
+  window.estadoNuvem = (ok, texto) => {
+    nuvem.innerHTML = SVG_NUVEM(ok);
+    nuvem.classList.toggle("nuvem-erro", !ok);
+    nuvem.title = texto + " — clique para sincronizar e salvar";
+    nuvem.setAttribute("aria-label", nuvem.title);
+  };
+  function nuvemInicial() {
+    if (!pastaHandle) window.estadoNuvem(false, "Sem pasta conectada: as alterações ficam só neste navegador");
+    else if (!etapa2Pendente) window.estadoNuvem(true, `Pasta "${pastaHandle.name}" conectada`);
+  }
+  window.avisoSite = (texto, erro) => {
+    let el = $("avisoSite");
+    if (!el) { el = document.createElement("div"); el.id = "avisoSite"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+    el.textContent = texto; el.className = erro ? "erro" : ""; el.style.display = "block";
+    clearTimeout(window.avisoSite.t); window.avisoSite.t = setTimeout(() => { el.style.display = "none"; }, erro ? 9000 : 5000);
+  };
+  async function sincronizarNuvem() {
+    if (!pastaHandle) { window.avisoSite("Conecte a pasta do SharePoint (📁 Conectar pasta) para salvar na nuvem.", true); nuvemInicial(); return; }
+    nuvem.classList.add("girando");
+    try {
+      if (!(await permissaoGravar())) { window.estadoNuvem(false, "Sem permissão para gravar na pasta"); window.avisoSite("Sem permissão para gravar na pasta: permita a edição quando o navegador perguntar.", true); return; }
+      let ok = true;
+      if (etapa2Pendente) ok = (await guardaAjustes(etapa2Pendente.ref, etapa2Pendente.ajustes)).ok && ok;
+      const w = quadro().hidden ? null : janela();
+      if (w && w.sincronizarTudo) ok = (await w.sincronizarTudo()) && ok;
+      else ok = (await window.arquivoCompartilhado.atualizar(() => {})).ok && ok;
+      window.estadoNuvem(ok, ok ? `Tudo salvo na pasta "${pastaHandle.name}"` : "Há alterações que não foram salvas na pasta");
+      window.avisoSite(ok ? `Sincronizado: tudo salvo na pasta "${pastaHandle.name}"` : "Não foi possível salvar tudo na pasta do SharePoint", !ok);
+    } finally { nuvem.classList.remove("girando"); }
+  }
+  nuvem.addEventListener("click", sincronizarNuvem);
+  nuvemInicial();
+
   let urlsCriadas = [];
 
   const ehEntrada = (nome) =>
@@ -902,6 +934,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       try {
         const handle = await window.showDirectoryPicker({ id: "faturamento", mode: "read" });
         pastaHandle = handle;
+        nuvemInicial();
         idb.set("pasta", handle);
         setFonte(`Pasta conectada: <b>${handle.name}</b>`);
         btnAtualizar.hidden = false;
@@ -1014,8 +1047,13 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   async function guardaAjustes(ref, ajustes) {
     try { const t = JSON.parse(localStorage.getItem(LS_AJUSTES) || "{}"); t[ref] = ajustes; localStorage.setItem(LS_AJUSTES, JSON.stringify(t)); } catch (e) {}
     const comp = window.arquivoCompartilhado;
-    if (!comp.disponivel()) return { ok: false, motivo: "sem pasta conectada: salvos só neste navegador" };
-    return comp.atualizar((d) => { d.etapa2 = d.etapa2 || {}; d.etapa2[ref] = { ajustes, atualizado: new Date().toISOString() }; });
+    const r = comp.disponivel()
+      ? await comp.atualizar((d) => { d.etapa2 = d.etapa2 || {}; d.etapa2[ref] = { ajustes, atualizado: new Date().toISOString() }; })
+      : { ok: false, motivo: "sem pasta conectada: salvos só neste navegador" };
+    etapa2Pendente = r.ok ? null : { ref, ajustes };
+    window.estadoNuvem(r.ok, r.ok ? "Ajustes da etapa 2 salvos na pasta" : `Ajustes da etapa 2 não salvos na pasta (${r.motivo})`);
+    window.avisoSite(r.ok ? "Ajustes da etapa 2 salvos na pasta do SharePoint — valem para todos" : `Ajustes da etapa 2 salvos só neste navegador (${r.motivo})`, !r.ok);
+    return r;
   }
   const quando = (iso) => { try { return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }); } catch (e) { return ""; } };
 
@@ -1360,6 +1398,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     const h = await idb.get("pasta");
     if (!h) return;
     pastaHandle = h;
+    nuvemInicial();
     btnAtualizar.hidden = false;
     btnEtapa2.hidden = false;
     btnAtualizar.title = `Reler a pasta "${h.name}"`;
