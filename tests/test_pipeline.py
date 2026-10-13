@@ -296,3 +296,11 @@ def test_ajustes_compartilhados_forecast_situacao_e_etapa2(analise):
     # etapa 2: só abre com arquivo lido agora (novo/alterado) ou pelo botão; os ajustes ficam salvos para todos
     assert "const novos = !dados.leitura || (dados.leitura.lidos || 0) > 0;" in site
     assert 'id="btnEtapa2"' in site and "guardaAjustes(refTop20, ajustes)" in site
+
+
+def test_sincronizacao_continua_entre_versoes_abertas(analise):
+    import os
+    html = open(analise.caminho_html, encoding="utf-8").read()
+    assert "window.puxarTudoDaPasta = function" in html and "atualizado com alterações salvas por outra pessoa" in html
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert "setInterval(verificaPasta, 5000)" in site and 'new BroadcastChannel("faturamento_ajustes")' in site

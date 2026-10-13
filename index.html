@@ -363,7 +363,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v66</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v67</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -496,7 +496,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v66-20261013"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v67-20261013"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -560,9 +560,12 @@ body.relatorio-aberto .conteudo { min-height: 0; }
           if (!(await permissaoGravar())) return { ok: false, motivo: "sem permissão para gravar na pasta" };
           const dados = await lerUnificado();
           altera(dados);
-          const w = await (await pastaHandle.getFileHandle(ARQ_AJUSTES, { create: true })).createWritable();
+          const fh = await pastaHandle.getFileHandle(ARQ_AJUSTES, { create: true });
+          const w = await fh.createWritable();
           await w.write(JSON.stringify(dados, null, 2));
           await w.close();
+          try { ultimaModificacao = (await fh.getFile()).lastModified; } catch (e) {}
+          try { canalAjustes && canalAjustes.postMessage("mudou"); } catch (e) {}     // outras abas deste PC atualizam na hora
           return { ok: true, dados };
         } catch (e) {
           console.warn("Ajustes compartilhados: gravação falhou", e);
@@ -625,6 +628,27 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   }
   nuvem.addEventListener("click", sincronizarNuvem);
   nuvemInicial();
+
+  // ===== Sincronização contínua entre as versões abertas (outros PCs pela pasta do OneDrive, outras abas na hora) =====
+  // A cada 5 s o site olha a data do ajustes_relatorio.json: se outra pessoa salvou (o OneDrive trouxe o arquivo novo),
+  // o relatório aberto relê a pasta e aplica. Ao voltar para a aba também confere na hora.
+  let ultimaModificacao = null, canalAjustes = null;
+  try { canalAjustes = new BroadcastChannel("faturamento_ajustes"); canalAjustes.onmessage = () => avisaRelatorio(); } catch (e) { /* sem BroadcastChannel */ }
+  function avisaRelatorio() {
+    try { const w = quadro().hidden ? null : janela(); if (w && w.puxarTudoDaPasta) w.puxarTudoDaPasta(); } catch (e) {}
+  }
+  async function verificaPasta() {
+    if (!pastaHandle) return;
+    try {
+      if ((await pastaHandle.queryPermission({ mode: "read" })) !== "granted") return;
+      const f = await (await pastaHandle.getFileHandle(ARQ_AJUSTES)).getFile();
+      if (ultimaModificacao !== null && f.lastModified !== ultimaModificacao) avisaRelatorio();
+      ultimaModificacao = f.lastModified;
+    } catch (e) { /* arquivo ainda não existe */ }
+  }
+  setInterval(verificaPasta, 5000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { verificaPasta(); avisaRelatorio(); } });
+  window.addEventListener("focus", () => verificaPasta());
 
   let urlsCriadas = [];
 

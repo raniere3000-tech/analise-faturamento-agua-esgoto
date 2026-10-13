@@ -545,6 +545,7 @@ async function lerJustificativasDaPasta() {
     if (!dados) { justStatus('Não foi possível ler as justificativas da pasta; usando as deste navegador.', true); return; }
     const item = dados[CHAVE_JUSTIFICATIVA];
     if (item && item.atualizado !== justAtualizado) {
+        if (justAtualizado !== null && typeof avisoNuvem === 'function') avisoNuvem('Justificativas: atualizadas com alterações salvas por outra pessoa');
         lista.innerHTML = item.html;
         localStorage.setItem(CHAVE_JUSTIFICATIVA, item.html);
         justAtualizado = item.atualizado;
@@ -1456,11 +1457,15 @@ function criaSync(secao, nome, obter, definir, redesenhar, ocupado) {
     let base = null, timer = null;
     async function puxar() {
         const comp = compartilhado();
-        if (!comp || (ocupado && ocupado())) return;
+        if (!comp || (ocupado && ocupado()) || timer || pendentesNuvem.has(nome)) return;   // não atropela o que ainda vai ser salvo
         const d = await comp.ler();
-        if (!d || !d[secao]) return;                     // nunca salvo na pasta: fica o que há neste navegador
+        if (!d) return;
+        if (!d[secao]) { if (base === null) base = {}; return; }   // nunca salvo na pasta: fica o que há neste navegador
         const remoto = d[secao].mapa || {};
-        if (!igualJson(remoto, obter())) { definir(copiaJson(remoto)); redesenhar(); }
+        if (!igualJson(remoto, obter())) {
+            definir(copiaJson(remoto)); redesenhar();
+            if (base !== null) avisoNuvem(`${nome}: atualizado com alterações salvas por outra pessoa`);
+        }
         base = copiaJson(remoto);
     }
     async function empurrar() {
@@ -1484,7 +1489,7 @@ function criaSync(secao, nome, obter, definir, redesenhar, ocupado) {
     }
     return {
         puxar, empurrar,
-        agendar() { clearTimeout(timer); timer = setTimeout(empurrar, 700); },
+        agendar() { clearTimeout(timer); timer = setTimeout(() => { timer = null; empurrar(); }, 700); },
     };
 }
 var syncForecast = criaSync('forecast', 'Forecast', () => prevEdicoes,
@@ -1498,5 +1503,7 @@ var syncSituacao = criaSync('situacao', 'Situação do grupo',
     () => document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach(sitAplicar),
     () => !!document.querySelector('select.sit-escolha'));
 function puxarAjustesCompartilhados() { syncForecast.puxar(); syncSituacao.puxar(); }
+// chamado pelo site quando o arquivo da pasta mudou (outra pessoa salvou) ou ao voltar para a aba
+window.puxarTudoDaPasta = function () { puxarAjustesCompartilhados(); lerJustificativasDaPasta(); };
 puxarAjustesCompartilhados();
 setInterval(puxarAjustesCompartilhados, 60000);
