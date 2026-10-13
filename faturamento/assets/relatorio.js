@@ -75,6 +75,7 @@ function aplicarFontes() {
 function selecionarOrcadoCiclo(fonte) {
     document.querySelectorAll('.orc-ciclo-bloco').forEach(b => { b.hidden = b.dataset.orcCiclo !== fonte; });
     const sel = document.getElementById('selOrcCiclo'); if (sel && sel.value !== fonte) sel.value = fonte;
+    configAlterada();
 }
 
 const CORES_CLASSES = ['#176b9c', '#16a5b8', '#1f8a70', '#d79b29', '#c94b4b', '#6b7a99'];
@@ -955,7 +956,7 @@ function sitlVisao(visao) {
 }
 document.addEventListener('click', function (e) {
     const b = e.target.closest && e.target.closest('.sitl-visao button');
-    if (b) sitlVisao(b.dataset.visao);
+    if (b) { sitlVisao(b.dataset.visao); configAlterada(); }
 });
 document.addEventListener('DOMContentLoaded', function () {
     let v = null; try { v = localStorage.getItem('faturamento_sitl_visao'); } catch (e) { /* sem armazenamento */ }
@@ -1131,12 +1132,14 @@ function previsaoAlternar(botao) {
     if (botao && botao.closest && botao.closest('#view-indiretas')) prevOcultaInd = !prevOcultaInd;
     else prevOculta = !prevOculta;
     prevSalvar(); previsaoAplicarVisibilidade();
+    configAlterada();
 }
 prevRecalcularTodas(); previsaoAplicarVisibilidade();
 
 
 // Diretas: por padrão só as colunas principais; o botão mostra as demais (dias de leitura, Δ absolutos, volume médio)
 function alternarColunas() {
+    configAlterada();
     const v = document.getElementById('view-tabelas'), compacto = v.classList.toggle('compacto');
     document.getElementById('btn-colunas').textContent = compacto ? 'Mostrar todas as colunas' : 'Mostrar só as principais';
     v.querySelectorAll('th[data-full]').forEach(th => { th.colSpan = parseInt(compacto ? th.dataset.comp : th.dataset.full, 10); });
@@ -1441,7 +1444,7 @@ function marcaNuvem(nome, r) {
 // clique na nuvem: grava tudo o que está na tela e relê a pasta; devolve true se tudo foi salvo
 window.sincronizarTudo = async function () {
     if (!compartilhado()) return false;
-    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await salvarJustificativas()];
+    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncConfig.empurrar(), await salvarJustificativas()];
     puxarAjustesCompartilhados(); lerJustificativasDaPasta();
     return r.every(Boolean);
 };
@@ -1502,8 +1505,54 @@ var syncSituacao = criaSync('situacao', 'Situação do grupo',
                  try { localStorage.setItem(SIT_LS, JSON.stringify(sitManuais)); } catch (e) {} },
     () => document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach(sitAplicar),
     () => !!document.querySelector('select.sit-escolha'));
-function puxarAjustesCompartilhados() { syncForecast.puxar(); syncSituacao.puxar(); }
+function puxarAjustesCompartilhados() { syncForecast.puxar(); syncSituacao.puxar(); if (typeof syncConfig !== 'undefined') syncConfig.puxar(); }
 // chamado pelo site quando o arquivo da pasta mudou (outra pessoa salvou) ou ao voltar para a aba
 window.puxarTudoDaPasta = function () { puxarAjustesCompartilhados(); lerJustificativasDaPasta(); };
 puxarAjustesCompartilhados();
 setInterval(puxarAjustesCompartilhados, 60000);
+
+
+// ===== Configurações do relatório compartilhadas (seção "config" do JSON) =====
+// Ocultar forecast (Forecast e Indiretas), Comparar (orçado de referência), Orçado por ciclo, visão Analítica/Sintética e
+// Mostrar todas as colunas: quem abrir a pasta vê o relatório configurado igual. Os filtros de navegação (Superintendência,
+// Mês e Grupos) continuam de cada pessoa.
+let aplicandoConfig = false;
+function configAlterada() { if (!aplicandoConfig && typeof syncConfig !== 'undefined') syncConfig.agendar(); }
+function refDoSite() {
+    try { const p = window.parent; if (p && p !== window && p.referenciaCompartilhada) return p.referenciaCompartilhada; } catch (e) {}
+    return null;
+}
+function lerConfig() {
+    const sel = document.getElementById('selOrcCiclo'), vt = document.getElementById('view-tabelas');
+    const sint = document.querySelector('.sitl-visao button[data-visao="sintetica"].ativo');
+    const site = refDoSite();
+    return {
+        ocultaForecast: !!prevOculta, ocultaIndiretas: !!prevOcultaInd,
+        referencia: (site ? site.obter() : ESTADO.ref) || '',
+        orcadoCiclo: sel ? sel.value : '',
+        visaoSituacao: sint ? 'sintetica' : 'analitica',
+        todasColunas: vt ? !vt.classList.contains('compacto') : false,
+    };
+}
+function aplicarConfig(c) {
+    aplicandoConfig = true;
+    try {
+        if ('ocultaForecast' in c || 'ocultaIndiretas' in c) {
+            prevOculta = !!c.ocultaForecast; prevOcultaInd = !!c.ocultaIndiretas;
+            try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta, ocultaInd: prevOcultaInd })); } catch (e) {}
+            previsaoAplicarVisibilidade();
+        }
+        const sel = document.getElementById('selOrcCiclo');
+        if (c.orcadoCiclo && sel && Array.from(sel.options).some(o => o.value === c.orcadoCiclo) && sel.value !== c.orcadoCiclo) selecionarOrcadoCiclo(c.orcadoCiclo);
+        if (c.visaoSituacao) sitlVisao(c.visaoSituacao);
+        const vt = document.getElementById('view-tabelas');
+        if ('todasColunas' in c && vt && vt.classList.contains('compacto') === !!c.todasColunas) alternarColunas();
+        if (c.referencia !== undefined && c.referencia !== lerConfig().referencia) {
+            const site = refDoSite();
+            if (site) site.definir(c.referencia); else definirFiltros({ ref: c.referencia });
+        }
+    } finally { aplicandoConfig = false; }
+}
+var syncConfig = criaSync('config', 'Configurações do relatório', lerConfig, aplicarConfig, () => {});
+window.configAlterada = configAlterada;               // o site avisa quando a "Comparar" muda no cabeçalho
+syncConfig.puxar();
