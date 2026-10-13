@@ -351,7 +351,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v64</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v65</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -366,6 +366,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       <button type="button" class="btn-top" id="btnPasta">📁 Conectar pasta</button>
       <a class="btn-top" href="https://raniere3000-tech.github.io/bookcomercial/">🏠 Menu</a>
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
+      <button type="button" class="btn-top" id="btnEtapa2" hidden title="Reler a pasta e abrir a conferência dos clientes em análise (etapa 2), mesmo sem arquivo novo">✎ Etapa 2</button>
       <button type="button" class="btn-top" id="btnPdf" hidden title="PDF executivo conforme os filtros da tela">📄 Executivo</button>
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
     </div>
@@ -417,6 +418,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     <h2 id="top20Titulo"><span class="badge">Etapa 2 · Conferência</span><span id="top20TituloTexto"></span></h2>
     <p class="lead"><span id="textoFiltro"></span>Maiores <b>Consumo Faturado</b> do mês atual. Se quiser, altere o consumo ou o valor total (água + esgoto) de algum cliente. Ao aplicar, toda a análise e a comparação usam os valores alterados. Os arquivos da pasta não são modificados.</p>
     <p class="nota" id="notaLeitura" hidden style="flex:none;margin:0 0 6px;font-size:.78rem;color:var(--muted);"></p>
+    <p class="nota nota-ajustes" id="notaAjustes" hidden style="flex:none;color:var(--azul, #1e40af);font-weight:600;font-size:.8rem;margin:0 0 6px;"></p>
     <p class="nota" id="avisoTop20" hidden style="flex:none;color:var(--laranja-texto);font-weight:600;font-size:.8rem;margin:0 0 6px;">A coluna "Situacao Conta" não foi encontrada nos arquivos, então abaixo aparece o Top 20 de maior consumo de todas as contas.</p>
     <div class="filtros-top20">
       <input type="search" id="buscaTop20" placeholder="Filtrar por ligação, cliente ou grupo…" aria-label="Filtrar clientes">
@@ -482,7 +484,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v64-20261013"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v65-20261013"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -493,7 +495,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
   const $ = (id) => document.getElementById(id);
-  const btnPasta = $("btnPasta"), btnAtualizar = $("btnAtualizar");
+  const btnPasta = $("btnPasta"), btnAtualizar = $("btnAtualizar"), btnEtapa2 = $("btnEtapa2");
   const inputPasta = $("inputPasta"), progresso = $("progresso");
 
   let worker = null;
@@ -514,6 +516,56 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       throw e;
     }
   }
+  // Ajustes compartilhados (etapa 2, forecast editado e Situação dos grupos): ajustes_relatorio.json na mesma pasta.
+  // As gravações passam por uma fila: duas alterações seguidas não se atropelam.
+  const ARQ_AJUSTES = "ajustes_relatorio.json";
+  let filaGravacao = Promise.resolve();
+  async function permissaoGravar() {
+    let perm = await pastaHandle.queryPermission({ mode: "readwrite" });
+    if (perm !== "granted") perm = await pastaHandle.requestPermission({ mode: "readwrite" });
+    return perm === "granted";
+  }
+  async function lerJson(nome) {
+    try {
+      const texto = await (await (await pastaHandle.getFileHandle(nome)).getFile()).text();
+      return texto.trim() ? JSON.parse(texto) : {};
+    } catch (e) {
+      if (e && e.name === "NotFoundError") return {};
+      throw e;
+    }
+  }
+  window.arquivoCompartilhado = {
+    disponivel: () => !!pastaHandle,
+    pasta: () => (pastaHandle ? pastaHandle.name : ""),
+    async ler() {
+      if (!pastaHandle) return null;
+      try {
+        if ((await pastaHandle.queryPermission({ mode: "read" })) !== "granted") return null;
+        return await lerJson(ARQ_AJUSTES);
+      } catch (e) { console.warn("Ajustes compartilhados: leitura falhou", e); return null; }
+    },
+    // altera(dados) muda o objeto lido do arquivo; o resultado é gravado de volta. Devolve { ok, dados | motivo }.
+    atualizar(altera) {
+      const tarefa = filaGravacao.then(async () => {
+        if (!pastaHandle) return { ok: false, motivo: "nenhuma pasta conectada pelo botão de pasta (Chrome/Edge)" };
+        try {
+          if (!(await permissaoGravar())) return { ok: false, motivo: "sem permissão para gravar na pasta" };
+          const dados = await lerJson(ARQ_AJUSTES);
+          altera(dados);
+          const w = await (await pastaHandle.getFileHandle(ARQ_AJUSTES, { create: true })).createWritable();
+          await w.write(JSON.stringify(dados, null, 2));
+          await w.close();
+          return { ok: true, dados };
+        } catch (e) {
+          console.warn("Ajustes compartilhados: gravação falhou", e);
+          return { ok: false, motivo: String((e && e.message) || e) };
+        }
+      });
+      filaGravacao = tarefa.catch(() => {});
+      return tarefa;
+    },
+  };
+
   window.justificativasCompartilhadas = {
     disponivel: () => !!pastaHandle,
     pasta: () => (pastaHandle ? pastaHandle.name : ""),
@@ -661,6 +713,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     rodando = sim;
     btnPasta.disabled = sim;
     btnAtualizar.disabled = sim;
+    btnEtapa2.disabled = sim;
   }
 
   // resumo da leitura: quantos arquivos foram lidos agora e quantos vieram de análises anteriores (guardados no navegador)
@@ -698,7 +751,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       log.scrollTop = log.scrollHeight;
     }
     else if (msg.tipo === "erro") { paraEta(); mostraErro(msg.resumo, msg.detalhe); }
-    else if (msg.tipo === "top20") { salvaEta(); mostraLeitura(msg.dados.leitura); mostraTop20(msg.dados); }
+    else if (msg.tipo === "top20") { salvaEta(); mostraLeitura(msg.dados.leitura); decideEtapa2(msg.dados); }
     else if (msg.tipo === "cacheLimpo") { $("statusNota").textContent = "Arquivos guardados apagados: a próxima análise lê todos os arquivos de novo."; }
     else if (msg.tipo === "concluido") { salvaEta(); abreRelatorio(msg); }
   }
@@ -742,6 +795,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     $("titulo").textContent = periodo ? `Faturamento — ${periodo}` : "Análise de Faturamento — Água e Esgoto";
     document.title = periodo ? `Relatório ${periodo}` : "Relatório";
     btnAtualizar.hidden = !pastaHandle;
+    btnEtapa2.hidden = !pastaHandle;
 
     // o cabeçalho do relatório repete o do site; aqui ele some (no arquivo/PDF continua)
     $("quadroRelatorio").srcdoc = htmlRelatorio;
@@ -851,6 +905,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
         idb.set("pasta", handle);
         setFonte(`Pasta conectada: <b>${handle.name}</b>`);
         btnAtualizar.hidden = false;
+        btnEtapa2.hidden = false;
         btnAtualizar.title = `Reler a pasta "${handle.name}"`;
         analisaHandle(handle);
       } catch (e) {
@@ -940,6 +995,57 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     $("etapaTop20").hidden = false;
     document.body.classList.add("top20-aberto");
     $("etapaTop20").scrollTop = 0;
+  }
+
+  // ===== Ajustes da etapa 2 guardados (pasta do SharePoint; sem pasta, só neste navegador) =====
+  // A etapa 2 só abre quando algum arquivo foi lido agora (novo ou alterado desde a última análise neste navegador) ou pelo
+  // botão "Etapa 2". Sem arquivo novo, a análise segue sozinha com os ajustes salvos — os mesmos para todos.
+  const LS_AJUSTES = "faturamento_ajustes_etapa2";
+  let forcarEtapa2 = false, refTop20 = "";
+  async function ajustesSalvos(ref) {
+    const comp = window.arquivoCompartilhado;
+    if (comp.disponivel()) {
+      const d = await comp.ler();
+      if (d) return { ajustes: (((d.etapa2 || {})[ref]) || {}).ajustes || [], fonte: "pasta", atualizado: ((d.etapa2 || {})[ref] || {}).atualizado };
+    }
+    try { return { ajustes: (JSON.parse(localStorage.getItem(LS_AJUSTES) || "{}")[ref] || []), fonte: "navegador" }; }
+    catch (e) { return { ajustes: [], fonte: "navegador" }; }
+  }
+  async function guardaAjustes(ref, ajustes) {
+    try { const t = JSON.parse(localStorage.getItem(LS_AJUSTES) || "{}"); t[ref] = ajustes; localStorage.setItem(LS_AJUSTES, JSON.stringify(t)); } catch (e) {}
+    const comp = window.arquivoCompartilhado;
+    if (!comp.disponivel()) return { ok: false, motivo: "sem pasta conectada: salvos só neste navegador" };
+    return comp.atualizar((d) => { d.etapa2 = d.etapa2 || {}; d.etapa2[ref] = { ajustes, atualizado: new Date().toISOString() }; });
+  }
+  const quando = (iso) => { try { return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }); } catch (e) { return ""; } };
+
+  async function decideEtapa2(dados) {
+    refTop20 = dados.refAtual || "";
+    const salvos = await ajustesSalvos(refTop20);
+    const presentes = new Set(dados.linhas.map((l) => String(l.ligacao)));
+    const validos = salvos.ajustes.filter((a) => presentes.has(String(a.ligacao)));
+    const novos = !dados.leitura || (dados.leitura.lidos || 0) > 0;
+    if (!novos && !forcarEtapa2) {
+      continuaAnalise(validos, `Nenhum arquivo novo ou alterado: etapa 2 pulada${validos.length ? `, com ${validos.length} ajuste(s) salvos (${salvos.fonte})` : ""}. Para conferir os clientes, use "✎ Etapa 2".`);
+      return;
+    }
+    forcarEtapa2 = false;
+    mostraTop20(dados);
+    let aplicados = 0;
+    validos.forEach((a) => {
+      const i = linhasTop20.findIndex((l) => String(l.ligacao) === String(a.ligacao));
+      if (i < 0) return;
+      ["consumo", "valor"].forEach((campo) => {
+        if (a[campo] == null) return;
+        const inp = document.querySelector(`#corpoTop20 input[data-indice="${i}"][data-campo="${campo}"]`);
+        if (inp) { inp.value = fmtNum(a[campo], +inp.dataset.dec); aplicados++; }
+      });
+    });
+    atualizaContador();
+    const nota = $("notaAjustes");
+    nota.hidden = !validos.length;
+    nota.textContent = validos.length ? `${validos.length} cliente(s) já vieram com os ajustes salvos ${salvos.fonte === "pasta" ? "na pasta do SharePoint" : "neste navegador"}`
+      + (salvos.atualizado ? ` (atualizados em ${quando(salvos.atualizado)})` : "") + ". Confira e aplique." : "";
   }
 
   // Lê a tabela; devolve { ajustes, invalido }
@@ -1072,11 +1178,12 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     $("btnAplicar").disabled = invalido;
   }
 
-  function continuaAnalise(ajustes) {
+  function continuaAnalise(ajustes, aviso) {
     $("etapaTop20").hidden = true;
     progresso.hidden = false;
     progresso.classList.remove("erro");
-    $("statusNota").textContent = (ajustes.length ? `Usando ${ajustes.length} cliente(s) com valores alterados.` : "Usando os valores originais.")
+    $("statusNota").textContent = (aviso ? aviso + " " : "")
+      + (ajustes.length ? `Usando ${ajustes.length} cliente(s) com valores alterados.` : "Usando os valores originais.")
       + (ultimaLeitura ? " " + ultimaLeitura + "." : "");
     limpaEtapas();
     iniciaEta("f2");
@@ -1085,9 +1192,11 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     pegaWorker().postMessage({ fase: "continuar", ajustes });
   }
 
-  $("btnAplicar").addEventListener("click", () => {
+  $("btnAplicar").addEventListener("click", async () => {
     const { ajustes, invalido } = leAjustes();
-    if (!invalido) continuaAnalise(ajustes);
+    if (invalido) return;
+    const r = await guardaAjustes(refTop20, ajustes);          // salvos para todos antes de seguir (o clique dá a permissão de gravar)
+    continuaAnalise(ajustes, r.ok ? "Ajustes salvos na pasta do SharePoint." : `Ajustes salvos só neste navegador (${r.motivo}).`);
   });
   $("btnPular").addEventListener("click", () => continuaAnalise([]));
   $("btnRestaurar").addEventListener("click", () => {
@@ -1220,6 +1329,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     pegaWorker().postMessage({ fase: "limparCache" });
   });
   btnAtualizar.addEventListener("click", atualiza);
+  btnEtapa2.addEventListener("click", () => { if (rodando || !pastaHandle) return; forcarEtapa2 = true; analisaHandle(pastaHandle); });
   $("btnCopiarLog").addEventListener("click", () => {
     const texto = $("logExecucao").textContent;
     (navigator.clipboard ? navigator.clipboard.writeText(texto) : Promise.reject()).catch(() => {
@@ -1251,6 +1361,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     if (!h) return;
     pastaHandle = h;
     btnAtualizar.hidden = false;
+    btnEtapa2.hidden = false;
     btnAtualizar.title = `Reler a pasta "${h.name}"`;
     const nome = h.name ? ` <b>${h.name}</b>` : "";
 
