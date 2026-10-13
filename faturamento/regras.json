@@ -202,5 +202,193 @@
     "55-RETIDA - MED > 2X MED MEDID": "Aumento de Consumo",
     "07-6NO HD": "Entregue",
     "07 - RECALCULADA": "Retida"
+  },
+  "estrutura_tarifaria": {
+    "_comentario": "Estrutura tarifária padrão (Categoria, Limite Inicial, Limite Final, Tarifa Normal, Tarifa Progressiva) e mínimo por economia. Uma planilha na pasta com 'tarif' no nome ou com a aba tblTarifas (e tblMinimo) substitui estes valores.",
+    "faixas": [
+      [
+        "RESIDENCIAL",
+        0,
+        15,
+        5.6941,
+        6.5231
+      ],
+      [
+        "RESIDENCIAL",
+        16,
+        30,
+        14.3508,
+        14.3508
+      ],
+      [
+        "RESIDENCIAL",
+        31,
+        45,
+        19.5692,
+        19.5692
+      ],
+      [
+        "RESIDENCIAL",
+        46,
+        60,
+        39.1384,
+        39.1384
+      ],
+      [
+        "RESIDENCIAL",
+        61,
+        99999999999,
+        52.1845,
+        52.1845
+      ],
+      [
+        "SOCIAL",
+        0,
+        15,
+        2.0083,
+        2.0083
+      ],
+      [
+        "SOCIAL",
+        16,
+        30,
+        14.3508,
+        14.3508
+      ],
+      [
+        "SOCIAL",
+        31,
+        45,
+        19.5692,
+        19.5692
+      ],
+      [
+        "SOCIAL",
+        46,
+        60,
+        39.1384,
+        39.1384
+      ],
+      [
+        "SOCIAL",
+        61,
+        99999999999,
+        52.1845,
+        52.1845
+      ],
+      [
+        "COMERCIAL",
+        0,
+        20,
+        22.1784,
+        22.1784
+      ],
+      [
+        "COMERCIAL",
+        21,
+        30,
+        39.0731,
+        39.0731
+      ],
+      [
+        "COMERCIAL",
+        31,
+        99999999999,
+        41.7476,
+        41.7476
+      ],
+      [
+        "PEQ. COMERCIO",
+        0,
+        10,
+        22.1784,
+        22.1784
+      ],
+      [
+        "PEQ. COMERCIO",
+        11,
+        20,
+        22.1784,
+        22.1784
+      ],
+      [
+        "PEQ. COMERCIO",
+        21,
+        30,
+        39.0731,
+        39.0731
+      ],
+      [
+        "PEQ. COMERCIO",
+        31,
+        99999999999,
+        41.7476,
+        41.7476
+      ],
+      [
+        "INDUSTRIAL",
+        0,
+        20,
+        30.6584,
+        30.6584
+      ],
+      [
+        "INDUSTRIAL",
+        21,
+        30,
+        30.6584,
+        30.6584
+      ],
+      [
+        "INDUSTRIAL",
+        31,
+        130,
+        35.2245,
+        35.2245
+      ],
+      [
+        "INDUSTRIAL",
+        131,
+        99999999999,
+        37.1814,
+        37.1814
+      ],
+      [
+        "PUBLICA",
+        0,
+        15,
+        8.6105,
+        8.6105
+      ],
+      [
+        "PUBLICA",
+        16,
+        99999999999,
+        19.0474,
+        19.0474
+      ],
+      [
+        "PUB. ESTADUAL",
+        0,
+        15,
+        7.5161,
+        7.5161
+      ],
+      [
+        "PUB. ESTADUAL",
+        16,
+        99999999999,
+        16.6265,
+        16.6265
+      ]
+    ],
+    "minimos": {
+      "RESIDENCIAL": 15,
+      "SOCIAL": 15,
+      "INDUSTRIAL": 20,
+      "PUBLICA": 15,
+      "PEQ. COMERCIO": 10,
+      "COMERCIAL": 20
+    }
   }
 }

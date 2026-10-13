@@ -410,3 +410,47 @@ tr.linha-pendente td { background:#fafbfc; }
               font-size:12.5px; font-weight:600; box-shadow:0 6px 20px rgba(0,0,0,.2); max-width:420px; }
 #avisoNuvem.erro { background:#9a3412; }
 @media print { #avisoNuvem { display:none !important; } }
+
+/* ===== aba Garantia ===== */
+.gar-topo { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.gar-topo h2 { margin:0; }
+.gar-sub { display:inline-flex; margin-left:auto; border:1px solid var(--linha); border-radius:6px; overflow:hidden; }
+.gar-sub button { border:0; background:#FFFFFF; color:var(--marinho); font:inherit; font-size:12.5px; font-weight:600; padding:5px 14px; cursor:pointer; }
+.gar-sub button + button { border-left:1px solid var(--linha); }
+.gar-sub button.ativo { background:var(--marinho); color:#FFFFFF; }
+.gar-barra { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.gar-barra .gar-espaco { flex:1; }
+.gar-contagem { font-size:12.5px; color:var(--azul-claro, #49668C); font-weight:600; }
+.gar-filtro.ativo { background:#ffedd5; border-color:#f59e0b; color:#9a3412; }
+.gar-entrada label { font-weight:700; font-size:12.5px; color:var(--marinho); }
+.gar-entrada textarea { width:340px; max-width:100%; min-height:30px; font:inherit; font-size:12.5px; padding:5px 8px; border:1px solid var(--linha); border-radius:6px; resize:vertical; }
+.gar-msg { font-size:12px; color:#64748b; }
+table.tabela-garantia { border-collapse:collapse; width:100%; font-size:12px; }
+table.tabela-garantia th { background:var(--marinho); color:#fff; padding:6px 7px; text-align:left; white-space:nowrap; position:sticky; top:0; }
+table.tabela-garantia th.num, table.tabela-garantia td.num { text-align:right; }
+table.tabela-garantia th.gar-ord { cursor:pointer; }
+table.tabela-garantia th, table.tabela-garantia td { text-align:left; }
+table.tabela-garantia td { padding:4px 7px; border-bottom:1px solid #eef1f5; white-space:nowrap; background:#fff; }
+table.tabela-garantia tbody tr:hover td { background:#f8fafc; }
+.gar-cli { max-width:220px; overflow:hidden; text-overflow:ellipsis; }
+.gar-forte { font-weight:800; }
+.gar-queda { color:#C2560C; } .gar-aumento { color:#1e40af; }
+tr.gar-linha-forte td:nth-child(2) { font-weight:800; }
+.gar-sit { font-size:11px; color:#64748b; }
+.gar-sit-analise { color:#9a3412; font-weight:700; background:#ffedd5; padding:1px 7px; border-radius:10px; }
+.gar-sit-lib { color:#166534; font-weight:600; background:#dcfce7; padding:1px 7px; border-radius:10px; }
+.gar-vazio { text-align:center; color:#64748b; padding:14px !important; white-space:normal !important; }
+.gar-in { font:inherit; font-size:12px; padding:3px 5px; border:1px solid var(--linha); border-radius:5px; background:#fff; }
+.gar-media { width:80px; text-align:right; }
+.gar-texto { width:190px; }
+.tabela-garantia td.gar-neg { color:#C2560C; }
+.tabela-garantia td.gar-ganho { color:#166534; }
+.gar-kpis { display:flex; gap:12px; flex-wrap:wrap; margin:6px 0 12px; }
+.gar-kpi { flex:1 1 180px; border:1px solid var(--linha); border-radius:8px; padding:10px 12px; background:#f8fafc; display:flex; flex-direction:column; gap:2px; }
+.gar-kpi span { font-size:11.5px; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+.gar-kpi b { font-size:20px; color:var(--marinho); }
+.gar-kpi small { font-size:11.5px; color:#64748b; }
+.gar-resumo tr.linha-media td { background:var(--marinho); color:#fff; }
+.gar-h3 { font-size:13px; margin:14px 0 6px; color:var(--marinho); }
+@media print { .gar-sub, .gar-add, .gar-remover, .gar-barra { display:none !important; } }
+#view-executivo .gar-kpis { margin-top:0; }

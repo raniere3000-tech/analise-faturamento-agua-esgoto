@@ -1,6 +1,6 @@
 const CHAVE_JUSTIFICATIVA = '__CHAVE_JUSTIFICATIVA__';
 
-const VIEWS = ['resumo', 'tabelas', 'analise', 'indiretas', 'forecast', 'dre', 'dados'];
+const VIEWS = ['resumo', 'tabelas', 'analise', 'indiretas', 'forecast', 'dre', 'garantia', 'dados'];
 function mostrarView(view) {
     VIEWS.forEach(v => {
         document.getElementById('view-' + v).classList.toggle('ativo', v === view);
@@ -35,6 +35,7 @@ function definirFiltros(parcial) {
         const el = document.getElementById(id); if (el && v) el.value = v;
     });
     desenharGraficosIndiretas();
+    if (typeof garRedesenhar === 'function') garRedesenhar();
 }
 
 // Superintendência nas abas por grupo (Resumo e Diretas): marca só os grupos da SUP escolhida (pela Localidade do cronograma)
@@ -210,6 +211,7 @@ function filtrarPorGrupo() {
     recalcularKPIsResumo();
     refazTops();                                            // Top 100 refeito só com os grupos marcados
     sitlRecalcular();                                       // cards da Situação de lançamento
+    if (typeof garRedesenhar === 'function') garRedesenhar();   // aba Garantia (Top 1000, análise e resumo)
 }
 
 function recalcularTotais() {
@@ -1188,6 +1190,7 @@ function gerarExecutivo(libs) {
         ['Orçado x Realizado', qa('#view-tabelas .orc-ciclo-bloco:not([hidden]) > .card')],
         ['Faturamento Mês a Mês', [card('#tabela-agua'), card('#tabela-esgoto')]],
         ['Indiretas', qa(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .prev-card`)],
+        ['Garantia — Resumo de Ganhos', [q('#garantia-resumo-card')]],
         ['Análise de Ciclo', [q('#card-justificativa')]],         // título só no PDF, em cima das justificativas
     ];
     secoes.forEach(([nome, els]) => {
@@ -1444,7 +1447,7 @@ function marcaNuvem(nome, r) {
 // clique na nuvem: grava tudo o que está na tela e relê a pasta; devolve true se tudo foi salvo
 window.sincronizarTudo = async function () {
     if (!compartilhado()) return false;
-    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncConfig.empurrar(), await salvarJustificativas()];
+    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncConfig.empurrar(), await syncGarantia.empurrar(), await salvarJustificativas()];
     puxarAjustesCompartilhados(); lerJustificativasDaPasta();
     return r.every(Boolean);
 };
@@ -1505,7 +1508,11 @@ var syncSituacao = criaSync('situacao', 'Situação do grupo',
                  try { localStorage.setItem(SIT_LS, JSON.stringify(sitManuais)); } catch (e) {} },
     () => document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach(sitAplicar),
     () => !!document.querySelector('select.sit-escolha'));
-function puxarAjustesCompartilhados() { syncForecast.puxar(); syncSituacao.puxar(); if (typeof syncConfig !== 'undefined') syncConfig.puxar(); }
+function puxarAjustesCompartilhados() {
+    syncForecast.puxar(); syncSituacao.puxar();
+    if (typeof syncConfig !== 'undefined') syncConfig.puxar();
+    if (typeof syncGarantia !== 'undefined') syncGarantia.puxar();
+}
 // chamado pelo site quando o arquivo da pasta mudou (outra pessoa salvou) ou ao voltar para a aba
 window.puxarTudoDaPasta = function () { puxarAjustesCompartilhados(); lerJustificativasDaPasta(); };
 puxarAjustesCompartilhados();
@@ -1556,3 +1563,308 @@ function aplicarConfig(c) {
 var syncConfig = criaSync('config', 'Configurações do relatório', lerConfig, aplicarConfig, () => {});
 window.configAlterada = configAlterada;               // o site avisa quando a "Comparar" muda no cabeçalho
 syncConfig.puxar();
+
+// ===== Aba Garantia: Top 1000 · Análise de Garantia · Resumo de Ganhos =====
+// Dados (script#garantia-dados, JSON em gzip): uma linha por matrícula, já no ranking da média do faturado (R$) dos
+// meses fechados. A análise manual (média do sistema, motivo, retorno, foto do faturado) fica em garItens e vai para a
+// seção "garantia" do ajustes_relatorio.json — a mesma análise para todos.
+const GAR = { dados: null, porLig: new Map(), ref: '', top: 1000, refs: [], tarifa: null, soAnalise: false,
+              ordem: { campo: 'rank', desc: false }, carregando: null };
+const GAR_LS = 'faturamento_garantia';
+let garItens = {};
+try { garItens = JSON.parse(localStorage.getItem(GAR_LS) || '{}') || {}; } catch (e) { /* sem armazenamento */ }
+const garEsc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const garR = (v) => (v == null || isNaN(v) ? '–' : 'R$ ' + fmtBR(v, 2));
+const garN = (v, d) => (v == null || isNaN(v) ? '–' : fmtBR(v, d || 0));
+const garEmAnalise = (d) => !!d && (d.sit || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim() === 'EM ANALISE';
+const garVar = (atual, media) => (atual == null || !media ? null : (atual - media) / media);
+
+function garCarregar() {
+    if (GAR.carregando) return GAR.carregando;
+    GAR.carregando = (async () => {
+        const el = document.getElementById('garantia-dados');
+        if (!el) return null;
+        const j = JSON.parse(new TextDecoder('utf-8').decode(await bytesEmbutidos(el)));
+        GAR.ref = j.refAtual; GAR.top = j.top || 1000; GAR.refs = j.refs || [];
+        GAR.dados = j.linhas.map((l) => Object.fromEntries(j.colunas.map((c, i) => [c, l[i]])));
+        GAR.porLig = new Map(GAR.dados.map((d) => [String(d.lig), d]));
+        GAR.lista = GAR.dados.filter((d) => d.rank && d.rank <= GAR.top);      // o Top 1000 (separado uma vez só)
+        try { GAR.tarifa = JSON.parse(document.getElementById('tarifa-dados').textContent); } catch (e) { GAR.tarifa = null; }
+        return GAR.dados;
+    })();
+    return GAR.carregando;
+}
+// filtro de grupos lido da tela uma vez por redesenho (ler para cada matrícula deixava a aba lenta)
+let garGrupos = null;
+function garVisivel(d) {
+    if (!d) return true;                                         // matrícula digitada que não está na base do mês
+    if (ESTADO.sup !== 'TODAS' && d.sup !== ESTADO.sup) return false;
+    return !garGrupos || garGrupos.has(normGrupo(d.grupo));
+}
+const garEco = (d) => ({ res: d.res || 0, com: d.com || 0, ind: d.ind || 0, pub: d.pub || 0 });
+function garCalculado(d, media) {
+    if (!d || media == null || media === '' || !GAR.tarifa || !window.Tarifa) return null;
+    return Tarifa.valor(GAR.tarifa, +media, d.cat, garEco(d), d.esg);
+}
+
+// --- Top 1000 ---
+const GAR_COLS_TOP = [
+    ['rank', '#', 'n'], ['lig', 'Matrícula', 't'], ['nome', 'Cliente', 't'], ['cat', 'Categoria', 't'], ['loc', 'Localidade', 't'],
+    ['grupo', 'Grupo', 't'], ['sup', 'SUP', 't'], ['eco', 'Econ.', 'n'], ['mMed', 'Média cons. medido (m³)', 'n'],
+    ['mCons', 'Média cons. faturado (m³)', 'n'], ['cons', 'Cons. faturado atual (m³)', 'n'], ['dCons', 'Δ% cons.', 'n'],
+    ['mVal', 'Média faturado (R$)', 'n'], ['val', 'Faturado atual (R$)', 'n'], ['dVal', 'Δ% R$', 'n'], ['sit', 'Situação conta', 't'],
+];
+function garValorCol(d, c) {
+    if (c === 'eco') return (d.res || 0) + (d.com || 0) + (d.ind || 0) + (d.pub || 0);
+    if (c === 'dCons') return garVar(d.cons, d.mCons);
+    if (c === 'dVal') return garVar(d.val, d.mVal);
+    return d[c];
+}
+function garLinhasTop() {
+    let ls = GAR.lista.filter((d) => garVisivel(d) && (!GAR.soAnalise || garEmAnalise(d)));
+    const { campo, desc } = GAR.ordem;
+    const num = GAR_COLS_TOP.find((c) => c[0] === campo)?.[2] !== 't';
+    ls.sort((a, b) => {
+        let x = garValorCol(a, campo), y = garValorCol(b, campo);
+        if (num) { x = x == null ? -Infinity : x; y = y == null ? -Infinity : y; return desc ? y - x : x - y; }
+        return desc ? String(y || '').localeCompare(String(x || '')) : String(x || '').localeCompare(String(y || ''));
+    });
+    return ls;
+}
+function garDesenharTop() {
+    const tab = document.getElementById('garTabelaTop'); if (!tab || !GAR.dados) return;
+    garGrupos = gruposFiltro();
+    const { campo, desc } = GAR.ordem;
+    tab.tHead.innerHTML = '<tr>' + GAR_COLS_TOP.map(([c, t, tipo]) => `<th class="gar-ord ${tipo === 'n' ? 'num' : ''}" data-ord="${c}" tabindex="0" title="Ordenar">${t}${c === campo ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '<th></th></tr>';
+    const ls = garLinhasTop();
+    const naAnalise = new Set(Object.keys(garItens).filter((k) => k.startsWith(GAR.ref + '|')).map((k) => k.slice(GAR.ref.length + 1)));
+    const pctCel = (p) => {
+        if (p == null) return '<td class="num">–</td>';
+        const forte = Math.abs(p) > 0.3, cls = p < 0 ? 'gar-queda' : 'gar-aumento';
+        return `<td class="num ${forte ? 'gar-forte ' + cls : ''}">${(p > 0 ? '+' : '') + fmtBR(p * 100, 1)}%</td>`;
+    };
+    tab.tBodies[0].innerHTML = ls.map((d) => {
+        const dc = garVar(d.cons, d.mCons), dv = garVar(d.val, d.mVal);
+        const forte = (dc != null && Math.abs(dc) > 0.3) || (dv != null && Math.abs(dv) > 0.3);
+        const sit = d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? 'Em análise' : d.sit)}</span>` : '<span class="gar-sit">sem fatura no mês</span>';
+        const lig = String(d.lig);
+        return `<tr class="${forte ? 'gar-linha-forte' : ''}"><td class="num">${d.rank}</td><td class="${forte ? 'gar-forte' : ''}">${garEsc(lig)}</td>`
+            + `<td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td><td>${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td>${garEsc(d.sup)}</td>`
+            + `<td class="num">${garN(garValorCol(d, 'eco'))}</td><td class="num">${garN(d.mMed, 1)}</td><td class="num">${garN(d.mCons, 1)}</td><td class="num">${garN(d.cons, 1)}</td>${pctCel(dc)}`
+            + `<td class="num">${garR(d.mVal)}</td><td class="num">${garR(d.val)}</td>${pctCel(dv)}<td>${sit}</td>`
+            + `<td><button type="button" class="btn-just gar-add" data-lig="${garEsc(lig)}" ${naAnalise.has(lig) ? 'disabled title="Já está na Análise de Garantia"' : 'title="Levar para a Análise de Garantia"'}>${naAnalise.has(lig) ? '✓' : '+ Análise'}</button></td></tr>`;
+    }).join('') || `<tr><td colspan="${GAR_COLS_TOP.length + 1}" class="gar-vazio">Nenhuma matrícula com os filtros escolhidos.</td></tr>`;
+    const emAnalise = GAR.lista.filter((d) => garVisivel(d) && garEmAnalise(d)).length;
+    document.getElementById('garTopContagem').textContent = `${ls.length} matrícula(s) na tela · ${emAnalise} em análise`;
+    const b = document.getElementById('garSoAnalise');
+    b.classList.toggle('ativo', GAR.soAnalise); b.setAttribute('aria-pressed', GAR.soAnalise ? 'true' : 'false');
+    b.textContent = GAR.soAnalise ? `Mostrando só em análise (${emAnalise}) — ver todas` : `Somente em análise (${emAnalise})`;
+}
+
+// --- Análise de Garantia ---
+const garChave = (lig) => `${GAR.ref}|${lig}`;
+function garItensDoMes() {
+    return Object.entries(garItens).filter(([k]) => k.startsWith(GAR.ref + '|'))
+        .map(([k, v]) => ({ lig: k.slice(GAR.ref.length + 1), ...v })).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+}
+function garSalvar() {
+    try { localStorage.setItem(GAR_LS, JSON.stringify(garItens)); } catch (e) { /* ignora */ }
+    if (typeof syncGarantia !== 'undefined') syncGarantia.agendar();
+}
+function garAdicionar(ligs) {
+    let novos = 0, fora = [];
+    const base = Date.now();
+    ligs.forEach((lig, i) => {
+        lig = String(lig).trim(); if (!lig) return;
+        const k = garChave(lig);
+        if (garItens[k]) return;
+        const d = GAR.porLig.get(lig);
+        if (!d) fora.push(lig);
+        garItens[k] = { media: null, motivo: '', retorno: '', obs: '', anterior: d && d.val != null ? d.val : null,
+                        foto: d && d.val != null ? new Date().toISOString() : null, ordem: base + i };
+        novos++;
+    });
+    if (novos) garSalvar();
+    const msg = document.getElementById('garMsg');
+    if (msg) msg.textContent = (novos ? `${novos} matrícula(s) adicionada(s).` : 'Nenhuma matrícula nova.')
+        + (fora.length ? ` Sem dados no mês atual: ${fora.slice(0, 5).join(', ')}${fora.length > 5 ? '…' : ''}` : '');
+    garRedesenhar();
+}
+function garCalcItem(it) {
+    const d = GAR.porLig.get(it.lig);
+    const calc = garCalculado(d, it.media);
+    const atual = d ? d.val : null;
+    const dif = atual != null && it.anterior != null ? atual - it.anterior : null;
+    return { d, calc, atual, dif };
+}
+function garDesenharAnalise() {
+    const tab = document.getElementById('garTabelaAnalise'); if (!tab || !GAR.dados) return;
+    tab.tHead.innerHTML = '<tr><th>Matrícula</th><th>Cliente</th><th>Categoria</th><th>Localidade</th><th class="num">Res.</th><th class="num">Com.</th>'
+        + '<th class="num">Ind.</th><th class="num">Púb.</th><th class="num">Total</th><th>Grupo</th><th>Rota</th><th>Situação conta</th>'
+        + '<th class="num" title="Média faturada do sistema (m³) — preenchida manualmente">Média volume fat. (m³)</th>'
+        + '<th class="num" title="Valor da média pela estrutura tarifária">Fat. calculado (R$)</th>'
+        + '<th class="num" title="Foto do faturado quando a matrícula entrou na análise">Fat. anterior (R$)</th>'
+        + '<th class="num" title="Faturado atual (muda quando a fatura é liberada)">Fat. ajustado (R$)</th><th class="num">Dif. (R$)</th>'
+        + '<th>Motivo</th><th>Retorno superintendência</th><th>OBS</th><th></th></tr>';
+    let mudouFoto = false;
+    const itens = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)));
+    tab.tBodies[0].innerHTML = itens.map((it) => {
+        const { d, calc, atual, dif } = garCalcItem(it);
+        if (it.anterior == null && atual != null) { garItens[garChave(it.lig)].anterior = atual; garItens[garChave(it.lig)].foto = new Date().toISOString(); it.anterior = atual; mudouFoto = true; }
+        const tot = d ? (d.res || 0) + (d.com || 0) + (d.ind || 0) + (d.pub || 0) : null;
+        const sit = !d ? '<span class="gar-sit">não encontrada</span>' : d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? 'Em análise' : d.sit)}</span>` : '<span class="gar-sit">sem fatura no mês</span>';
+        const opt = (v, t) => `<option value="${v}" ${it.motivo === v ? 'selected' : ''}>${t}</option>`;
+        return `<tr data-lig="${garEsc(it.lig)}"><td>${garEsc(it.lig)}</td><td class="gar-cli" title="${garEsc(d && d.nome)}">${garEsc(d && d.nome)}</td>`
+            + `<td>${garEsc(d && d.cat)}</td><td>${garEsc(d && d.loc)}</td><td class="num">${garN(d && d.res)}</td><td class="num">${garN(d && d.com)}</td>`
+            + `<td class="num">${garN(d && d.ind)}</td><td class="num">${garN(d && d.pub)}</td><td class="num">${garN(tot)}</td><td>${garEsc(d && d.grupo)}</td>`
+            + `<td>${garEsc(d && d.rota)}</td><td>${sit}</td>`
+            + `<td class="num"><input class="gar-in gar-media" data-campo="media" inputmode="decimal" value="${it.media == null ? '' : fmtBR(it.media, it.media % 1 ? 2 : 0)}"></td>`
+            + `<td class="num" data-f="calc">${garR(calc)}</td><td class="num">${garR(it.anterior)}</td><td class="num" data-f="atual">${garR(atual)}</td>`
+            + `<td class="num ${dif < 0 ? 'gar-neg' : ''}" data-f="dif">${garR(dif)}</td>`
+            + `<td><select class="gar-in" data-campo="motivo">${opt('', '—')}${opt('QUEDA', 'Queda de consumo')}${opt('AUMENTO', 'Aumento de consumo')}</select></td>`
+            + `<td><input class="gar-in gar-texto" data-campo="retorno" value="${garEsc(it.retorno)}" placeholder="ex.: FATURAR MÉDIA 311 m³"></td>`
+            + `<td><input class="gar-in gar-texto" data-campo="obs" value="${garEsc(it.obs)}"></td>`
+            + `<td><button type="button" class="btn-just gar-remover" title="Tirar da análise" aria-label="Tirar a matrícula ${garEsc(it.lig)} da análise">✕</button></td></tr>`;
+    }).join('') || '<tr><td colspan="21" class="gar-vazio">Nenhuma matrícula na análise deste mês. Digite ou cole matrículas acima, ou use “+ Análise” no Top 1000.</td></tr>';
+    if (mudouFoto) garSalvar();
+}
+function garLerNumero(t) {
+    t = String(t || '').trim().replace(/\s/g, '').replace(/m³|m3/gi, '');
+    if (!t) return null;
+    if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(t);
+    return isNaN(n) ? null : n;
+}
+document.addEventListener('input', (e) => {
+    const inp = e.target.closest && e.target.closest('#garTabelaAnalise .gar-in'); if (!inp) return;
+    const tr = inp.closest('tr'), it = garItens[garChave(tr.dataset.lig)]; if (!it) return;
+    const campo = inp.dataset.campo;
+    it[campo] = campo === 'media' ? garLerNumero(inp.value) : inp.value;
+    if (campo === 'media') {
+        const c = garCalcItem({ lig: tr.dataset.lig, ...it });
+        tr.querySelector('[data-f="calc"]').textContent = garR(c.calc);
+    }
+    garSalvar(); garDesenharResumo();
+});
+document.addEventListener('click', (e) => {
+    const add = e.target.closest && e.target.closest('.gar-add');
+    if (add) { garAdicionar([add.dataset.lig]); return; }
+    const rem = e.target.closest && e.target.closest('#garTabelaAnalise .gar-remover');
+    if (rem) {
+        const lig = rem.closest('tr').dataset.lig;
+        if (!confirm(`Tirar a matrícula ${lig} da análise de garantia?`)) return;
+        delete garItens[garChave(lig)]; garSalvar(); garRedesenhar(); return;
+    }
+    const aba = e.target.closest && e.target.closest('[data-gar-aba]');
+    if (aba) {
+        document.querySelectorAll('[data-gar-aba]').forEach((b) => { const ok = b === aba; b.classList.toggle('ativo', ok); b.setAttribute('aria-pressed', ok ? 'true' : 'false'); });
+        document.querySelectorAll('.gar-painel').forEach((p) => { p.hidden = p.dataset.gar !== aba.dataset.garAba; });
+        return;
+    }
+    const ord = e.target.closest && e.target.closest('#garTabelaTop th.gar-ord');
+    if (ord) {
+        const c = ord.dataset.ord;
+        GAR.ordem = { campo: c, desc: GAR.ordem.campo === c ? !GAR.ordem.desc : c !== 'rank' };
+        garDesenharTop(); return;
+    }
+    if (e.target.id === 'garSoAnalise') { GAR.soAnalise = !GAR.soAnalise; garDesenharTop(); return; }
+    if (e.target.id === 'garAdicionar') {
+        const t = document.getElementById('garEntrada');
+        garAdicionar((t.value.match(/\d{4,}/g) || [])); t.value = ''; return;
+    }
+    if (e.target.id === 'garBaixarTop') { garBaixarTop(); return; }
+    if (e.target.id === 'garEmail') { garExportarEmail(); return; }
+});
+document.addEventListener('keydown', (e) => {
+    if (e.target.id === 'garEntrada' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('garAdicionar').click(); }
+    const ord = e.target.closest && e.target.closest('#garTabelaTop th.gar-ord');
+    if (ord && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); ord.click(); }
+});
+document.addEventListener('paste', (e) => {               // colar várias matrículas direto no campo já adiciona
+    if (e.target.id !== 'garEntrada') return;
+    const t = (e.clipboardData || window.clipboardData).getData('text');
+    const ligs = t.match(/\d{4,}/g) || [];
+    if (ligs.length > 1) { e.preventDefault(); garAdicionar(ligs); }
+});
+function garBaixarTop() {
+    const cols = ['Ranking', 'Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'SUP', 'Economias', 'Média cons. medido (m³)',
+        'Média cons. faturado (m³)', 'Cons. faturado atual (m³)', 'Δ% cons.', 'Média faturado (R$)', 'Faturado atual (R$)', 'Δ% R$', 'Situação conta'];
+    const pct = (p) => (p == null ? null : Math.round(p * 1000) / 10);
+    const linhas = garLinhasTop().map((d) => [d.rank, d.lig, d.nome, d.cat, d.loc, d.grupo, d.sup, garValorCol(d, 'eco'), d.mMed, d.mCons, d.cons,
+        pct(garVar(d.cons, d.mCons)), d.mVal, d.val, pct(garVar(d.val, d.mVal)), d.sit || '']);
+    baixarTexto(csvDe(cols, linhas), `Garantia_Top${GAR.top}_${GAR.ref.replace('/', '-')}${GAR.soAnalise ? '_em_analise' : ''}.csv`);
+}
+function garExportarEmail() {
+    const itens = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)) && (it.motivo || it.retorno));
+    if (!itens.length) { avisoNuvem('Nenhuma matrícula com motivo ou retorno preenchido para exportar.', true); return; }
+    const cols = ['Matrícula', 'Cliente', 'Grupo', 'Localidade', 'Categoria', 'Motivo', 'Solicitação', 'Média (m³)', 'OBS'];
+    const linhas = itens.map((it) => { const d = GAR.porLig.get(it.lig) || {};
+        return [it.lig, d.nome || '', d.grupo || '', d.loc || '', d.cat || '', it.motivo === 'QUEDA' ? 'Queda de consumo' : it.motivo === 'AUMENTO' ? 'Aumento de consumo' : '',
+                it.retorno || '', it.media, it.obs || '']; });
+    const html = `<p>Prezados, seguem as matrículas da análise de garantia (${garEsc(GAR.ref)}) com a solicitação para o faturamento:</p>`
+        + '<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px">'
+        + '<tr style="background:#1A2740;color:#fff">' + cols.map((c) => `<th>${garEsc(c)}</th>`).join('') + '</tr>'
+        + linhas.map((l) => '<tr>' + l.map((v, i) => `<td${i === 7 ? ' align="right"' : ''}>${garEsc(i === 7 && v != null ? fmtBR(v, v % 1 ? 2 : 0) : v)}</td>`).join('') + '</tr>').join('') + '</table>';
+    const texto = cols.join('\t') + '\n' + linhas.map((l) => l.map((v) => (v == null ? '' : v)).join('\t')).join('\n');
+    const copiar = async () => {
+        try {
+            await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([texto], { type: 'text/plain' }) })]);
+            return true;
+        } catch (e) {
+            const div = document.createElement('div'); div.innerHTML = html; div.style.cssText = 'position:fixed;left:-9999px;top:0';
+            document.body.appendChild(div);
+            const r = document.createRange(); r.selectNodeContents(div); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+            let ok = false; try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+            s.removeAllRanges(); div.remove(); return ok;
+        }
+    };
+    copiar().then((ok) => avisoNuvem(ok ? `${itens.length} matrícula(s) copiadas: cole no e-mail (Ctrl+V). O CSV também foi baixado.` : 'Não foi possível copiar; use o CSV baixado.', !ok));
+    baixarTexto(csvDe(cols, linhas), `Garantia_email_${GAR.ref.replace('/', '-')}.csv`);
+}
+
+// --- Resumo de Ganhos ---
+function garTotais() {
+    const t = { AUMENTO: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 }, QUEDA: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 } }, porGrupo = {};
+    garItensDoMes().forEach((it) => {
+        if (!t[it.motivo]) return;
+        const { d, calc, atual } = garCalcItem(it);
+        if (!garVisivel(d)) return;
+        const x = t[it.motivo], ant = it.anterior || 0, at = atual || 0;
+        const ajust = it.motivo === 'AUMENTO' ? (calc || 0) : at;
+        const gar = it.motivo === 'AUMENTO' ? (calc == null ? 0 : at - calc) : at - ant;
+        x.n++; if (d && !garEmAnalise(d)) x.lib++;
+        x.orig += ant; x.ajust += ajust; x.gar += gar;
+        const g = (d && d.grupo) || '—', pg = porGrupo[g] = porGrupo[g] || { n: 0, QUEDA: 0, AUMENTO: 0 };
+        pg.n++; pg[it.motivo] += gar;
+    });
+    return { t, porGrupo };
+}
+function garDesenharResumo() {
+    const el = document.getElementById('garResumo'); if (!el || !GAR.dados) return;
+    const { t, porGrupo } = garTotais();
+    const tot = ['n', 'lib', 'orig', 'ajust', 'gar'].reduce((o, k) => (o[k] = t.AUMENTO[k] + t.QUEDA[k], o), {});
+    const lin = (nome, x, cls) => `<tr class="${cls || ''}"><td>${nome}</td><td class="num">${x.n}</td><td class="num">${x.lib}</td><td class="num">${garR(x.orig)}</td>`
+        + `<td class="num">${garR(x.ajust)}</td><td class="num ${x.gar < 0 ? 'gar-neg' : 'gar-ganho'}"><b>${garR(x.gar)}</b></td></tr>`;
+    const grupos = Object.keys(porGrupo).sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+    el.innerHTML = '<div class="gar-kpis">'
+        + `<div class="gar-kpi"><span>Garantia total</span><b>${garR(tot.gar)}</b><small>${tot.n} matrícula(s) · ${tot.lib} liberada(s)</small></div>`
+        + `<div class="gar-kpi"><span>Queda de consumo</span><b>${garR(t.QUEDA.gar)}</b><small>${t.QUEDA.n} matrícula(s)</small></div>`
+        + `<div class="gar-kpi"><span>Aumento de consumo</span><b>${garR(t.AUMENTO.gar)}</b><small>${t.AUMENTO.n} matrícula(s)</small></div></div>`
+        + '<div class="tabela-wrap"><table class="tabela-garantia gar-resumo"><thead><tr><th>Resumo</th><th class="num">Ligações</th><th class="num">Liberadas</th>'
+        + '<th class="num">Valor original</th><th class="num">Valor ajustado / média</th><th class="num">Garantia</th></tr></thead><tbody>'
+        + lin('Aumento de consumo', t.AUMENTO) + lin('Queda de consumo', t.QUEDA) + lin('<b>Total</b>', tot, 'linha-media') + '</tbody></table></div>'
+        + (grupos.length ? '<h3 class="gar-h3">Por grupo</h3><div class="tabela-wrap"><table class="tabela-garantia gar-resumo"><thead><tr><th>Grupo</th><th class="num">Ligações</th>'
+            + '<th class="num">Garantia queda</th><th class="num">Garantia aumento</th><th class="num">Total</th></tr></thead><tbody>'
+            + grupos.map((g) => { const p = porGrupo[g]; return `<tr><td>${garEsc(g)}</td><td class="num">${p.n}</td><td class="num">${garR(p.QUEDA)}</td><td class="num">${garR(p.AUMENTO)}</td><td class="num"><b>${garR(p.QUEDA + p.AUMENTO)}</b></td></tr>`; }).join('')
+            + '</tbody></table></div>' : '<p class="nota-secao">Nenhuma matrícula com motivo preenchido na Análise de Garantia.</p>');
+}
+function garRedesenhar() {
+    if (!GAR.dados) return;
+    garGrupos = gruposFiltro();
+    garDesenharTop(); garDesenharAnalise(); garDesenharResumo();
+}
+var syncGarantia = criaSync('garantia', 'Análise de garantia', () => garItens,
+    (m) => { garItens = m; try { localStorage.setItem(GAR_LS, JSON.stringify(garItens)); } catch (e) {} },
+    () => garRedesenhar(),
+    () => !!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#garTabelaAnalise')));
+garCarregar().then(() => { garRedesenhar(); syncGarantia.puxar(); }).catch((e) => console.warn('Garantia: dados não carregaram', e));

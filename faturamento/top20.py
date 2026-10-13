@@ -54,6 +54,11 @@ def calcula_top20_maior_consumo(ctx, n=20):
     if not col_sit:            # sem a coluna Situacao Conta, limita ao Top n para não listar a base toda
         agua = agua.head(n)
     sup_da = _sup_da_linha(ctx)
+    # para a estrutura tarifária na conferência: economias por tipo e se a ligação tem esgoto (valor × 2)
+    serv = mes["__serv"] if "__serv" in mes.columns else mes["Rubrica"].astype(str).str.upper().map(lambda r: "E" if "ESGOTO" in r else "A")
+    com_esgoto = set(mes.loc[serv == "E", "N. Ligação"].astype(str))
+    eco_cols = {"eco_res": "Qtd. Economia Residencial", "eco_com": "Qtd. Economia Comercial",
+                "eco_ind": "Qtd. Economia Industrial", "eco_pub": "Qtd. Economia Publica"}
     linhas = []
     for _, r in agua.iterrows():
         linhas.append({
@@ -64,6 +69,8 @@ def calcula_top20_maior_consumo(ctx, n=20):
             "situacao": str(r[col_sit]) if col_sit else "",
             "sup": sup_da(r),
             "economias": _numero(r.get("Economias_Totais")),          # economias da ligação no mês (do consumo)
+            **{k: _numero(r.get(c)) for k, c in eco_cols.items()},
+            "esgoto": str(r["N. Ligação"]) in com_esgoto,
             "consumo": float(r["Consumo Faturado"]),
             "valor": round(float(valor_total.get(r["N. Ligação"], 0)), 2),
             # mês anterior (só para conferência; None = a ligação não faturou no mês anterior)
@@ -71,6 +78,7 @@ def calcula_top20_maior_consumo(ctx, n=20):
             "valor_ant": _ou_none(valor_ant.get(r["N. Ligação"]), 2),
         })
     return {"refAtual": ref, "refAnterior": ref_ant, "linhas": linhas, "colunaSituacao": col_sit or "",
+            "tarifa": getattr(ctx, "tarifa", None),
             "grupos": _totais_por_grupo(ctx, mes, valor_total, consumo_lig, valor_ant, consumo_ant)}
 
 
