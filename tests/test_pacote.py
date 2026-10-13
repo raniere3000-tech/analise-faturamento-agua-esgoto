@@ -93,3 +93,13 @@ def test_consumo_minimo_do_publico_e_15():
     from faturamento.config import CONSUMO_MINIMO_POR_CATEGORIA, MINIMO_POR_TIPO_ECONOMIA
     assert CONSUMO_MINIMO_POR_CATEGORIA["PUBLICA"] == 15 and CONSUMO_MINIMO_POR_CATEGORIA["PUB. ESTADUAL"] == 15
     assert MINIMO_POR_TIPO_ECONOMIA["Qtd. Economia Publica"] == 15
+
+
+def test_superintendencia_lagos_agora_e_interior():
+    from faturamento.config import REGRAS, sup_da_localidade
+    from faturamento.dre import _nome_sup, _sup_orcado
+    assert "INTERIOR" in REGRAS["superintendencias"] and "LAGOS" not in REGRAS["superintendencias"]
+    assert sup_da_localidade("Lagos") == "INTERIOR" and sup_da_localidade("Interior") == "INTERIOR"
+    assert sup_da_localidade("RIO BONITO") == "INTERIOR" and sup_da_localidade("MARICA") == "LESTE"
+    assert _sup_orcado("LAGOS") == "INTERIOR" == _sup_orcado("Interior")
+    assert _nome_sup("TODAS") == "Todas as superintendências"

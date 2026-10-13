@@ -427,7 +427,7 @@ def processa_cronograma(caminho):
     df_final = df_final[df_final["Grupo"].str.fullmatch(r"\d+") | df_final["Qts. Dias"].notna()]   # tira linhas de título/total
     # mês da leitura: permite cruzar o cronograma com a fatura por grupo E mês (dias de leitura de cada mês)
     df_final["Referencia Cronograma"] = padroniza_referencia(df_final["Data da Leitura"])
-    # cidade do grupo (coluna Localidade): define a superintendência de cada grupo (Lagos, Leste...)
+    # cidade do grupo (coluna Localidade): define a superintendência de cada grupo (Interior, Leste...)
     col_loc = next((c for c in df_final.columns if chave_texto(c) in ("LOCALIDADE", "NOMEDALOCALIDADE", "CIDADE", "MUNICIPIO")), None)
     df_final["Localidade"] = df_final[col_loc].astype(str).str.strip() if col_loc else np.nan
     print(f"   ✅ Cronograma {nome}: {df_final['Grupo'].nunique()} grupos, meses: "

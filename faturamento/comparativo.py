@@ -77,7 +77,7 @@ def _sup_dos_grupos(ctx, base):
 def limita_ao_ultimo_grupo(ctx):
     """Só entram na análise os grupos até o último que faturou na última referência — em cada superintendência.
 
-    Ex.: se a última referência só tem faturamento dos grupos 501 a 503 (Lagos) e 401 a 404 (Leste), os grupos 504+
+    Ex.: se a última referência só tem faturamento dos grupos 501 a 503 (Interior) e 401 a 404 (Leste), os grupos 504+
     e 405+ (que ainda não faturaram) ficam de fora também nos outros meses, para a comparação ser entre os mesmos
     grupos. Cada SUP tem a sua numeração (4xx, 5xx...), por isso o corte é feito por SUP; uma SUP sem nenhum grupo
     faturado no mês ainda fica toda de fora (entra no forecast)."""

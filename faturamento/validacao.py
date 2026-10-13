@@ -230,7 +230,7 @@ def monta_bases(ctx):
         linhas.append(o)
     if linhas:
         orc = pd.concat(linhas, ignore_index=True)
-        if "Sup" in orc.columns:                       # SUP padronizada (Interior → LAGOS) para o filtro Superintendência
+        if "Sup" in orc.columns:                       # SUP padronizada (Lagos → INTERIOR) para o filtro Superintendência
             from .dre import _sup_orcado
             orc["Superintendência"] = orc["Sup"].map(_sup_orcado)
         BASES["orcado"] = {"df": orc, "truncada": False, "total": len(orc)}
@@ -264,7 +264,7 @@ def _secao_bases(ctx):
     return ('<p class="val-rot">Bases para download</p>'
             '<p>Arquivos CSV (separador ";" e vírgula decimal — abrem direto no Excel). Cada item abaixo indica qual base usar e o filtro '
             'que leva ao resultado da tela. Todos os downloads (bases e tabelas) seguem o filtro <b>Superintendência</b> do cabeçalho: '
-            f'com LAGOS ou LESTE escolhida, só as linhas daquela superintendência vêm no arquivo.</p><ul class="val-bases">{"".join(linhas)}</ul>{dados}')
+            f'com INTERIOR ou LESTE escolhida, só as linhas daquela superintendência vêm no arquivo.</p><ul class="val-bases">{"".join(linhas)}</ul>{dados}')
 
 
 DESCRICAO_BASES = {
@@ -719,7 +719,7 @@ def gera_validacao_html(ctx):
                "dias_leitura", ctx=ctx, bases=[("fatura", f"{f_atual_ant}; média de Qts. Dias por Grupo")],
                montagem=["Faixa com os dois meses e o Δ em dias (laranja quando diminui)"]),
         _bloco(f"Destaques do mês — {mes}",
-               "um quadro por superintendência (LAGOS, LESTE), cada um com os principais movimentos só daquela SUP: cortes, grupos que "
+               "um quadro por superintendência (INTERIOR, LESTE), cada um com os principais movimentos só daquela SUP: cortes, grupos que "
                "mais cresceram e mais caíram (água e esgoto) e o Top 100. O filtro Superintendência mostra o quadro escolhido.",
                ["Cortes: total de ligações cortadas e ativas (tabela 'Economias faturadas por ciclo — ativas × cortadas') e a diferença vs mês anterior",
                 "Crescimento / Queda: os 3 grupos com maior diferença de faturamento (atual − anterior), por serviço",
