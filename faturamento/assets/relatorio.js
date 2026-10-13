@@ -1020,7 +1020,10 @@ let prevEdicoes = {}, prevOculta = false, prevOcultaInd = false;     // "Ocultar
 try { const salvo = JSON.parse(localStorage.getItem(PREV_CHAVE_LS) || '{}'); prevEdicoes = salvo.edicoes || {};
     // a SUP LAGOS passou a se chamar INTERIOR: as edições guardadas com o nome antigo continuam valendo
     Object.keys(prevEdicoes).filter(c => c.includes('|LAGOS|')).forEach(c => { const n = c.replace('|LAGOS|', '|INTERIOR|'); if (!(n in prevEdicoes)) prevEdicoes[n] = prevEdicoes[c]; delete prevEdicoes[c]; }); prevOculta = !!salvo.oculta; prevOcultaInd = !!salvo.ocultaInd; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
-function prevSalvar() { try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta, ocultaInd: prevOcultaInd })); } catch (e) { /* ignora */ } }
+function prevSalvar() {
+    try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta, ocultaInd: prevOcultaInd })); } catch (e) { /* ignora */ }
+    if (typeof syncForecast !== 'undefined') syncForecast.agendar();
+}
 
 const prevN = (v, d) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
 function prevFmt(v, formato) {
@@ -1361,7 +1364,10 @@ const SIT_OPCOES = ['Liberado', 'Em Análise', 'LIS', 'Aguardando'];
 const SIT_CLASSE = { 'Liberado': 'sit-liberado', 'Em Análise': 'sit-analise', 'LIS': 'sit-lis', 'Aguardando': 'sit-aguardando' };
 let sitManuais = {};
 try { sitManuais = JSON.parse(localStorage.getItem(SIT_LS) || '{}') || {}; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
-function sitSalvar() { try { localStorage.setItem(SIT_LS, JSON.stringify(sitManuais)); } catch (e) { /* ignora */ } }
+function sitSalvar() {
+    try { localStorage.setItem(SIT_LS, JSON.stringify(sitManuais)); } catch (e) { /* ignora */ }
+    if (typeof syncSituacao !== 'undefined') syncSituacao.agendar();
+}
 function sitAplicar(el) {
     const auto = el.dataset.sitAuto, man = (sitManuais[el.dataset.sitRef] || {})[el.dataset.sitGrupo];
     const v = man || auto;
@@ -1407,3 +1413,68 @@ document.addEventListener('keydown', e => {
     const el = e.target.closest && e.target.closest('.sit-grupo[data-sit-grupo]');
     if (el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); sitEditar(el); }
 });
+
+
+// ===== Ajustes compartilhados na pasta do SharePoint (forecast editado e Situação dos grupos) =====
+// Com o relatório aberto pelo site e a pasta conectada, cada alteração vai para ajustes_relatorio.json na pasta (o OneDrive
+// sincroniza): quem abrir a mesma pasta vê os mesmos valores. Ao gravar, só as chaves alteradas aqui entram no arquivo
+// (o que outra pessoa mudou em outras linhas é mantido). A cada minuto o relatório relê o arquivo.
+function compartilhado() {
+    try { const p = window.parent; return p && p !== window && p.arquivoCompartilhado && p.arquivoCompartilhado.disponivel() ? p.arquivoCompartilhado : null; }
+    catch (e) { return null; }
+}
+function avisoNuvem(texto, erro) {
+    let el = document.getElementById('avisoNuvem');
+    if (!el) { el = document.createElement('div'); el.id = 'avisoNuvem'; document.body.appendChild(el); }
+    el.textContent = texto; el.className = erro ? 'erro' : ''; el.style.display = 'block';
+    clearTimeout(avisoNuvem.t); avisoNuvem.t = setTimeout(() => { el.style.display = 'none'; }, erro ? 8000 : 3500);
+}
+const igualJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const copiaJson = (o) => JSON.parse(JSON.stringify(o || {}));
+function criaSync(secao, nome, obter, definir, redesenhar, ocupado) {
+    let base = null, timer = null;
+    async function puxar() {
+        const comp = compartilhado();
+        if (!comp || (ocupado && ocupado())) return;
+        const d = await comp.ler();
+        if (!d || !d[secao]) return;                     // nunca salvo na pasta: fica o que há neste navegador
+        const remoto = d[secao].mapa || {};
+        if (!igualJson(remoto, obter())) { definir(copiaJson(remoto)); redesenhar(); }
+        base = copiaJson(remoto);
+    }
+    async function empurrar() {
+        const comp = compartilhado();
+        if (!comp) return;
+        const atual = copiaJson(obter()), antes = base || {};
+        const r = await comp.atualizar((d) => {
+            const sec = d[secao] = d[secao] || { mapa: {} }, m = sec.mapa = sec.mapa || {};
+            new Set([...Object.keys(atual), ...Object.keys(antes)]).forEach(k => {
+                if (!(k in atual)) delete m[k];
+                else if (!igualJson(atual[k], antes[k])) m[k] = atual[k];
+            });
+            sec.atualizado = new Date().toISOString();
+        });
+        if (r.ok) {
+            base = copiaJson(r.dados[secao].mapa);
+            if (!igualJson(base, obter())) { definir(copiaJson(base)); redesenhar(); }
+            avisoNuvem(`${nome}: salvo na pasta "${comp.pasta()}" — vale para todos`);
+        } else avisoNuvem(`${nome}: salvo só neste navegador (${r.motivo})`, true);
+    }
+    return {
+        puxar, empurrar,
+        agendar() { clearTimeout(timer); timer = setTimeout(empurrar, 700); },
+    };
+}
+var syncForecast = criaSync('forecast', 'Forecast', () => prevEdicoes,
+    (m) => { prevEdicoes = m; try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta, ocultaInd: prevOcultaInd })); } catch (e) {} },
+    () => prevRecalcularTodas(),
+    () => document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('p-prev'));
+var syncSituacao = criaSync('situacao', 'Situação do grupo',
+    () => { const plano = {}; Object.entries(sitManuais).forEach(([ref, gs]) => Object.entries(gs).forEach(([g, v]) => { plano[ref + '|' + g] = v; })); return plano; },
+    (plano) => { sitManuais = {}; Object.entries(plano).forEach(([k, v]) => { const i = k.lastIndexOf('|'); (sitManuais[k.slice(0, i)] = sitManuais[k.slice(0, i)] || {})[k.slice(i + 1)] = v; });
+                 try { localStorage.setItem(SIT_LS, JSON.stringify(sitManuais)); } catch (e) {} },
+    () => document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach(sitAplicar),
+    () => !!document.querySelector('select.sit-escolha'));
+function puxarAjustesCompartilhados() { syncForecast.puxar(); syncSituacao.puxar(); }
+puxarAjustesCompartilhados();
+setInterval(puxarAjustesCompartilhados, 60000);

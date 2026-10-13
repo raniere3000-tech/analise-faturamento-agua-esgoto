@@ -404,3 +404,9 @@ tr.linha-pendente td { background:#fafbfc; }
 .status-just-erro { color:#C2560C; }
 #view-executivo .status-just { display:none; }
 @media print { .status-just { display:none; } }
+
+/* aviso de gravação dos ajustes compartilhados */
+#avisoNuvem { display:none; position:fixed; right:16px; bottom:16px; z-index:9999; background:#1A2740; color:#fff; padding:9px 14px; border-radius:8px;
+              font-size:12.5px; font-weight:600; box-shadow:0 6px 20px rgba(0,0,0,.2); max-width:420px; }
+#avisoNuvem.erro { background:#9a3412; }
+@media print { #avisoNuvem { display:none !important; } }

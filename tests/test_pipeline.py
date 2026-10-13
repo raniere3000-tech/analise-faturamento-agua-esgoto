@@ -280,3 +280,14 @@ def test_justificativas_compartilhadas_na_pasta(analise):
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert 'const ARQ_JUST = "justificativas_relatorio.json"' in site and "window.justificativasCompartilhadas" in site
     assert 'requestPermission({ mode: "readwrite" })' in site
+
+
+def test_ajustes_compartilhados_forecast_situacao_e_etapa2(analise):
+    import os
+    html = open(analise.caminho_html, encoding="utf-8").read()
+    assert "var syncForecast = criaSync('forecast'" in html and "var syncSituacao = criaSync('situacao'" in html
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert 'const ARQ_AJUSTES = "ajustes_relatorio.json"' in site and "window.arquivoCompartilhado" in site
+    # etapa 2: só abre com arquivo lido agora (novo/alterado) ou pelo botão; os ajustes ficam salvos para todos
+    assert "const novos = !dados.leitura || (dados.leitura.lidos || 0) > 0;" in site
+    assert 'id="btnEtapa2"' in site and "guardaAjustes(refTop20, ajustes)" in site
