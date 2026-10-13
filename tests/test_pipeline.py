@@ -304,3 +304,13 @@ def test_sincronizacao_continua_entre_versoes_abertas(analise):
     assert "window.puxarTudoDaPasta = function" in html and "atualizado com alterações salvas por outra pessoa" in html
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert "setInterval(verificaPasta, 2000)" in site and 'new BroadcastChannel("faturamento_ajustes")' in site
+
+
+def test_configuracoes_do_relatorio_no_json(analise):
+    import os
+    html = open(analise.caminho_html, encoding="utf-8").read()
+    assert "var syncConfig = criaSync('config'" in html
+    for chave in ("ocultaForecast", "ocultaIndiretas", "referencia", "orcadoCiclo", "visaoSituacao", "todasColunas"):
+        assert chave + ":" in html, chave
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert "window.referenciaCompartilhada" in site and "w.configAlterada()" in site

@@ -363,7 +363,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v68</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v69</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -496,7 +496,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v68-20261013"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v69-20261013"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1329,6 +1329,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     $("btnPdf").hidden = false;
     filtrosEstado.view = "resumo";
     aplicaFiltros();
+    avisaRelatorio();                 // aplica as configurações salvas no JSON (ex.: "Comparar") por cima das padrões
   }
 
   function aplicaGrupos() {
@@ -1357,6 +1358,18 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   const mudouRef = () => {
     const escolhidas = [$("selRef1Top").value, $("selRef2Top").value].filter((v, i, a) => v && a.indexOf(v) === i);
     filtrosEstado.ref = escolhidas.join("|"); aplicaFiltros();
+    try { const w = janela(); if (w && w.configAlterada) w.configAlterada(); } catch (e) {}     // "Comparar" vai para o JSON
+  };
+  // o relatório lê/aplica a "Comparar" compartilhada (seção config do JSON) por aqui
+  window.referenciaCompartilhada = {
+    obter: () => filtrosEstado.ref || "",
+    definir(ref) {
+      const [r1, r2] = String(ref || "").split("|");
+      const tem = (sel, v) => !v || Array.from($(sel).options).some((o) => o.value === v);
+      if (!tem("selRef1Top", r1) || !tem("selRef2Top", r2)) return;        // planilha que não existe nesta pasta: ignora
+      $("selRef1Top").value = r1 || ""; $("selRef2Top").value = r2 || "";
+      filtrosEstado.ref = ref || ""; aplicaFiltros();
+    },
   };
   $("selRef1Top").addEventListener("change", mudouRef);
   $("selRef2Top").addEventListener("change", mudouRef);
