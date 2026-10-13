@@ -394,4 +394,6 @@ tr.linha-pendente td { background:#fafbfc; }
 .sit-manual { border:1px solid currentColor; padding:0 6px; }   /* borda (não box-shadow inset: o html2canvas pinta o selo inteiro no PDF) */
 .sit-escolha { font:inherit; font-size:11px; padding:1px 2px; border:1px solid #94a3b8; border-radius:6px; }
 #view-executivo .sit-lapis { display:none; }
+#view-executivo .sit-manual { border-color:transparent; }   /* no PDF o selo manual fica igual ao automático (sem o contorno) */
+@media print { .sit-manual { border-color:transparent; } }
 @media print { .sit-lapis { display:none; } }
