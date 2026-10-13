@@ -303,4 +303,4 @@ def test_sincronizacao_continua_entre_versoes_abertas(analise):
     html = open(analise.caminho_html, encoding="utf-8").read()
     assert "window.puxarTudoDaPasta = function" in html and "atualizado com alterações salvas por outra pessoa" in html
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
-    assert "setInterval(verificaPasta, 5000)" in site and 'new BroadcastChannel("faturamento_ajustes")' in site
+    assert "setInterval(verificaPasta, 2000)" in site and 'new BroadcastChannel("faturamento_ajustes")' in site
