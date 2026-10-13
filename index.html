@@ -351,7 +351,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v63</span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao" id="versao">v64</span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -482,7 +482,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 
 <script>
 (() => {
-  const VERSAO_SITE = "v63-20261013"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v64-20261013"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -499,6 +499,49 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   let worker = null;
   let pastaHandle = null;
   let rodando = false;
+
+  // ===== Justificativas compartilhadas: arquivo dentro da pasta conectada (sincronizada com o SharePoint pelo OneDrive) =====
+  // O relatório (iframe na mesma página) chama window.justificativasCompartilhadas: quem abrir a mesma pasta vê o que os
+  // outros escreveram. Cada mês é uma chave do arquivo; ao gravar, o arquivo é relido para não apagar os outros meses.
+  const ARQ_JUST = "justificativas_relatorio.json";
+  async function lerArquivoJust(handle) {
+    try {
+      const arq = await (await handle.getFileHandle(ARQ_JUST)).getFile();
+      const texto = await arq.text();
+      return texto.trim() ? JSON.parse(texto) : {};
+    } catch (e) {
+      if (e && e.name === "NotFoundError") return {};
+      throw e;
+    }
+  }
+  window.justificativasCompartilhadas = {
+    disponivel: () => !!pastaHandle,
+    pasta: () => (pastaHandle ? pastaHandle.name : ""),
+    async ler() {
+      if (!pastaHandle) return null;
+      try {
+        if ((await pastaHandle.queryPermission({ mode: "read" })) !== "granted") return null;
+        return await lerArquivoJust(pastaHandle);
+      } catch (e) { console.warn("Justificativas compartilhadas: leitura falhou", e); return null; }
+    },
+    async gravar(chave, html) {
+      if (!pastaHandle) return { ok: false, motivo: "nenhuma pasta conectada pelo botão de pasta (Chrome/Edge)" };
+      try {
+        let perm = await pastaHandle.queryPermission({ mode: "readwrite" });
+        if (perm !== "granted") perm = await pastaHandle.requestPermission({ mode: "readwrite" });
+        if (perm !== "granted") return { ok: false, motivo: "sem permissão para gravar na pasta" };
+        const dados = await lerArquivoJust(pastaHandle);
+        dados[chave] = { html, atualizado: new Date().toISOString() };
+        const w = await (await pastaHandle.getFileHandle(ARQ_JUST, { create: true })).createWritable();
+        await w.write(JSON.stringify(dados, null, 2));
+        await w.close();
+        return { ok: true, atualizado: dados[chave].atualizado };
+      } catch (e) {
+        console.warn("Justificativas compartilhadas: gravação falhou", e);
+        return { ok: false, motivo: String((e && e.message) || e) };
+      }
+    },
+  };
   let urlsCriadas = [];
 
   const ehEntrada = (nome) =>

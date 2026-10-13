@@ -22,6 +22,7 @@ def gera_justificativa_html(ctx, texto_justificativa):
             <button class="btn-just" onclick="limparJustificativas()" style="color:#C2560C;">Limpar</button>
         </div>
     </div>
+    <p class="status-just" id="statusJust"></p>
     <div id="lista-justificativas" style="font-size:0.9em; color:#1A2740; line-height:1.6;">
         {texto_justificativa}
     </div>

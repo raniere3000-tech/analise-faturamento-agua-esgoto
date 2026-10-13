@@ -397,3 +397,10 @@ tr.linha-pendente td { background:#fafbfc; }
 #view-executivo .sit-manual { border-color:transparent; }   /* no PDF o selo manual fica igual ao automático (sem o contorno) */
 @media print { .sit-manual { border-color:transparent; } }
 @media print { .sit-lapis { display:none; } }
+
+/* justificativas compartilhadas (arquivo na pasta do SharePoint) */
+.status-just { margin:-6px 0 8px; font-size:11.5px; color:#64748b; }
+.status-just:empty { display:none; }
+.status-just-erro { color:#C2560C; }
+#view-executivo .status-just { display:none; }
+@media print { .status-just { display:none; } }

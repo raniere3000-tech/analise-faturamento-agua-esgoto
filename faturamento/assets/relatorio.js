@@ -517,15 +517,60 @@ function configurarTooltipGrafico() {
     chart.update();
 }
 
+// Justificativas: guardadas neste navegador e, quando o relatório é aberto pelo site com a pasta conectada, também no
+// arquivo justificativas_relatorio.json da pasta (sincronizada com o SharePoint) — a cópia da pasta vale para todos.
+function justCompartilhada() {
+    try { const p = window.parent; return p && p !== window && p.justificativasCompartilhadas && p.justificativasCompartilhadas.disponivel() ? p.justificativasCompartilhadas : null; }
+    catch (e) { return null; }
+}
+function justStatus(texto, erro) {
+    const el = document.getElementById('statusJust');
+    if (!el) return;
+    el.textContent = texto; el.classList.toggle('status-just-erro', !!erro);
+}
+const quandoJust = (iso) => { try { return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return ''; } };
+let justAtualizado = null;
+function limparHtmlJust(html) {           // sem os botões de remover (são recriados ao carregar)
+    const d = document.createElement('div'); d.innerHTML = html;
+    d.querySelectorAll('.btn-remover-item').forEach(b => b.remove());
+    d.querySelectorAll('[contenteditable]').forEach(e => e.removeAttribute('contenteditable'));
+    return d.innerHTML;
+}
+async function lerJustificativasDaPasta() {
+    const comp = justCompartilhada();
+    if (!comp) { justStatus('Salvas só neste navegador (abra o relatório pelo site com a pasta do SharePoint conectada para compartilhar).'); return; }
+    const lista = document.getElementById('lista-justificativas');
+    if (lista.classList.contains('modo-edicao')) return;                 // não atropela quem está editando
+    const dados = await comp.ler();
+    if (!dados) { justStatus('Não foi possível ler as justificativas da pasta; usando as deste navegador.', true); return; }
+    const item = dados[CHAVE_JUSTIFICATIVA];
+    if (item && item.atualizado !== justAtualizado) {
+        lista.innerHTML = item.html;
+        localStorage.setItem(CHAVE_JUSTIFICATIVA, item.html);
+        justAtualizado = item.atualizado;
+        aplicarBotoesRemover();
+    }
+    justStatus(item ? `Compartilhadas na pasta "${comp.pasta()}" · atualizadas em ${quandoJust(item.atualizado)}`
+                    : `Compartilhadas na pasta "${comp.pasta()}" · ainda não salvas por ninguém neste mês`);
+}
+
 function carregarJustificativas() {
     const salvo = localStorage.getItem(CHAVE_JUSTIFICATIVA);
     if (salvo) document.getElementById('lista-justificativas').innerHTML = salvo;
     aplicarBotoesRemover();
+    lerJustificativasDaPasta();
+    setInterval(lerJustificativasDaPasta, 60000);                         // vê o que os outros salvaram sem recarregar
 }
 
-function salvarJustificativas() {
-    const conteudo = document.getElementById('lista-justificativas').innerHTML;
+async function salvarJustificativas() {
+    const conteudo = limparHtmlJust(document.getElementById('lista-justificativas').innerHTML);
     localStorage.setItem(CHAVE_JUSTIFICATIVA, conteudo);
+    const comp = justCompartilhada();
+    if (!comp) return;
+    justStatus('Salvando na pasta…');
+    const r = await comp.gravar(CHAVE_JUSTIFICATIVA, conteudo);
+    if (r.ok) { justAtualizado = r.atualizado; justStatus(`Salvas na pasta "${comp.pasta()}" em ${quandoJust(r.atualizado)} — todos que abrirem a pasta verão`); }
+    else justStatus(`Salvas só neste navegador: ${r.motivo}`, true);
 }
 
 function toggleEdicaoJustificativa() {
