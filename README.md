@@ -24,6 +24,19 @@ Além do comparativo (aba **Diretas**), o relatório tem a aba **DRE** (Projeto/
 
 A relação rubrica → classe, as rubricas de cancelamento e cidade → SUP ficam em `faturamento/regras.json`. A SUP vem da cidade (`Nome da Localidade`) da fatura ou do serviço avulso.
 
+## Aba Garantia e estrutura tarifária
+
+- **Top 1000:** matrículas pela média do faturado (água + esgoto) de todos os meses fechados da pasta; consumo e faturado
+  do mês atual com Δ% (negrito acima de 30%), Situação Conta e o botão **Somente em análise**.
+- **Análise de Garantia:** digite ou cole matrículas; preencha a média do sistema (m³), o motivo (queda/aumento) e o
+  retorno. O **Fat. calculado** sai pela estrutura tarifária; o **Fat. anterior** é a foto do faturado quando a matrícula
+  entra na análise e o **Fat. ajustado** é o faturado atual. **Exportar para e-mail** copia a tabela (e baixa o CSV).
+- **Resumo de Ganhos:** queda = ajustado − anterior; aumento = ajustado − valor pela média. Entra no PDF executivo.
+- A análise fica no `ajustes_relatorio.json` da pasta (vale para todos).
+- **Estrutura tarifária:** padrão em `regras.json`; uma planilha na pasta com "tarif" no nome ou com a aba `tblTarifas`
+  (e `tblMinimo`) substitui o padrão — os mínimos dela valem para o painel todo. Na etapa 2, a coluna **Mínimo** joga o
+  consumo para o mínimo e o consumo digitado recalcula o valor pela tarifa.
+
 ## Estrutura do código
 
 O script do Colab foi dividido no pacote `faturamento/` (leitura, base, comparativo, análises, tabelas/painel HTML, relatório, pipeline). As regras de negócio (consumo mínimo, textos padrão, alertas) ficam em `faturamento/regras.json`; CSS e JS do relatório ficam em `faturamento/assets/`. `acompanhamento_faturamento.py` é só a linha de comando: `python acompanhamento_faturamento.py --pasta DADOS --modo local`.

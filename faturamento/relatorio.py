@@ -66,10 +66,11 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
                justificativa_html, tabela_agua_html, tabela_esgoto_html, tabelas_orcado_ciclo_html, quadro_ciclos_html, matriz_html,
                tabela_minimo_html, tabela_top100_agua_html, cards_situacao_html="", tabela_top100_esgoto_html,
                tabela_aumento_agua_html, tabela_aumento_esgoto_html,
-               aba_dre_html, aba_indiretas_html, aba_dados_html, aba_forecast_html, filtros_dre_html, info_filtros_json):
+               aba_dre_html, aba_indiretas_html, aba_dados_html, aba_forecast_html, filtros_dre_html, info_filtros_json,
+               aba_garantia_html=""):
     chave_justificativa = "justificativas_" + ctx.mes_atual.replace(" ", "_").replace("/", "_")
     html_style = "\n<style>\n" + carrega_asset("relatorio.css") + "</style>\n"
-    script_js = "\n<script>\n" + carrega_asset("relatorio.js").replace("__CHAVE_JUSTIFICATIVA__", chave_justificativa) + "</script>\n"
+    script_js = "\n<script>\n" + carrega_asset("tarifa.js") + "\n" + carrega_asset("relatorio.js").replace("__CHAVE_JUSTIFICATIVA__", chave_justificativa) + "</script>\n"
     return f"""
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -100,6 +101,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
     <button id="btn-indiretas" onclick="mostrarView('indiretas')">Indiretas</button>
     <button id="btn-forecast" onclick="mostrarView('forecast')">Forecast</button>
     <button id="btn-dre" onclick="mostrarView('dre')">DRE</button>
+    <button id="btn-garantia" onclick="mostrarView('garantia')">Garantia</button>
     <button id="btn-dados" onclick="mostrarView('dados')">Dados</button>
   </div>
   {filtros_dre_html}
@@ -122,6 +124,10 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
 
 <div id="view-forecast">
     {aba_forecast_html}
+</div>
+
+<div id="view-garantia">
+    {aba_garantia_html}
 </div>
 
 <div id="view-dados">

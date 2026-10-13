@@ -11,7 +11,7 @@ from .leitura import (chave_grupo, classifica_arquivos, compacta_textos, nome_re
                       processa_fatura_completa, processa_orcado)
 
 
-COLUNAS_DESCARTADAS = ["Leitura Atual", "Consumo Medido", "Total Economias", "Qtd. Tipos de Economia", "Mes Lancamento",
+COLUNAS_DESCARTADAS = ["Leitura Atual", "Total Economias", "Qtd. Tipos de Economia", "Mes Lancamento",
                        "Ano Lancamento", "Data de Vencimento", "Aba/Mês Cronograma"]
 
 
@@ -149,6 +149,22 @@ def monta_base(ctx):
         if len(longo):
             eventos.append(_padroniza_sup(longo).assign(Arquivo=nome_relativo(caminho, ctx.pasta)))
     ctx.orcado_eventos = pd.concat(eventos, ignore_index=True) if eventos else None
+    # estrutura tarifária: planilha da pasta (a mais recente, se houver mais de uma) ou o padrão do regras.json
+    from .tarifa import define_tarifa, processa_tarifa
+    lida, arq_tarifa = None, ""
+    for caminho, aba in ctx.classificacao.get("tarifa", []):
+        try:
+            t = cache_arquivos.memo(caminho, f"processa_tarifa_{aba}", lambda c=caminho, a=aba: processa_tarifa(c, a))
+        except Exception as exc:                   # planilha de tarifa com problema não derruba a análise
+            ctx.avisos_base.append(f"Estrutura tarifária em {nome_relativo(caminho, ctx.pasta)} não pôde ser lida ({exc}); usando a padrão.")
+            continue
+        if t.get("faixas"):
+            lida, arq_tarifa = t, nome_relativo(caminho, ctx.pasta)
+    define_tarifa(ctx, lida, arq_tarifa)
+    print(f"✅ Estrutura tarifária: {ctx.tarifa['fonte']} ({len(ctx.tarifa['faixas'])} faixas)")
+    if lida:
+        ctx.bases_info_extra = [{"tipo": "Estrutura tarifária", "arquivo": arq_tarifa, "linhas": len(lida["faixas"]), "periodo": "",
+                                 "extra": f"{len(lida['minimos'])} mínimos por economia"}]
     print(f"✅ Fatura: {len(fatura_total)} linhas")
     if len(fatura_total) and "Referencia de Leitura" in fatura_total.columns:
         sem_ref = int(fatura_total["Referencia de Leitura"].isna().sum())
@@ -188,6 +204,7 @@ def monta_base(ctx):
                         "periodo": periodo(d["Referencia Cronograma"]) if "Referencia Cronograma" in d else "",
                         "extra": f"{d['Grupo'].nunique()} grupos" if len(d) else "nenhuma linha válida"}
                        for c, d in zip(ctx.classificacao["cronograma"], cronogramas)]
+    ctx.bases_info += getattr(ctx, "bases_info_extra", [])
     if ctx.orcado_eventos is not None:
         for arq, d in ctx.orcado_eventos.groupby("Arquivo"):
             ctx.bases_info.append({"tipo": "Orçado SUP — eventos", "arquivo": arq, "linhas": len(d), "periodo": periodo(d["Referencia"])})

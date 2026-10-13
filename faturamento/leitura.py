@@ -43,7 +43,7 @@ BYTES_CABECALHO = 256 * 1024
 # Colunas que o relatório usa (o resto — endereço, bairro, complemento, rota... — não é carregado: economiza memória)
 COLUNAS_USADAS_FATURA = set(NOMES_LIGACAO) | {"Grupo", "Rubrica", "Valor Parcela", "Referencia de Leitura", "Data de Vencimento",
                                               "Nome Cliente", "Categoria", "Situacao Ligacao", "Situacao Conta", "Nome da Localidade",
-                                              "Situacao Lancamento"}
+                                              "Situacao Lancamento", "Rota"}
 COLUNAS_USADAS_CONSUMO = set(NOMES_LIGACAO) | {"Leitura Atual", "Consumo Medido", "Consumo Faturado", "Mes Lancamento",
                                                "Ano Lancamento", "Situacao Conta", "Grupo", "Nome da Localidade", "Situacao Lancamento"} | set(COLUNAS_ECONOMIA_TODAS)          # para achar o cabeçalho e o tipo do arquivo basta o começo
 
@@ -479,13 +479,20 @@ def _classifica_um(caminho, nome):
     df_head = None
     try:
         if caminho.lower().endswith((".xlsx", ".xls")):
-            for aba in pd.ExcelFile(caminho).sheet_names:
+            from .tarifa import abas_de_tarifa
+            abas = pd.ExcelFile(caminho).sheet_names
+            aba_tarifa = abas_de_tarifa(abas, nome)        # estrutura tarifária (tblTarifas) pode vir junto de outro tipo
+            if aba_tarifa is not None and "TARIF" in chave_texto(os.path.basename(nome)):
+                return {"tipo": "tarifa", "aba": aba_tarifa}
+            for aba in abas:
                 df_head = le_dataframe(caminho, nrows=5, sheet_name=aba)
                 if df_head is None:
                     continue
                 tipo = identifica_tipo(df_head.columns, nome)
                 if tipo != "desconhecido":
-                    return {"tipo": tipo, "aba": aba}
+                    return {"tipo": tipo, "aba": aba, **({"aba_tarifa": aba_tarifa} if aba_tarifa is not None else {})}
+            if aba_tarifa is not None:
+                return {"tipo": "tarifa", "aba": aba_tarifa}
         else:
             df_head = le_dataframe(caminho, nrows=5)
             if df_head is not None:
@@ -541,6 +548,8 @@ def classifica_arquivos(pasta, progresso=None):
                     cache_arquivos.guarda(caminho, "classe", r)
             if r.get("tipo"):
                 classificados.append({"caminho": caminho, "tipo": r["tipo"], "aba": r.get("aba", 0)})
+                if r.get("aba_tarifa") is not None:          # livro que também traz a estrutura tarifária
+                    classificados.append({"caminho": caminho, "tipo": "tarifa", "aba": r["aba_tarifa"]})
             else:
                 ignorados.append({"arquivo": nome, "motivo": r["motivo"]})
         if progresso:
@@ -550,6 +559,7 @@ def classifica_arquivos(pasta, progresso=None):
                  for t in ("consumo", "fatura", "cronograma", "avulso")}
     resultado["orcado"] = [(c["caminho"], c["aba"]) for c in classificados if c["tipo"] == "orcado"]
     resultado["orcado_eventos"] = [(c["caminho"], c["aba"]) for c in classificados if c["tipo"] == "orcado_eventos"]
+    resultado["tarifa"] = [(c["caminho"], c["aba"]) for c in classificados if c["tipo"] == "tarifa"]
     resultado["ignorados"] = ignorados
     print(f"📁 Consumo: {len(resultado['consumo'])} | Fatura: {len(resultado['fatura'])} | "
           f"Cronograma: {len(resultado['cronograma'])} | "
