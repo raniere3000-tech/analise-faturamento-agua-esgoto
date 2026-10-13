@@ -271,3 +271,12 @@ def test_etapa2_mes_anterior_e_totais_por_grupo(tmp_path):
     b = s.ctx.base_final
     mes = b[b["Referencia de Leitura"] == info["refAtual"]]
     assert sum(g["valor"] for g in grupos.values()) == pytest.approx(pd.to_numeric(mes["Valor (R$)"]).sum(), rel=1e-6)
+
+
+def test_justificativas_compartilhadas_na_pasta(analise):
+    import os
+    html = open(analise.caminho_html, encoding="utf-8").read()
+    assert 'id="statusJust"' in html and "justCompartilhada()" in html and "comp.gravar(CHAVE_JUSTIFICATIVA" in html
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert 'const ARQ_JUST = "justificativas_relatorio.json"' in site and "window.justificativasCompartilhadas" in site
+    assert 'requestPermission({ mode: "readwrite" })' in site
