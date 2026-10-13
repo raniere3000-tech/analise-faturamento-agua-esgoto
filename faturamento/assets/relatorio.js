@@ -571,6 +571,8 @@ async function salvarJustificativas() {
     const r = await comp.gravar(CHAVE_JUSTIFICATIVA, conteudo);
     if (r.ok) { justAtualizado = r.atualizado; justStatus(`Salvas na pasta "${comp.pasta()}" em ${quandoJust(r.atualizado)} — todos que abrirem a pasta verão`); }
     else justStatus(`Salvas só neste navegador: ${r.motivo}`, true);
+    marcaNuvem('Justificativas', r);
+    return r.ok;
 }
 
 function toggleEdicaoJustificativa() {
@@ -1423,11 +1425,30 @@ function compartilhado() {
     try { const p = window.parent; return p && p !== window && p.arquivoCompartilhado && p.arquivoCompartilhado.disponivel() ? p.arquivoCompartilhado : null; }
     catch (e) { return null; }
 }
+// Nuvem ao lado da versão (no site): ✓ quando tudo foi salvo na pasta, ✕ quando alguma alteração ficou só aqui.
+const pendentesNuvem = new Set();
+function marcaNuvem(nome, r) {
+    const comp = compartilhado();
+    if (r.ok) pendentesNuvem.delete(nome); else pendentesNuvem.add(nome);
+    avisoNuvem(r.ok ? `${nome}: alteração salva na pasta "${comp ? comp.pasta() : ''}" — vale para todos` : `${nome}: salvo só neste navegador (${r.motivo})`, !r.ok);
+    try {
+        const p = window.parent;
+        if (p && p !== window && p.estadoNuvem) p.estadoNuvem(!pendentesNuvem.size,
+            pendentesNuvem.size ? `Não salvo na pasta: ${Array.from(pendentesNuvem).join(', ')}` : `Tudo salvo na pasta "${comp ? comp.pasta() : ''}"`);
+    } catch (e) { /* relatório aberto fora do site */ }
+}
+// clique na nuvem: grava tudo o que está na tela e relê a pasta; devolve true se tudo foi salvo
+window.sincronizarTudo = async function () {
+    if (!compartilhado()) return false;
+    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await salvarJustificativas()];
+    puxarAjustesCompartilhados(); lerJustificativasDaPasta();
+    return r.every(Boolean);
+};
 function avisoNuvem(texto, erro) {
     let el = document.getElementById('avisoNuvem');
     if (!el) { el = document.createElement('div'); el.id = 'avisoNuvem'; document.body.appendChild(el); }
     el.textContent = texto; el.className = erro ? 'erro' : ''; el.style.display = 'block';
-    clearTimeout(avisoNuvem.t); avisoNuvem.t = setTimeout(() => { el.style.display = 'none'; }, erro ? 8000 : 3500);
+    clearTimeout(avisoNuvem.t); avisoNuvem.t = setTimeout(() => { el.style.display = 'none'; }, erro ? 9000 : 5000);
 }
 const igualJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const copiaJson = (o) => JSON.parse(JSON.stringify(o || {}));
@@ -1444,7 +1465,7 @@ function criaSync(secao, nome, obter, definir, redesenhar, ocupado) {
     }
     async function empurrar() {
         const comp = compartilhado();
-        if (!comp) return;
+        if (!comp) return false;
         const atual = copiaJson(obter()), antes = base || {};
         const r = await comp.atualizar((d) => {
             const sec = d[secao] = d[secao] || { mapa: {} }, m = sec.mapa = sec.mapa || {};
@@ -1457,8 +1478,9 @@ function criaSync(secao, nome, obter, definir, redesenhar, ocupado) {
         if (r.ok) {
             base = copiaJson(r.dados[secao].mapa);
             if (!igualJson(base, obter())) { definir(copiaJson(base)); redesenhar(); }
-            avisoNuvem(`${nome}: salvo na pasta "${comp.pasta()}" — vale para todos`);
-        } else avisoNuvem(`${nome}: salvo só neste navegador (${r.motivo})`, true);
+        }
+        marcaNuvem(nome, r);
+        return r.ok;
     }
     return {
         puxar, empurrar,
