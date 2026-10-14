@@ -1727,7 +1727,8 @@ function garDesenharAnalise() {
             + `<td class="num ${dif < 0 ? 'gar-neg' : ''}" data-f="dif">${garR(dif)}</td>`
             + `<td><select class="gar-in" data-campo="motivo">${opt('', '—')}${opt('QUEDA', 'Queda de consumo')}${opt('AUMENTO', 'Aumento de consumo')}</select></td>`
             + `<td><input class="gar-in gar-texto" data-campo="retorno" value="${garEsc(it.retorno)}" placeholder="ex.: FATURAR MÉDIA 311 m³"></td>`
-            + `<td><select class="gar-in" data-campo="obs">${optOS('', '—')}${optOS(OS_ABRIR, OS_ABRIR)}${optOS(OS_NAO, OS_NAO)}${it.obs && it.obs !== OS_ABRIR && it.obs !== OS_NAO ? optOS(it.obs, it.obs) : ''}</select></td>`
+            + `<td><select class="gar-in" data-campo="obs">${optOS('', '—')}${optOS(OS_ABRIR, OS_ABRIR)}${optOS(OS_NAO, OS_NAO)}${it.obs && it.obs !== OS_ABRIR && it.obs !== OS_NAO ? optOS(it.obs, it.obs) : ''}</select>`
+            + (it.obs === OS_ABRIR ? `<input class="gar-in gar-os-num" data-campo="os_num" inputmode="numeric" value="${garEsc(it.os_num || '')}" placeholder="Nº da O.S." title="Número da O.S. aberta" aria-label="Número da O.S. da matrícula ${garEsc(it.lig)}">` : '') + '</td>'
             + `<td><button type="button" class="btn-just gar-remover" title="Tirar da análise" aria-label="Tirar a matrícula ${garEsc(it.lig)} da análise">✕</button></td></tr>`;
     }).join('') || '<tr><td colspan="21" class="gar-vazio">Nenhuma matrícula na análise deste mês. Digite ou cole matrículas acima, ou use “+ Análise” no Top 1000.</td></tr>';
     if (mudouFoto) garSalvar();
@@ -1746,13 +1747,20 @@ document.addEventListener('input', (e) => {
     it[campo] = campo === 'media' ? garLerNumero(inp.value) : inp.value;
     if (campo === 'obs') {
         if (inp.value === OS_ABRIR) { if (!it.os_data) it.os_data = garHoje(); delete it.os_status; }
-        else { delete it.os_data; delete it.os_status; delete it.os_realizada; }
+        else { delete it.os_data; delete it.os_status; delete it.os_realizada; delete it.os_num; }
     }
+    if (campo === 'os_num') it.os_num = inp.value.trim();
     if (campo === 'media') {
         const c = garCalcItem({ lig: tr.dataset.lig, ...it });
         tr.querySelector('[data-f="calc"]').textContent = garR(c.calc);
     }
-    garSalvar(); garDesenharResumo(); if (campo === 'obs') garDesenharOS();
+    garSalvar(); garDesenharResumo();
+    if (campo === 'obs') {                   // mostra/esconde o campo do nº da O.S. na linha
+        garDesenharAnalise(); garDesenharOS();
+        const n = inp.value === OS_ABRIR && document.querySelector(`#garTabelaAnalise tr[data-lig="${CSS.escape(tr.dataset.lig)}"] .gar-os-num`);
+        if (n) n.focus();
+    }
+    if (campo === 'os_num') garDesenharOS();
 });
 document.addEventListener('click', (e) => {
     const add = e.target.closest && e.target.closest('.gar-add');
@@ -1830,6 +1838,7 @@ function garImportarExcel(texto) {
     if (iCab < 0) return false;
     const cab = tab[iCab].map(norm), col = (f) => cab.findIndex(f);
     const cLig = col((c) => c.includes('LIGACAO')), cMed = col((c) => c.includes('MEDIA')), cAnt = col((c) => c.includes('ANTERIOR'));
+    const cNum = col((c) => /^(NUMERO|N|NO)(DA)?OS$|^OSN(UMERO)?$/.test(c));
     const cMot = col((c) => c.includes('MOTIVO')), cRet = col((c) => c.includes('RETORNO')), cData = col((c) => c.startsWith('DATA'));
     const cOS = cab.map((c, i) => i).filter((i) => ['OS', 'OBS'].includes(cab[i]) || cab[i].startsWith('OBSERVAC') || (cRet >= 0 && i > cRet && !cab[i]));
     const dataISO = (v) => { const m = String(v || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (!m) return null;
@@ -1845,7 +1854,9 @@ function garImportarExcel(texto) {
                     motivo: mot.includes('QUEDA') ? 'QUEDA' : mot.includes('AUMENTO') ? 'AUMENTO' : '',
                     retorno: cRet >= 0 ? String(l[cRet] || '').replace(/\s+/g, ' ').trim() : '',
                     obs: /NAOABRIR/.test(nOS) ? OS_NAO : /ABRIROS/.test(nOS) ? OS_ABRIR : '', obs_texto: osTxt,
-                    data: cData >= 0 ? dataISO(l[cData]) : null });
+                    data: cData >= 0 ? dataISO(l[cData]) : null,
+                    os_num: cNum >= 0 ? (String(l[cNum] || '').match(/\d{4,}/) || [])[0]
+                        : ((osTxt + ' ' + (l[cRet] || '')).match(/O\.?\s*S\.?\s*(?:N[º°o.]*\s*)?(\d{5,})/i) || [])[1] });
     });
     if (!regs.length) { avisoNuvem('Nenhuma matrícula reconhecida nas linhas coladas.', true); return true; }
     const ja = regs.filter((r) => garItens[garChave(r.lig)]).length;
@@ -1863,6 +1874,7 @@ function garImportarExcel(texto) {
         if (r.retorno) it.retorno = r.retorno;
         if (r.obs_texto) it.obs_texto = r.obs_texto;
         if (r.obs && !it.obs) { it.obs = r.obs; if (r.obs === OS_ABRIR) it.os_data = r.data || it.os_data || garHoje(); }
+        if (it.obs === OS_ABRIR && r.os_num && !it.os_num) it.os_num = r.os_num;
     });
     garSalvar(); garRedesenhar();
     const msg = document.getElementById('garMsg');
@@ -1950,10 +1962,10 @@ function garDesenharOS() {
         + `<p class="nota-secao">${vencidas.length ? `<b>${vencidas.length}</b> matrícula(s) com O.S. aberta há ${OS_PRAZO_DIAS} dias ou mais: verifique se foram realizadas ou estão em atraso.` : 'Nenhuma O.S. com prazo vencido.'}`
         + (noPrazo ? ` ${noPrazo} ainda dentro do prazo.` : '') + ' Depois de conferir, marque como realizada.</p>'
         + (vencidas.length ? '<div class="tabela-wrap"><table class="tabela-garantia"><thead><tr><th>Matrícula</th><th>Cliente</th><th>Grupo</th><th>SUP</th><th>Motivo</th>'
-            + '<th>Retorno superintendência</th><th>Análise</th><th>Prazo (D+' + OS_PRAZO_DIAS + ')</th><th class="num">Dias após o prazo</th><th></th></tr></thead><tbody>'
+            + '<th>Retorno superintendência</th><th>Nº O.S.</th><th>Análise</th><th>Prazo (D+' + OS_PRAZO_DIAS + ')</th><th class="num">Dias após o prazo</th><th></th></tr></thead><tbody>'
             + vencidas.map((o) => `<tr><td><b>${garEsc(o.lig)}</b></td><td class="gar-cli" title="${garEsc(o.d && o.d.nome)}">${garEsc(o.d && o.d.nome)}</td>`
                 + `<td>${garEsc(o.d && o.d.grupo)}</td><td>${garEsc(o.d && o.d.sup)}</td><td>${motivo(o.v.motivo)}</td><td>${garEsc(o.v.retorno)}</td>`
-                + `<td>${garDataBR(o.data)}</td><td>${o.prazo.toLocaleDateString('pt-BR')}</td><td class="num gar-neg"><b>${o.dias}</b></td>`
+                + `<td>${o.v.os_num ? '<b>' + garEsc(o.v.os_num) + '</b>' : '<span class="gar-sit">não informado</span>'}</td><td>${garDataBR(o.data)}</td><td>${o.prazo.toLocaleDateString('pt-BR')}</td><td class="num gar-neg"><b>${o.dias}</b></td>`
                 + `<td><button type="button" class="btn-just gar-os-ok" data-k="${garEsc(o.k)}" title="O.S. conferida e realizada: sai do aviso">✓ Realizada</button></td></tr>`).join('')
             + '</tbody></table></div>' : '');
 }

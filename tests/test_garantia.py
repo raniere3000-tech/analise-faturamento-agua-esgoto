@@ -129,3 +129,4 @@ def test_importar_planilha_de_garantia(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert "function garImportarExcel(texto)" in html and "function garLerTSV(texto)" in html
     assert "if (t.includes('\\t') && garImportarExcel(t))" in html and "Antes do painel (planilha)" in html
+    assert 'data-campo="os_num"' in html and "<th>Nº O.S.</th>" in html
