@@ -1807,18 +1807,22 @@ function garExportarEmail() {
     const nomeSup = (s) => String(s || '').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
     const linhas = itens.map((it) => { const d = GAR.porLig.get(it.lig) || {};
         return [d.grupo || '', it.lig, nomeSup(d.sup), it.motivo === 'QUEDA' ? 'QUEDA DE CONSUMO' : it.motivo === 'AUMENTO' ? 'AUMENTO DE CONSUMO' : '', it.retorno || '']; });
-    const th = 'background:#44546A;color:#FFFFFF;font-weight:bold;padding:4px 14px;text-align:center;border:1px solid #FFFFFF';
-    const td = 'padding:3px 14px;text-align:center;border-bottom:1px solid #D9D9D9';
-    const html = '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:14px">'
-        + `<tr><td colspan="${cols.length}" style="background:#44546A;color:#FFFFFF;padding:3px 8px">Email</td></tr>`
-        + '<tr>' + cols.map((c) => `<th style="${th}">${garEsc(c)}</th>`).join('') + '</tr>'
-        + linhas.map((l) => '<tr>' + l.map((v) => `<td style="${td}">${garEsc(v)}</td>`).join('') + '</tr>').join('') + '</table>';
+    // formatação pedida: sem linhas de grade, Calibri 14, títulos em negrito com fundo azul-petróleo escuro (Ênfase 1, mais
+    // escuro 25% = #0F4761) e fonte branca; demais linhas fonte preta sem preenchimento. Estilo em cada célula (o Outlook
+    // ignora CSS de <th>/<style>), com bgcolor para o Outlook desktop.
+    const AZUL = '#0F4761', FONTE = "font-family:Calibri,'Calibri',sans-serif;font-size:14pt;";
+    const tit = (conteudo, extra) => `<td bgcolor="${AZUL}" ${extra || ''} style="${FONTE}background:${AZUL};color:#FFFFFF;font-weight:bold;border:none;padding:2px 14px;text-align:center;white-space:nowrap">${conteudo}</td>`;
+    const cel = (v) => `<td style="${FONTE}color:#000000;border:none;padding:2px 14px;text-align:center;white-space:nowrap">${garEsc(v)}</td>`;
+    const html = `<table border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:none;${FONTE}">`
+        + `<tr>${tit('Email', `colspan="${cols.length}"`).replace('text-align:center', 'text-align:left')}</tr>`
+        + '<tr>' + cols.map((c) => tit(garEsc(c))).join('') + '</tr>'
+        + linhas.map((l) => '<tr>' + l.map(cel).join('') + '</tr>').join('') + '</table>';
     const texto = cols.join('\t') + '\n' + linhas.map((l) => l.map((v) => (v == null ? '' : v)).join('\t')).join('\n');
     const copiar = async () => {
         try {
             await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([texto], { type: 'text/plain' }) })]);
             return true;
-        } catch (e) {
+        } catch (e) {                        // reserva: copia a tabela renderizada (mantém a formatação)
             const div = document.createElement('div'); div.innerHTML = html; div.style.cssText = 'position:fixed;left:-9999px;top:0';
             document.body.appendChild(div);
             const r = document.createRange(); r.selectNodeContents(div); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
@@ -1826,8 +1830,19 @@ function garExportarEmail() {
             s.removeAllRanges(); div.remove(); return ok;
         }
     };
-    copiar().then((ok) => avisoNuvem(ok ? `${itens.length} matrícula(s) copiadas: cole no e-mail (Ctrl+V). O CSV também foi baixado.` : 'Não foi possível copiar; use o CSV baixado.', !ok));
-    baixarTexto(csvDe(cols, linhas), `Garantia_email_${GAR.ref.replace('/', '-')}.csv`);
+    copiar().then((ok) => avisoNuvem((ok ? `${itens.length} matrícula(s) copiadas com a formatação: cole no e-mail (Ctrl+V). ` : 'Não foi possível copiar. ')
+        + 'Também foi baixado um rascunho de e-mail (.eml): abra-o para enviar pelo Outlook.', !ok));
+    garBaixarEml(html, `Análise de garantia — ${GAR.ref}`, `Garantia_email_${GAR.ref.replace('/', '-')}.eml`);
+}
+// rascunho de e-mail (.eml) com a tabela formatada: o Outlook abre como mensagem nova, pronta para enviar
+function garBaixarEml(html, assunto, nome) {
+    const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+    const corpo = `<html><head><meta charset="utf-8"></head><body style="font-family:Calibri,sans-serif;font-size:14pt">${html}</body></html>`;
+    const eml = ['X-Unsent: 1', `Subject: =?UTF-8?B?${b64(assunto)}?=`, 'MIME-Version: 1.0', 'Content-Type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: base64', '', b64(corpo).replace(/.{76}/g, '$&\r\n')].join('\r\n');
+    const url = URL.createObjectURL(new Blob([eml], { type: 'message/rfc822' }));
+    const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 // --- Controle de O.S. (Abrir O.S. → verificar em D+10 a partir do dia da análise) ---
