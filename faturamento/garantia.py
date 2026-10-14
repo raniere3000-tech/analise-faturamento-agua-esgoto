@@ -165,7 +165,7 @@ def gera_aba_garantia_html(ctx):
   <div class="card">
     <div class="gar-barra gar-entrada">
       <label for="garEntrada">Matrículas</label>
-      <textarea id="garEntrada" rows="1" placeholder="Digite ou cole uma ou várias matrículas (uma por linha)"></textarea>
+      <textarea id="garEntrada" rows="1" placeholder="Digite ou cole matrículas (uma por linha) — ou cole as linhas da planilha de garantia do Excel, com o cabeçalho"></textarea>
       <button type="button" class="btn-just" id="garAdicionar">Adicionar</button>
       <span class="gar-msg" id="garMsg"></span>
       <span class="gar-espaco"></span>
@@ -174,7 +174,10 @@ def gera_aba_garantia_html(ctx):
     <p class="nota-secao">A linha traz os dados da matrícula no mês atual. Preencha a <b>média faturada</b> (a do sistema, em m³): o
     <b>Fat. calculado</b> sai pela estrutura tarifária. <b>Fat. anterior</b> é a foto do faturado no momento em que a matrícula entrou
     na análise; <b>Fat. ajustado</b> é o faturado atual (muda quando a fatura é liberada). Em <b>O.S.</b>, “Abrir O.S.” entra no controle
-    de prazo (D+10 a partir do dia da análise) do Resumo de Ganhos. Tudo fica salvo na pasta para todos.</p>
+    de prazo (D+10 a partir do dia da análise) do Resumo de Ganhos. Tudo fica salvo na pasta para todos.
+    <b>Análises feitas antes do painel:</b> no Excel, selecione as linhas da planilha de garantia <i>com o cabeçalho</i>, copie e cole no
+    campo acima. Entram com o selo <b>Histórico</b>, o Fat. anterior da planilha, a média, o motivo, o retorno e a O.S. (“abrir O.S.” na
+    observação).</p>
     <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaAnalise"><thead></thead><tbody></tbody></table></div>
   </div>
 </div>
