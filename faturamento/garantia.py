@@ -172,11 +172,13 @@ def gera_aba_garantia_html(ctx):
     </div>
     <p class="nota-secao">A linha traz os dados da matrícula no mês atual. Preencha a <b>média faturada</b> (a do sistema, em m³): o
     <b>Fat. calculado</b> sai pela estrutura tarifária. <b>Fat. anterior</b> é a foto do faturado no momento em que a matrícula entrou
-    na análise; <b>Fat. ajustado</b> é o faturado atual (muda quando a fatura é liberada). Tudo fica salvo na pasta para todos.</p>
+    na análise; <b>Fat. ajustado</b> é o faturado atual (muda quando a fatura é liberada). Em <b>O.S.</b>, “Abrir O.S.” entra no controle
+    de prazo (D+10 a partir do dia da análise) do Resumo de Ganhos. Tudo fica salvo na pasta para todos.</p>
     <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaAnalise"><thead></thead><tbody></tbody></table></div>
   </div>
 </div>
 <div class="gar-painel" data-gar="resumo" hidden>
+  <div class="card gar-aviso-os" id="garAvisoOS" hidden></div>
   <div class="card" id="garantia-resumo-card">
     <h2>Resumo de ganhos — garantia — {e(ctx.mes_atual)}</h2>
     <p class="nota-secao"><b>Queda de consumo:</b> garantia = faturado ajustado (atual) − faturado anterior (foto).
