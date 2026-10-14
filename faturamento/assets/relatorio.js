@@ -1717,7 +1717,8 @@ function garDesenharAnalise() {
         const sit = !d ? '<span class="gar-sit">não encontrada</span>' : d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? 'Em análise' : d.sit)}</span>` : '<span class="gar-sit">sem fatura no mês</span>';
         const opt = (v, t) => `<option value="${v}" ${it.motivo === v ? 'selected' : ''}>${t}</option>`;
         const optOS = (v, t) => `<option value="${garEsc(v)}" ${(it.obs || '') === v ? 'selected' : ''}>${garEsc(t)}</option>`;
-        return `<tr data-lig="${garEsc(it.lig)}"><td>${garEsc(it.lig)}</td><td class="gar-cli" title="${garEsc(d && d.nome)}">${garEsc(d && d.nome)}</td>`
+        const hist = it.historico ? ` <span class="gar-hist" title="Trazida da planilha (análise feita antes do painel): Fat. anterior informado na planilha">Histórico</span>` : '';
+        return `<tr data-lig="${garEsc(it.lig)}" ${it.obs_texto ? `title="Observação da planilha: ${garEsc(it.obs_texto)}"` : ''}><td>${garEsc(it.lig)}${hist}</td><td class="gar-cli" title="${garEsc(d && d.nome)}">${garEsc(d && d.nome)}</td>`
             + `<td>${garEsc(d && d.cat)}</td><td>${garEsc(d && d.loc)}</td><td class="num">${garN(d && d.res)}</td><td class="num">${garN(d && d.com)}</td>`
             + `<td class="num">${garN(d && d.ind)}</td><td class="num">${garN(d && d.pub)}</td><td class="num">${garN(tot)}</td><td>${garEsc(d && d.grupo)}</td>`
             + `<td>${garEsc(d && d.rota)}</td><td>${sit}</td>`
@@ -1732,7 +1733,7 @@ function garDesenharAnalise() {
     if (mudouFoto) garSalvar();
 }
 function garLerNumero(t) {
-    t = String(t || '').trim().replace(/\s/g, '').replace(/m³|m3/gi, '');
+    t = String(t || '').trim().replace(/\s/g, '').replace(/m³|m3|R\$/gi, '');
     if (!t) return null;
     if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
     const n = parseFloat(t);
@@ -1778,7 +1779,8 @@ document.addEventListener('click', (e) => {
     if (e.target.id === 'garSoAnalise') { GAR.soAnalise = !GAR.soAnalise; garDesenharTop(); return; }
     if (e.target.id === 'garAdicionar') {
         const t = document.getElementById('garEntrada');
-        garAdicionar((t.value.match(/\d{4,}/g) || [])); t.value = ''; return;
+        if (!(t.value.includes('\t') && garImportarExcel(t.value))) garAdicionar((t.value.match(/\d{4,}/g) || []));
+        t.value = ''; return;
     }
     if (e.target.id === 'garBaixarTop') { garBaixarTop(); return; }
     if (e.target.id === 'garEmail') { garExportarEmail(); return; }
@@ -1796,9 +1798,78 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('paste', (e) => {               // colar várias matrículas direto no campo já adiciona
     if (e.target.id !== 'garEntrada') return;
     const t = (e.clipboardData || window.clipboardData).getData('text');
+    if (t.includes('\t') && garImportarExcel(t)) { e.preventDefault(); return; }
     const ligs = t.match(/\d{4,}/g) || [];
     if (ligs.length > 1) { e.preventDefault(); garAdicionar(ligs); }
 });
+// --- Importar do Excel o que já foi analisado antes do painel ---
+// Cola as linhas da planilha de garantia (com o cabeçalho): Nº da Ligação, Média Volume Fat., Fat. Anterior, Motivo,
+// Retorno Superintendência e a observação de O.S. (coluna sem título depois do Retorno, ou "O.S."/"Observação").
+// O Fat. anterior vem da planilha (a foto de antes do ajuste); o Fat. ajustado continua sendo o valor de hoje na base.
+function garLerTSV(texto) {
+    const linhas = []; let lin = [], cel = '', aspas = false;
+    texto = texto.replace(/\r\n?/g, '\n');
+    for (let i = 0; i < texto.length; i++) {
+        const c = texto[i];
+        if (aspas) {
+            if (c === '"' && texto[i + 1] === '"') { cel += '"'; i++; }
+            else if (c === '"') aspas = false;
+            else cel += c;
+        } else if (c === '"' && cel === '') aspas = true;
+        else if (c === '\t') { lin.push(cel); cel = ''; }
+        else if (c === '\n') { lin.push(cel); linhas.push(lin); lin = []; cel = ''; }
+        else cel += c;
+    }
+    if (cel !== '' || lin.length) { lin.push(cel); linhas.push(lin); }
+    return linhas;
+}
+function garImportarExcel(texto) {
+    const tab = garLerTSV(texto);
+    const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const iCab = tab.findIndex((l) => l.some((c) => norm(c).includes('LIGACAO')) && l.some((c) => norm(c).includes('ANTERIOR')));
+    if (iCab < 0) return false;
+    const cab = tab[iCab].map(norm), col = (f) => cab.findIndex(f);
+    const cLig = col((c) => c.includes('LIGACAO')), cMed = col((c) => c.includes('MEDIA')), cAnt = col((c) => c.includes('ANTERIOR'));
+    const cMot = col((c) => c.includes('MOTIVO')), cRet = col((c) => c.includes('RETORNO')), cData = col((c) => c.startsWith('DATA'));
+    const cOS = cab.map((c, i) => i).filter((i) => ['OS', 'OBS'].includes(cab[i]) || cab[i].startsWith('OBSERVAC') || (cRet >= 0 && i > cRet && !cab[i]));
+    const dataISO = (v) => { const m = String(v || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (!m) return null;
+        const a = m[3].length === 2 ? '20' + m[3] : m[3]; return `${a}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; };
+    const vistos = new Set(), regs = [];
+    tab.slice(iCab + 1).forEach((l) => {
+        const lig = (String(l[cLig] || '').match(/\d{4,}/) || [])[0];
+        if (!lig || vistos.has(lig)) return;
+        vistos.add(lig);
+        const mot = norm(l[cMot]), osTxt = cOS.map((i) => String(l[i] || '').trim()).filter(Boolean).join(' · ');
+        const nOS = norm(osTxt);
+        regs.push({ lig, media: cMed >= 0 ? garLerNumero(l[cMed]) : null, anterior: garLerNumero(l[cAnt]),
+                    motivo: mot.includes('QUEDA') ? 'QUEDA' : mot.includes('AUMENTO') ? 'AUMENTO' : '',
+                    retorno: cRet >= 0 ? String(l[cRet] || '').replace(/\s+/g, ' ').trim() : '',
+                    obs: /NAOABRIR/.test(nOS) ? OS_NAO : /ABRIROS/.test(nOS) ? OS_ABRIR : '', obs_texto: osTxt,
+                    data: cData >= 0 ? dataISO(l[cData]) : null });
+    });
+    if (!regs.length) { avisoNuvem('Nenhuma matrícula reconhecida nas linhas coladas.', true); return true; }
+    const ja = regs.filter((r) => garItens[garChave(r.lig)]).length;
+    if (!confirm(`Importar ${regs.length} matrícula(s) da planilha para a Análise de Garantia de ${GAR.ref}?\n\n`
+        + `${regs.length - ja} nova(s)` + (ja ? ` · ${ja} já na análise (recebem o Fat. anterior e os campos preenchidos na planilha)` : '')
+        + `\n\nO Fat. anterior vem da planilha; o Fat. ajustado é o valor de hoje na base.`)) return true;
+    const base = Date.now(), fora = [];
+    regs.forEach((r, i) => {
+        const k = garChave(r.lig), it = garItens[k] || (garItens[k] = { media: null, motivo: '', retorno: '', obs: '', anterior: null, foto: null, ordem: base + i });
+        if (!GAR.porLig.get(r.lig)) fora.push(r.lig);
+        it.historico = true;
+        if (r.anterior != null) { it.anterior = r.anterior; it.foto = null; }
+        if (r.media != null) it.media = r.media;
+        if (r.motivo) it.motivo = r.motivo;
+        if (r.retorno) it.retorno = r.retorno;
+        if (r.obs_texto) it.obs_texto = r.obs_texto;
+        if (r.obs && !it.obs) { it.obs = r.obs; if (r.obs === OS_ABRIR) it.os_data = r.data || it.os_data || garHoje(); }
+    });
+    garSalvar(); garRedesenhar();
+    const msg = document.getElementById('garMsg');
+    if (msg) msg.textContent = `${regs.length} matrícula(s) importada(s) da planilha.` + (fora.length ? ` Sem dados no mês atual: ${fora.slice(0, 5).join(', ')}${fora.length > 5 ? '…' : ''}` : '');
+    avisoNuvem(`${regs.length} matrícula(s) da planilha importadas para a Análise de Garantia.`);
+    return true;
+}
 function garBaixarTop() {
     const cols = ['Ranking', 'Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'SUP', 'Economias', 'Média cons. medido (m³)',
         'Média cons. faturado (m³)', 'Cons. faturado atual (m³)', 'Δ% cons.', 'Média faturado (R$)', 'Faturado atual (R$)', 'Δ% R$', 'Situação conta'];
@@ -1895,7 +1966,8 @@ document.addEventListener('click', (e) => {
 
 // --- Resumo de Ganhos ---
 function garTotais() {
-    const t = { AUMENTO: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 }, QUEDA: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 } }, porGrupo = {};
+    const t = { AUMENTO: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 }, QUEDA: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 },
+                hist: { n: 0, gar: 0 }, painel: { n: 0, gar: 0 } }, porGrupo = {};
     garItensDoMes().forEach((it) => {
         if (!t[it.motivo]) return;
         const { d, calc, atual } = garCalcItem(it);
@@ -1905,6 +1977,7 @@ function garTotais() {
         const gar = it.motivo === 'AUMENTO' ? (calc == null ? 0 : at - calc) : at - ant;
         x.n++; if (d && !garEmAnalise(d)) x.lib++;
         x.orig += ant; x.ajust += ajust; x.gar += gar;
+        const o = it.historico ? t.hist : t.painel; o.n++; o.gar += gar;
         const g = (d && d.grupo) || '—', pg = porGrupo[g] = porGrupo[g] || { n: 0, QUEDA: 0, AUMENTO: 0 };
         pg.n++; pg[it.motivo] += gar;
     });
@@ -1920,7 +1993,9 @@ function garDesenharResumo() {
     el.innerHTML = '<div class="gar-kpis">'
         + `<div class="gar-kpi"><span>Garantia total</span><b>${garR(tot.gar)}</b><small>${tot.n} matrícula(s) · ${tot.lib} liberada(s)</small></div>`
         + `<div class="gar-kpi"><span>Queda de consumo</span><b>${garR(t.QUEDA.gar)}</b><small>${t.QUEDA.n} matrícula(s)</small></div>`
-        + `<div class="gar-kpi"><span>Aumento de consumo</span><b>${garR(t.AUMENTO.gar)}</b><small>${t.AUMENTO.n} matrícula(s)</small></div></div>`
+        + `<div class="gar-kpi"><span>Aumento de consumo</span><b>${garR(t.AUMENTO.gar)}</b><small>${t.AUMENTO.n} matrícula(s)</small></div>`
+        + (t.hist.n ? `<div class="gar-kpi"><span>Antes do painel (planilha)</span><b>${garR(t.hist.gar)}</b><small>${t.hist.n} matrícula(s)</small></div>`
+            + `<div class="gar-kpi"><span>Pelo painel</span><b>${garR(t.painel.gar)}</b><small>${t.painel.n} matrícula(s)</small></div>` : '') + '</div>'
         + '<div class="tabela-wrap"><table class="tabela-garantia gar-resumo"><thead><tr><th>Resumo</th><th class="num">Ligações</th><th class="num">Liberadas</th>'
         + '<th class="num">Valor original</th><th class="num">Valor ajustado / média</th><th class="num">Garantia</th></tr></thead><tbody>'
         + lin('Aumento de consumo', t.AUMENTO) + lin('Queda de consumo', t.QUEDA) + lin('<b>Total</b>', tot, 'linha-media') + '</tbody></table></div>'
