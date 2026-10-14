@@ -421,6 +421,9 @@ tr.linha-pendente td { background:#fafbfc; }
 .gar-barra { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
 .gar-barra .gar-espaco { flex:1; }
 .gar-contagem { font-size:12.5px; color:var(--azul-claro, #49668C); font-weight:600; }
+.gar-busca { display:inline-flex; align-items:center; gap:6px; }
+.gar-busca label { font-weight:700; font-size:12.5px; color:var(--marinho); }
+.gar-busca input { width:240px; max-width:60vw; font:inherit; font-size:12.5px; padding:5px 8px; border:1px solid var(--linha); border-radius:6px; }
 .gar-filtro.ativo { background:#ffedd5; border-color:#f59e0b; color:#9a3412; }
 .gar-entrada label { font-weight:700; font-size:12.5px; color:var(--marinho); }
 .gar-entrada textarea { width:340px; max-width:100%; min-height:30px; font:inherit; font-size:12.5px; padding:5px 8px; border:1px solid var(--linha); border-radius:6px; resize:vertical; }

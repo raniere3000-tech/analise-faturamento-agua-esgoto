@@ -1190,7 +1190,6 @@ function gerarExecutivo(libs) {
         ['Orçado x Realizado', qa('#view-tabelas .orc-ciclo-bloco:not([hidden]) > .card')],
         ['Faturamento Mês a Mês', [card('#tabela-agua'), card('#tabela-esgoto')]],
         ['Indiretas', qa(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .prev-card`)],
-        ['Garantia — Resumo de Ganhos', [q('#garantia-resumo-card')]],
         ['Análise de Ciclo', [q('#card-justificativa')]],         // título só no PDF, em cima das justificativas
     ];
     secoes.forEach(([nome, els]) => {
@@ -1568,7 +1567,7 @@ syncConfig.puxar();
 // Dados (script#garantia-dados, JSON em gzip): uma linha por matrícula, já no ranking da média do faturado (R$) dos
 // meses fechados. A análise manual (média do sistema, motivo, retorno, foto do faturado) fica em garItens e vai para a
 // seção "garantia" do ajustes_relatorio.json — a mesma análise para todos.
-const GAR = { dados: null, porLig: new Map(), ref: '', top: 1000, refs: [], tarifa: null, soAnalise: false,
+const GAR = { dados: null, porLig: new Map(), ref: '', top: 1000, refs: [], tarifa: null, soAnalise: false, busca: [],
               ordem: { campo: 'rank', desc: false }, carregando: null };
 const GAR_LS = 'faturamento_garantia';
 let garItens = {};
@@ -1621,7 +1620,9 @@ function garValorCol(d, c) {
     return d[c];
 }
 function garLinhasTop() {
-    let ls = GAR.lista.filter((d) => garVisivel(d) && (!GAR.soAnalise || garEmAnalise(d)));
+    const busca = GAR.busca;                             // filtro por matrícula (parte do número; várias separadas por espaço)
+    let ls = GAR.lista.filter((d) => garVisivel(d) && (!GAR.soAnalise || garEmAnalise(d))
+        && (!busca.length || busca.some((t) => String(d.lig).includes(t))));
     const { campo, desc } = GAR.ordem;
     const num = GAR_COLS_TOP.find((c) => c[0] === campo)?.[2] !== 't';
     ls.sort((a, b) => {
@@ -1653,7 +1654,8 @@ function garDesenharTop() {
             + `<td class="num">${garN(garValorCol(d, 'eco'))}</td><td class="num">${garN(d.mMed, 1)}</td><td class="num">${garN(d.mCons, 1)}</td><td class="num">${garN(d.cons, 1)}</td>${pctCel(dc)}`
             + `<td class="num">${garR(d.mVal)}</td><td class="num">${garR(d.val)}</td>${pctCel(dv)}<td>${sit}</td>`
             + `<td><button type="button" class="btn-just gar-add" data-lig="${garEsc(lig)}" ${naAnalise.has(lig) ? 'disabled title="Já está na Análise de Garantia"' : 'title="Levar para a Análise de Garantia"'}>${naAnalise.has(lig) ? '✓' : '+ Análise'}</button></td></tr>`;
-    }).join('') || `<tr><td colspan="${GAR_COLS_TOP.length + 1}" class="gar-vazio">Nenhuma matrícula com os filtros escolhidos.</td></tr>`;
+    }).join('') || `<tr><td colspan="${GAR_COLS_TOP.length + 1}" class="gar-vazio">${GAR.busca.length && !GAR.busca.some((t) => GAR.lista.some((d) => String(d.lig).includes(t)))
+        ? 'Matrícula fora do Top ' + GAR.top + ': para analisá-la, use a sub-aba Análise de Garantia.' : 'Nenhuma matrícula com os filtros escolhidos.'}</td></tr>`;
     const emAnalise = GAR.lista.filter((d) => garVisivel(d) && garEmAnalise(d)).length;
     document.getElementById('garTopContagem').textContent = `${ls.length} matrícula(s) na tela · ${emAnalise} em análise`;
     const b = document.getElementById('garSoAnalise');
@@ -1772,6 +1774,7 @@ document.addEventListener('click', (e) => {
         GAR.ordem = { campo: c, desc: GAR.ordem.campo === c ? !GAR.ordem.desc : c !== 'rank' };
         garDesenharTop(); return;
     }
+    if (e.target.id === 'garLimparBusca') { const i = document.getElementById('garBuscaLig'); i.value = ''; GAR.busca = []; garDesenharTop(); i.focus(); return; }
     if (e.target.id === 'garSoAnalise') { GAR.soAnalise = !GAR.soAnalise; garDesenharTop(); return; }
     if (e.target.id === 'garAdicionar') {
         const t = document.getElementById('garEntrada');
@@ -1779,6 +1782,11 @@ document.addEventListener('click', (e) => {
     }
     if (e.target.id === 'garBaixarTop') { garBaixarTop(); return; }
     if (e.target.id === 'garEmail') { garExportarEmail(); return; }
+});
+document.addEventListener('input', (e) => {
+    if (e.target.id !== 'garBuscaLig') return;
+    GAR.busca = e.target.value.match(/\d+/g) || [];
+    clearTimeout(GAR.tBusca); GAR.tBusca = setTimeout(garDesenharTop, 150);
 });
 document.addEventListener('keydown', (e) => {
     if (e.target.id === 'garEntrada' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('garAdicionar').click(); }
