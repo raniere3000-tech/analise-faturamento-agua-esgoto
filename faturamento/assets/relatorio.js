@@ -1807,14 +1807,13 @@ function garExportarEmail() {
     const nomeSup = (s) => String(s || '').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
     const linhas = itens.map((it) => { const d = GAR.porLig.get(it.lig) || {};
         return [d.grupo || '', it.lig, nomeSup(d.sup), it.motivo === 'QUEDA' ? 'QUEDA DE CONSUMO' : it.motivo === 'AUMENTO' ? 'AUMENTO DE CONSUMO' : '', it.retorno || '']; });
-    // formatação pedida: sem linhas de grade, Calibri 14, títulos em negrito com fundo azul-petróleo escuro (Ênfase 1, mais
-    // escuro 25% = #0F4761) e fonte branca; demais linhas fonte preta sem preenchimento. Estilo em cada célula (o Outlook
+    // formatação pedida: sem linhas de grade, Calibri 14, títulos em negrito com fundo cinza-azulado (Texto 2, mais
+    // escuro 25% = #333F4F) e fonte branca; demais linhas fonte preta sem preenchimento. Estilo em cada célula (o Outlook
     // ignora CSS de <th>/<style>), com bgcolor para o Outlook desktop.
-    const AZUL = '#0F4761', FONTE = "font-family:Calibri,'Calibri',sans-serif;font-size:14pt;";
+    const AZUL = '#333F4F', FONTE = "font-family:Calibri,'Calibri',sans-serif;font-size:14pt;";
     const tit = (conteudo, extra) => `<td bgcolor="${AZUL}" ${extra || ''} style="${FONTE}background:${AZUL};color:#FFFFFF;font-weight:bold;border:none;padding:2px 14px;text-align:center;white-space:nowrap">${conteudo}</td>`;
     const cel = (v) => `<td style="${FONTE}color:#000000;border:none;padding:2px 14px;text-align:center;white-space:nowrap">${garEsc(v)}</td>`;
     const html = `<table border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:none;${FONTE}">`
-        + `<tr>${tit('Email', `colspan="${cols.length}"`).replace('text-align:center', 'text-align:left')}</tr>`
         + '<tr>' + cols.map((c) => tit(garEsc(c))).join('') + '</tr>'
         + linhas.map((l) => '<tr>' + l.map(cel).join('') + '</tr>').join('') + '</table>';
     const texto = cols.join('\t') + '\n' + linhas.map((l) => l.map((v) => (v == null ? '' : v)).join('\t')).join('\n');
