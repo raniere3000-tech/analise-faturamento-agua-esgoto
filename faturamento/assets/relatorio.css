@@ -109,9 +109,26 @@ tbody tr.linha-media td, tbody tr.linha-total td { font-weight:700; background-c
 /* ===== Justificativas ===== */
 .btn-just { padding:6px 12px; border:1px solid var(--linha); border-radius:6px; background:#FFFFFF; color:var(--marinho); font-family:inherit; font-size:12.5px; cursor:pointer; margin-left:6px; font-weight:600; }
 .btn-just:hover { border-color:var(--azul-claro); }
-#lista-justificativas p { position:relative; padding:6px 8px; border-radius:6px; margin:6px 0; font-size:13.5px; }
-#lista-justificativas.modo-edicao p { outline:1px dashed var(--azul-claro); background:var(--zebra); }
-#lista-justificativas.modo-edicao p:hover { background:var(--tint); }
+#lista-justificativas > p { position:relative; padding:6px 8px; border-radius:6px; margin:6px 0; font-size:13.5px; }
+#lista-justificativas.modo-edicao > p { outline:1px dashed var(--azul-claro); background:var(--zebra); }
+#lista-justificativas.modo-edicao > p:hover { background:var(--tint); }
+/* justificativas por grupo: água e esgoto lado a lado */
+.jg { border:1px solid var(--linha); border-radius:8px; margin:10px 0; overflow:hidden; break-inside:avoid; }
+.jg-tit { background:var(--tint); padding:6px 12px; font-weight:700; color:var(--marinho); font-size:13.5px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.jg-tit span { flex:1; }
+.jg-tit small { font-weight:600; color:var(--azul-claro); font-size:11.5px; }
+.jg-tit .btn-remover-item { position:static; flex:none; }
+.jg-cols { display:grid; grid-template-columns:1fr 1fr; }
+.jg-cols.um { grid-template-columns:1fr; }
+.jg-col { padding:8px 12px; font-size:13.5px; line-height:1.6; color:#1A2740; min-width:0; }
+.jg-col + .jg-col { border-left:1px solid var(--linha); }
+.jg-rot { display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:1px 8px; border-radius:10px; margin-bottom:4px; }
+.r-agua { background:#e0f2fe; color:#075985; } .r-esg { background:#ede9fe; color:#5b21b6; }
+.jg-txt p { margin:0 0 6px; } .jg-txt p:last-child { margin-bottom:0; }
+.jg-txt:empty::before { content:attr(data-vazio); color:#94a3b8; font-style:italic; }
+#lista-justificativas.modo-edicao .jg-txt { outline:1px dashed var(--azul-claro); background:var(--zebra); border-radius:5px; padding:4px 6px; min-height:28px; }
+#lista-justificativas.modo-edicao .jg-txt:focus { background:#fff; outline:2px solid var(--azul); }
+@media (max-width: 760px) { .jg-cols { grid-template-columns:1fr; } .jg-col + .jg-col { border-left:none; border-top:1px solid var(--linha); } }
 .btn-remover-item { display:none; position:absolute; top:2px; right:4px; background:var(--laranja-texto); color:#FFFFFF; border:none; border-radius:50%; width:20px; height:20px; font-size:0.7em; cursor:pointer; line-height:1; }
 #lista-justificativas.modo-edicao .btn-remover-item { display:block; }
 

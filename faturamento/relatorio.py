@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Montagem do relatório HTML (CSS e JavaScript ficam em `assets/`)."""
 import html
+import json
 import os
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
@@ -11,7 +12,24 @@ def carrega_asset(nome):
         return f.read()
 
 
+def _grupos_justificativa(ctx):
+    """Grupos do mês e os que têm esgoto (as justificativas de esgoto só aparecem para esses)."""
+    def grupos(df, so_com_valor=False):
+        if df is None or not len(df) or "Grupo" not in df.columns:
+            return []
+        d = df
+        if so_com_valor:
+            cols = [c for c in ("Faturamento_atual", "Faturamento_anterior", "Economias_atual") if c in d.columns]
+            if cols:
+                d = d[d[cols].fillna(0).abs().sum(axis=1) > 0]
+        return [str(g).strip() for g in d["Grupo"].dropna() if str(g).strip() not in ("", "nan", "None", "TOTAL", "Total")]
+    todos = grupos(getattr(ctx, "comp_agua", None)) + grupos(getattr(ctx, "comp_esgoto", None))
+    vistos = list(dict.fromkeys(todos))
+    return {"grupos": vistos, "esgoto": list(dict.fromkeys(grupos(getattr(ctx, "comp_esgoto", None), True)))}
+
+
 def gera_justificativa_html(ctx, texto_justificativa):
+    info = json.dumps(_grupos_justificativa(ctx), ensure_ascii=False).replace("</", "<\\/")
     return f"""
 <div class="card" id="card-justificativa">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
@@ -26,6 +44,7 @@ def gera_justificativa_html(ctx, texto_justificativa):
     <div id="lista-justificativas" style="font-size:0.9em; color:#1A2740; line-height:1.6;">
         {texto_justificativa}
     </div>
+    <script type="application/json" id="just-grupos">{info}</script>
 </div>
 """
 

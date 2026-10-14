@@ -130,3 +130,10 @@ def test_importar_planilha_de_garantia(sessao):
     assert "function garImportarExcel(texto)" in html and "function garLerTSV(texto)" in html
     assert "if (t.includes('\\t') && garImportarExcel(t))" in html and "Antes do painel (planilha)" in html
     assert 'data-campo="os_num"' in html and "<th>Nº O.S.</th>" in html
+
+
+def test_justificativas_agua_e_esgoto_por_grupo(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    info = json.loads(re.search(r'<script type="application/json" id="just-grupos">(.*?)</script>', html, re.S).group(1))
+    assert info["grupos"] and set(info["esgoto"]) <= set(info["grupos"])
+    assert "function justBloco(g, agua, esgoto)" in html and "function justConverterAntigo(lista)" in html

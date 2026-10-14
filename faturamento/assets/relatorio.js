@@ -552,7 +552,7 @@ async function lerJustificativasDaPasta() {
         lista.innerHTML = item.html;
         localStorage.setItem(CHAVE_JUSTIFICATIVA, item.html);
         justAtualizado = item.atualizado;
-        aplicarBotoesRemover();
+        justPreparar();
     }
     justStatus(item ? `Compartilhadas na pasta "${comp.pasta()}" · atualizadas em ${quandoJust(item.atualizado)}`
                     : `Compartilhadas na pasta "${comp.pasta()}" · ainda não salvas por ninguém neste mês`);
@@ -561,12 +561,13 @@ async function lerJustificativasDaPasta() {
 function carregarJustificativas() {
     const salvo = localStorage.getItem(CHAVE_JUSTIFICATIVA);
     if (salvo) document.getElementById('lista-justificativas').innerHTML = salvo;
-    aplicarBotoesRemover();
+    justPreparar();
     lerJustificativasDaPasta();
     setInterval(lerJustificativasDaPasta, 60000);                         // vê o que os outros salvaram sem recarregar
 }
 
 async function salvarJustificativas() {
+    justLimparVazios();
     const conteudo = limparHtmlJust(document.getElementById('lista-justificativas').innerHTML);
     localStorage.setItem(CHAVE_JUSTIFICATIVA, conteudo);
     const comp = justCompartilhada();
@@ -585,30 +586,35 @@ function toggleEdicaoJustificativa() {
     const emEdicao = lista.classList.contains('modo-edicao');
     if (emEdicao) {
         lista.classList.remove('modo-edicao');
-        lista.querySelectorAll('p').forEach(p => p.contentEditable = false);
+        lista.querySelectorAll('.jg-txt, :scope > p').forEach(p => p.contentEditable = false);
         btn.innerText = 'Editar';
         salvarJustificativas();
     } else {
         lista.classList.add('modo-edicao');
-        lista.querySelectorAll('p').forEach(p => p.contentEditable = true);
+        lista.querySelectorAll('.jg-txt, :scope > p').forEach(p => p.contentEditable = true);
         btn.innerText = 'Salvar';
     }
 }
 
 function adicionarJustificativa() {
     const lista = document.getElementById('lista-justificativas');
-    const novoP = document.createElement('p');
-    novoP.innerHTML = '<strong>Novo item:</strong> clique em Editar e escreva aqui...';
-    novoP.contentEditable = lista.classList.contains('modo-edicao');
-    const btnRemover = document.createElement('button');
-    btnRemover.className = 'btn-remover-item';
-    btnRemover.innerText = '';
-    btnRemover.onclick = function () { novoP.remove(); salvarJustificativas(); };
-    novoP.appendChild(btnRemover);
-    lista.appendChild(novoP);
+    const sug = justInfo().grupos.slice(0, 12).join(', ') + (justInfo().grupos.length > 12 ? '…' : '');
+    let g = prompt(`Grupo da justificativa${sug ? ' (' + sug + ')' : ''}.\nDeixe em branco para uma observação geral.`, '');
+    if (g === null) return;
+    g = g.trim().replace(/^grupo\s*/i, '');
+    const chave = g ? normGrupo(g) : '';
+    g = justInfo().grupos.find((x) => normGrupo(x) === chave) || g;      // "5" → "05", como o grupo aparece no relatório
+    let bloco = Array.from(lista.querySelectorAll('.jg')).find((b) => (b.dataset.grupo ? normGrupo(b.dataset.grupo) : '') === chave);
+    if (!bloco) {
+        bloco = justBloco(g, '', '');
+        const depois = Array.from(lista.querySelectorAll('.jg')).find((b) => b.dataset.grupo && g && justOrdem(b.dataset.grupo) > justOrdem(g));
+        lista.insertBefore(bloco, depois || null);
+        justPreparar();
+    }
     if (!lista.classList.contains('modo-edicao')) toggleEdicaoJustificativa();
-    aplicarBotoesRemover();
-    salvarJustificativas();
+    else bloco.querySelectorAll('.jg-txt').forEach((t) => { t.contentEditable = true; });
+    const alvo = Array.from(bloco.querySelectorAll('.jg-txt')).find((t) => !t.textContent.trim()) || bloco.querySelector('.jg-txt');
+    if (alvo) { alvo.focus(); bloco.scrollIntoView({ block: 'nearest' }); }
 }
 
 function limparJustificativas() {
@@ -617,17 +623,75 @@ function limparJustificativas() {
     salvarJustificativas();
 }
 
-function aplicarBotoesRemover() {
-    const lista = document.getElementById('lista-justificativas');
-    lista.querySelectorAll('p').forEach(function (p) {
-        if (p.querySelector('.btn-remover-item')) return;
-        const btnRemover = document.createElement('button');
-        btnRemover.className = 'btn-remover-item';
-        btnRemover.innerText = '';
-        btnRemover.onclick = function () { p.remove(); salvarJustificativas(); };
-        p.appendChild(btnRemover);
+// Justificativas por grupo, com água e esgoto separados (esgoto só nos grupos que têm esgoto no mês).
+// Cada grupo é um bloco .jg[data-grupo] com colunas .jg-col[data-serv="agua"|"esgoto"]; o HTML salvo na pasta é esse.
+// Texto no formato antigo (parágrafos "<strong>Grupo 501:</strong> ...") vira a coluna de água do grupo.
+let JUST_INFO = null;
+function justInfo() {                                     // lida na primeira vez que precisa (o script roda antes do card)
+    if (JUST_INFO) return JUST_INFO;
+    try {
+        const j = JSON.parse(document.getElementById('just-grupos').textContent);
+        JUST_INFO = { grupos: j.grupos || [], esgoto: new Set((j.esgoto || []).map((g) => normGrupo(g))) };
+    } catch (e) { return { grupos: [], esgoto: new Set() }; }
+    return JUST_INFO;
+}
+const justOrdem = (g) => { const n = parseFloat(String(g).replace(',', '.')); return isNaN(n) ? Infinity : n; };
+const JUST_SERV = { agua: ['r-agua', '💧 Água', 'água'], esgoto: ['r-esg', 'Esgoto', 'esgoto'] };
+function justBloco(g, agua, esgoto) {
+    const temEsg = !!g && (justInfo().esgoto.has(normGrupo(g)) || !!String(esgoto || '').trim());
+    const col = (s, h) => `<div class="jg-col" data-serv="${s}">`
+        + (g ? `<span class="jg-rot ${JUST_SERV[s][0]}">${JUST_SERV[s][1]}</span>` : '')
+        + `<div class="jg-txt" data-vazio="${g ? `Sem justificativa de ${JUST_SERV[s][2]} para este grupo — clique em Editar para escrever.` : 'Clique em Editar para escrever.'}">${h || ''}</div></div>`;
+    const b = document.createElement('div');
+    b.className = 'jg'; b.dataset.grupo = g;
+    b.innerHTML = `<div class="jg-tit"><span>${g ? 'Grupo ' + garEscJust(g) : 'Observações gerais'}</span><small>${g ? (temEsg ? 'água e esgoto' : 'somente água') : ''}</small></div>`
+        + `<div class="jg-cols${temEsg ? '' : ' um'}">${col('agua', agua)}${temEsg ? col('esgoto', esgoto) : ''}</div>`;
+    return b;
+}
+const garEscJust = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function justConverterAntigo(lista) {
+    const blocos = new Map(), ordem = [];
+    const pega = (g) => { if (!blocos.has(g)) { blocos.set(g, { agua: [], esgoto: [] }); ordem.push(g); } return blocos.get(g); };
+    Array.from(lista.childNodes).forEach((n) => {
+        if (n.nodeType === 3) { if (n.textContent.trim()) pega('').agua.push(garEscJust(n.textContent.trim())); return; }
+        if (n.nodeType !== 1) return;
+        n.querySelectorAll('.btn-remover-item').forEach((x) => x.remove());
+        if (!n.textContent.trim()) return;
+        const forte = n.querySelector('strong, b'), rot = forte ? forte.textContent : '';
+        const m = rot.match(/grupo\s*([\w.\-]+)/i);
+        if (!m) { pega('').agua.push(n.innerHTML.trim()); return; }
+        forte.remove();
+        const corpo = n.innerHTML.replace(/^\s*(:|-|–)?\s*/, '').trim();
+        const soEsgoto = /esgoto/i.test(rot) && !/[áa]gua/i.test(rot);
+        pega(m[1])[soEsgoto ? 'esgoto' : 'agua'].push(corpo);
+    });
+    lista.innerHTML = '';
+    ordem.sort((a, b) => (a === '' ? 1 : b === '' ? -1 : justOrdem(a) - justOrdem(b)))
+        .forEach((g) => { const x = blocos.get(g); lista.appendChild(justBloco(g, x.agua.join('<br>'), x.esgoto.join('<br>'))); });
+}
+function justPreparar() {
+    const lista = document.getElementById('lista-justificativas'); if (!lista) return;
+    if (!lista.querySelector('.jg') && lista.textContent.trim()) justConverterAntigo(lista);
+    lista.querySelectorAll('.jg').forEach((b) => {           // grupo com esgoto que ainda não tem a coluna (ex.: salvo antes)
+        const g = b.dataset.grupo;
+        if (g && justInfo().esgoto.has(normGrupo(g)) && !b.querySelector('[data-serv="esgoto"]')) {
+            const novo = justBloco(g, b.querySelector('[data-serv="agua"] .jg-txt')?.innerHTML || '', '');
+            b.replaceWith(novo); b = novo;
+        }
+        const tit = b.querySelector('.jg-tit');
+        if (tit && !tit.querySelector('.btn-remover-item')) {
+            const r = document.createElement('button');
+            r.type = 'button'; r.className = 'btn-remover-item'; r.title = 'Remover este grupo das justificativas';
+            r.onclick = () => { if (confirm(`Remover as justificativas do ${tit.querySelector('span').textContent}?`)) { r.closest('.jg').remove(); salvarJustificativas(); } };
+            tit.appendChild(r);
+        }
+        if (lista.classList.contains('modo-edicao')) b.querySelectorAll('.jg-txt').forEach((t) => { t.contentEditable = true; });
     });
 }
+function justLimparVazios() {                             // texto apagado no editor deixa <br> — volta a ficar vazio
+    document.querySelectorAll('#lista-justificativas .jg-txt').forEach((t) => { if (!t.textContent.trim() && !t.querySelector('img')) t.innerHTML = ''; });
+}
+const aplicarBotoesRemover = justPreparar;
 
 document.addEventListener('DOMContentLoaded', function () {
     mostrarView('resumo');
@@ -1165,6 +1229,9 @@ function gerarExecutivo(libs) {
         c.querySelectorAll('script').forEach(x => x.remove());          // só o conteúdo: nada roda no documento do PDF
         c.querySelectorAll('.dias-uteis').forEach(x => x.remove());     // no PDF vai só a tabela do forecast (sem o painel de dias úteis)
         c.querySelectorAll('[contenteditable]').forEach(x => x.removeAttribute('contenteditable'));
+        c.querySelectorAll('.jg-col').forEach((col) => { const t = col.querySelector('.jg-txt'); if (t && !t.textContent.trim()) col.remove(); });
+        c.querySelectorAll('.jg').forEach((b) => { const n = b.querySelectorAll('.jg-col').length; if (!n) b.remove(); else if (n === 1) b.querySelector('.jg-cols').classList.add('um'); });
+        c.querySelectorAll('.btn-remover-item').forEach(x => x.remove());
         c.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
         c.removeAttribute('id');
         return c;
