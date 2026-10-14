@@ -168,7 +168,7 @@ def gera_aba_garantia_html(ctx):
       <button type="button" class="btn-just" id="garAdicionar">Adicionar</button>
       <span class="gar-msg" id="garMsg"></span>
       <span class="gar-espaco"></span>
-      <button type="button" class="btn-just" id="garEmail" title="Copia a tabela para colar no e-mail ao faturamento e baixa o mesmo conteúdo em CSV">📧 Exportar para e-mail</button>
+      <button type="button" class="btn-just" id="garEmail" title="Copia a tabela formatada para colar no e-mail e baixa um rascunho de e-mail (.eml) para abrir no Outlook">📧 Exportar para e-mail</button>
     </div>
     <p class="nota-secao">A linha traz os dados da matrícula no mês atual. Preencha a <b>média faturada</b> (a do sistema, em m³): o
     <b>Fat. calculado</b> sai pela estrutura tarifária. <b>Fat. anterior</b> é a foto do faturado no momento em que a matrícula entrou
