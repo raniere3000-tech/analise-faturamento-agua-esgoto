@@ -121,5 +121,5 @@ def test_os_e_email_no_layout_pedido(sessao):
 
 def test_email_formatado_e_rascunho_eml(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
-    assert "const AZUL = '#0F4761'" in html and "font-size:14pt" in html and "border:none" in html
+    assert "const AZUL = '#333F4F'" in html and "tit('Email'" not in html and "font-size:14pt" in html and "border:none" in html
     assert "function garBaixarEml(html, assunto, nome)" in html and "'X-Unsent: 1'" in html
