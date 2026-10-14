@@ -454,3 +454,7 @@ tr.gar-linha-forte td:nth-child(2) { font-weight:800; }
 .gar-h3 { font-size:13px; margin:14px 0 6px; color:var(--marinho); }
 @media print { .gar-sub, .gar-add, .gar-remover, .gar-barra { display:none !important; } }
 #view-executivo .gar-kpis { margin-top:0; }
+.gar-badge { display:inline-block; min-width:18px; padding:0 6px; margin-left:4px; border-radius:9px; background:#C2560C; color:#fff; font-size:11px; line-height:18px; text-align:center; }
+.gar-aviso-os { border-left:5px solid #C2560C; background:#fff8f1; }
+.gar-aviso-os h2 { color:#9a3412; }
+@media print { .gar-aviso-os, .gar-os-ok { display:none !important; } }

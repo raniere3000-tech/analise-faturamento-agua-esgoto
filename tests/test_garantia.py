@@ -109,3 +109,11 @@ def test_etapa2_recebe_economias_por_tipo_e_esgoto(sessao):
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert '<script src="faturamento/assets/tarifa.js"></script>' in site and 'id="chkMinTodos"' in site
     assert 'data-view="garantia"' in site
+
+
+def test_os_e_email_no_layout_pedido(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert 'id="garAvisoOS"' in html and "const OS_ABRIR = 'Abrir O.S.', OS_NAO = 'Não abrir O.S.', OS_PRAZO_DIAS = 10;" in html
+    assert "const cols = ['Grupo', 'Nº da Ligação', 'Superintendência', 'Motivo', 'Retorno Superintendência'];" in html
+    # o aviso de O.S. fica fora do card do resumo (não vai para o PDF)
+    assert html.index('id="garAvisoOS"') < html.index('id="garantia-resumo-card"')

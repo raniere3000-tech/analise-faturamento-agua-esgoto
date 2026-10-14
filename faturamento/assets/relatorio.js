@@ -1705,7 +1705,7 @@ function garDesenharAnalise() {
         + '<th class="num" title="Valor da média pela estrutura tarifária">Fat. calculado (R$)</th>'
         + '<th class="num" title="Foto do faturado quando a matrícula entrou na análise">Fat. anterior (R$)</th>'
         + '<th class="num" title="Faturado atual (muda quando a fatura é liberada)">Fat. ajustado (R$)</th><th class="num">Dif. (R$)</th>'
-        + '<th>Motivo</th><th>Retorno superintendência</th><th>OBS</th><th></th></tr>';
+        + '<th>Motivo</th><th>Retorno superintendência</th><th title="Abrir O.S.: a matrícula entra no controle de prazo (D+10) do Resumo de Ganhos">O.S.</th><th></th></tr>';
     let mudouFoto = false;
     const itens = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)));
     tab.tBodies[0].innerHTML = itens.map((it) => {
@@ -1714,6 +1714,7 @@ function garDesenharAnalise() {
         const tot = d ? (d.res || 0) + (d.com || 0) + (d.ind || 0) + (d.pub || 0) : null;
         const sit = !d ? '<span class="gar-sit">não encontrada</span>' : d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? 'Em análise' : d.sit)}</span>` : '<span class="gar-sit">sem fatura no mês</span>';
         const opt = (v, t) => `<option value="${v}" ${it.motivo === v ? 'selected' : ''}>${t}</option>`;
+        const optOS = (v, t) => `<option value="${garEsc(v)}" ${(it.obs || '') === v ? 'selected' : ''}>${garEsc(t)}</option>`;
         return `<tr data-lig="${garEsc(it.lig)}"><td>${garEsc(it.lig)}</td><td class="gar-cli" title="${garEsc(d && d.nome)}">${garEsc(d && d.nome)}</td>`
             + `<td>${garEsc(d && d.cat)}</td><td>${garEsc(d && d.loc)}</td><td class="num">${garN(d && d.res)}</td><td class="num">${garN(d && d.com)}</td>`
             + `<td class="num">${garN(d && d.ind)}</td><td class="num">${garN(d && d.pub)}</td><td class="num">${garN(tot)}</td><td>${garEsc(d && d.grupo)}</td>`
@@ -1723,7 +1724,7 @@ function garDesenharAnalise() {
             + `<td class="num ${dif < 0 ? 'gar-neg' : ''}" data-f="dif">${garR(dif)}</td>`
             + `<td><select class="gar-in" data-campo="motivo">${opt('', '—')}${opt('QUEDA', 'Queda de consumo')}${opt('AUMENTO', 'Aumento de consumo')}</select></td>`
             + `<td><input class="gar-in gar-texto" data-campo="retorno" value="${garEsc(it.retorno)}" placeholder="ex.: FATURAR MÉDIA 311 m³"></td>`
-            + `<td><input class="gar-in gar-texto" data-campo="obs" value="${garEsc(it.obs)}"></td>`
+            + `<td><select class="gar-in" data-campo="obs">${optOS('', '—')}${optOS(OS_ABRIR, OS_ABRIR)}${optOS(OS_NAO, OS_NAO)}${it.obs && it.obs !== OS_ABRIR && it.obs !== OS_NAO ? optOS(it.obs, it.obs) : ''}</select></td>`
             + `<td><button type="button" class="btn-just gar-remover" title="Tirar da análise" aria-label="Tirar a matrícula ${garEsc(it.lig)} da análise">✕</button></td></tr>`;
     }).join('') || '<tr><td colspan="21" class="gar-vazio">Nenhuma matrícula na análise deste mês. Digite ou cole matrículas acima, ou use “+ Análise” no Top 1000.</td></tr>';
     if (mudouFoto) garSalvar();
@@ -1740,11 +1741,15 @@ document.addEventListener('input', (e) => {
     const tr = inp.closest('tr'), it = garItens[garChave(tr.dataset.lig)]; if (!it) return;
     const campo = inp.dataset.campo;
     it[campo] = campo === 'media' ? garLerNumero(inp.value) : inp.value;
+    if (campo === 'obs') {
+        if (inp.value === OS_ABRIR) { if (!it.os_data) it.os_data = garHoje(); delete it.os_status; }
+        else { delete it.os_data; delete it.os_status; delete it.os_realizada; }
+    }
     if (campo === 'media') {
         const c = garCalcItem({ lig: tr.dataset.lig, ...it });
         tr.querySelector('[data-f="calc"]').textContent = garR(c.calc);
     }
-    garSalvar(); garDesenharResumo();
+    garSalvar(); garDesenharResumo(); if (campo === 'obs') garDesenharOS();
 });
 document.addEventListener('click', (e) => {
     const add = e.target.closest && e.target.closest('.gar-add');
@@ -1797,14 +1802,17 @@ function garBaixarTop() {
 function garExportarEmail() {
     const itens = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)) && (it.motivo || it.retorno));
     if (!itens.length) { avisoNuvem('Nenhuma matrícula com motivo ou retorno preenchido para exportar.', true); return; }
-    const cols = ['Matrícula', 'Cliente', 'Grupo', 'Localidade', 'Categoria', 'Motivo', 'Solicitação', 'Média (m³)', 'OBS'];
+    // layout do e-mail: Grupo · Nº da Ligação · Superintendência · Motivo · Retorno Superintendência (como na planilha)
+    const cols = ['Grupo', 'Nº da Ligação', 'Superintendência', 'Motivo', 'Retorno Superintendência'];
+    const nomeSup = (s) => String(s || '').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
     const linhas = itens.map((it) => { const d = GAR.porLig.get(it.lig) || {};
-        return [it.lig, d.nome || '', d.grupo || '', d.loc || '', d.cat || '', it.motivo === 'QUEDA' ? 'Queda de consumo' : it.motivo === 'AUMENTO' ? 'Aumento de consumo' : '',
-                it.retorno || '', it.media, it.obs || '']; });
-    const html = `<p>Prezados, seguem as matrículas da análise de garantia (${garEsc(GAR.ref)}) com a solicitação para o faturamento:</p>`
-        + '<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px">'
-        + '<tr style="background:#1A2740;color:#fff">' + cols.map((c) => `<th>${garEsc(c)}</th>`).join('') + '</tr>'
-        + linhas.map((l) => '<tr>' + l.map((v, i) => `<td${i === 7 ? ' align="right"' : ''}>${garEsc(i === 7 && v != null ? fmtBR(v, v % 1 ? 2 : 0) : v)}</td>`).join('') + '</tr>').join('') + '</table>';
+        return [d.grupo || '', it.lig, nomeSup(d.sup), it.motivo === 'QUEDA' ? 'QUEDA DE CONSUMO' : it.motivo === 'AUMENTO' ? 'AUMENTO DE CONSUMO' : '', it.retorno || '']; });
+    const th = 'background:#44546A;color:#FFFFFF;font-weight:bold;padding:4px 14px;text-align:center;border:1px solid #FFFFFF';
+    const td = 'padding:3px 14px;text-align:center;border-bottom:1px solid #D9D9D9';
+    const html = '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:14px">'
+        + `<tr><td colspan="${cols.length}" style="background:#44546A;color:#FFFFFF;padding:3px 8px">Email</td></tr>`
+        + '<tr>' + cols.map((c) => `<th style="${th}">${garEsc(c)}</th>`).join('') + '</tr>'
+        + linhas.map((l) => '<tr>' + l.map((v) => `<td style="${td}">${garEsc(v)}</td>`).join('') + '</tr>').join('') + '</table>';
     const texto = cols.join('\t') + '\n' + linhas.map((l) => l.map((v) => (v == null ? '' : v)).join('\t')).join('\n');
     const copiar = async () => {
         try {
@@ -1821,6 +1829,47 @@ function garExportarEmail() {
     copiar().then((ok) => avisoNuvem(ok ? `${itens.length} matrícula(s) copiadas: cole no e-mail (Ctrl+V). O CSV também foi baixado.` : 'Não foi possível copiar; use o CSV baixado.', !ok));
     baixarTexto(csvDe(cols, linhas), `Garantia_email_${GAR.ref.replace('/', '-')}.csv`);
 }
+
+// --- Controle de O.S. (Abrir O.S. → verificar em D+10 a partir do dia da análise) ---
+const OS_ABRIR = 'Abrir O.S.', OS_NAO = 'Não abrir O.S.', OS_PRAZO_DIAS = 10;
+const garHoje = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const garDataBR = (iso) => (iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '–');
+function garPrazo(iso) { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + OS_PRAZO_DIAS); return d; }
+// todas as O.S. abertas (de qualquer mês) que ainda não foram marcadas como realizadas
+function garOS() {
+    const hoje = new Date(garHoje() + 'T12:00:00');
+    return Object.entries(garItens).filter(([, v]) => v.obs === OS_ABRIR && v.os_status !== 'Realizada').map(([k, v]) => {
+        const i = k.lastIndexOf('|'), ref = k.slice(0, i), lig = k.slice(i + 1);
+        const data = v.os_data || (v.foto ? v.foto.slice(0, 10) : garHoje());
+        const prazo = garPrazo(data), dias = Math.round((hoje - prazo) / 86400000);
+        return { k, ref, lig, v, data, prazo, dias, vencida: dias >= 0, d: GAR.porLig.get(lig) };
+    }).filter((o) => garVisivel(o.d)).sort((a, b) => b.dias - a.dias);
+}
+function garDesenharOS() {
+    const el = document.getElementById('garAvisoOS'); if (!el || !GAR.dados) return;
+    const os = garOS(), vencidas = os.filter((o) => o.vencida), noPrazo = os.length - vencidas.length;
+    const aba = document.querySelector('[data-gar-aba="resumo"]');
+    if (aba) aba.innerHTML = 'Resumo de Ganhos' + (vencidas.length ? ` <span class="gar-badge" title="O.S. com prazo de ${OS_PRAZO_DIAS} dias vencido">${vencidas.length}</span>` : '');
+    if (!os.length) { el.hidden = true; el.innerHTML = ''; return; }
+    el.hidden = false;
+    const motivo = (m) => (m === 'QUEDA' ? 'Queda de consumo' : m === 'AUMENTO' ? 'Aumento de consumo' : '–');
+    el.innerHTML = `<h2>⚠ O.S. abertas — prazo de ${OS_PRAZO_DIAS} dias</h2>`
+        + `<p class="nota-secao">${vencidas.length ? `<b>${vencidas.length}</b> matrícula(s) com O.S. aberta há ${OS_PRAZO_DIAS} dias ou mais: verifique se foram realizadas ou estão em atraso.` : 'Nenhuma O.S. com prazo vencido.'}`
+        + (noPrazo ? ` ${noPrazo} ainda dentro do prazo.` : '') + ' Depois de conferir, marque como realizada.</p>'
+        + (vencidas.length ? '<div class="tabela-wrap"><table class="tabela-garantia"><thead><tr><th>Matrícula</th><th>Cliente</th><th>Grupo</th><th>SUP</th><th>Motivo</th>'
+            + '<th>Retorno superintendência</th><th>Análise</th><th>Prazo (D+' + OS_PRAZO_DIAS + ')</th><th class="num">Dias após o prazo</th><th></th></tr></thead><tbody>'
+            + vencidas.map((o) => `<tr><td><b>${garEsc(o.lig)}</b></td><td class="gar-cli" title="${garEsc(o.d && o.d.nome)}">${garEsc(o.d && o.d.nome)}</td>`
+                + `<td>${garEsc(o.d && o.d.grupo)}</td><td>${garEsc(o.d && o.d.sup)}</td><td>${motivo(o.v.motivo)}</td><td>${garEsc(o.v.retorno)}</td>`
+                + `<td>${garDataBR(o.data)}</td><td>${o.prazo.toLocaleDateString('pt-BR')}</td><td class="num gar-neg"><b>${o.dias}</b></td>`
+                + `<td><button type="button" class="btn-just gar-os-ok" data-k="${garEsc(o.k)}" title="O.S. conferida e realizada: sai do aviso">✓ Realizada</button></td></tr>`).join('')
+            + '</tbody></table></div>' : '');
+}
+document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('.gar-os-ok'); if (!b) return;
+    const it = garItens[b.dataset.k]; if (!it) return;
+    it.os_status = 'Realizada'; it.os_realizada = garHoje();
+    garSalvar(); garDesenharOS();
+});
 
 // --- Resumo de Ganhos ---
 function garTotais() {
@@ -1861,7 +1910,7 @@ function garDesenharResumo() {
 function garRedesenhar() {
     if (!GAR.dados) return;
     garGrupos = gruposFiltro();
-    garDesenharTop(); garDesenharAnalise(); garDesenharResumo();
+    garDesenharTop(); garDesenharAnalise(); garDesenharResumo(); garDesenharOS();
 }
 var syncGarantia = criaSync('garantia', 'Análise de garantia', () => garItens,
     (m) => { garItens = m; try { localStorage.setItem(GAR_LS, JSON.stringify(garItens)); } catch (e) {} },
