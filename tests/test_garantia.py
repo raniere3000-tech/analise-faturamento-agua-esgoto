@@ -70,11 +70,11 @@ def test_top1000_pela_media_dos_meses_fechados(sessao):
 def test_aba_garantia_no_relatorio(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert 'id="view-garantia"' in html and 'id="btn-garantia"' in html
-    for trecho in ('data-gar-aba="top"', 'data-gar-aba="analise"', 'data-gar-aba="resumo"', 'id="garSoAnalise"', 'id="garEmail"',
+    for trecho in ('data-gar-aba="top"', 'data-gar-aba="analise"', 'data-gar-aba="resumo"', 'id="garSoAnalise"', 'id="garEmail"', 'id="garBuscaLig"',
                    'id="garantia-resumo-card"', 'id="garantia-dados" data-gz="1"', 'id="tarifa-dados"',
-                   "var syncGarantia = criaSync('garantia'", "raiz.Tarifa = { valor, minimo, norm }",
-                   "['Garantia — Resumo de Ganhos', [q('#garantia-resumo-card')]]"):
+                   "var syncGarantia = criaSync('garantia'", "raiz.Tarifa = { valor, minimo, norm }"):
         assert trecho in html, trecho
+    assert "['Garantia — Resumo de Ganhos'" not in html        # a garantia não vai para o PDF executivo
     tarifa = json.loads(re.search(r'<script type="application/json" id="tarifa-dados">(.*?)</script>', html, re.S).group(1))
     assert tarifa["fonte"].startswith("padrão") and len(tarifa["faixas"]) == len(TAB["faixas"])
 

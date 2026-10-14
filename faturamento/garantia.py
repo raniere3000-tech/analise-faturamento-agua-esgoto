@@ -154,6 +154,7 @@ def gera_aba_garantia_html(ctx):
   <div class="card">
     <div class="gar-barra">
       <span class="gar-contagem" id="garTopContagem"></span>
+      <span class="gar-busca"><label for="garBuscaLig">Matrícula</label><input type="text" id="garBuscaLig" inputmode="numeric" autocomplete="off" placeholder="Filtrar por matrícula (uma ou várias)"><button type="button" class="btn-just" id="garLimparBusca" title="Limpar o filtro de matrícula" aria-label="Limpar o filtro de matrícula">✕</button></span>
       <button type="button" class="btn-just gar-filtro" id="garSoAnalise" aria-pressed="false">Somente em análise</button>
       <button type="button" class="btn-just btn-baixar-gar" id="garBaixarTop" title="Baixar a lista na tela (CSV)" aria-label="Baixar a lista na tela (CSV)">&#11015;</button>
     </div>
