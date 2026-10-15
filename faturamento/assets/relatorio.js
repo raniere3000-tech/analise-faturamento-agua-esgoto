@@ -1,6 +1,6 @@
 const CHAVE_JUSTIFICATIVA = '__CHAVE_JUSTIFICATIVA__';
 
-const VIEWS = ['resumo', 'tabelas', 'analise', 'indiretas', 'forecast', 'dre', 'garantia', 'dados'];
+const VIEWS = ['resumo', 'tabelas', 'analise', 'indiretas', 'forecast', 'dre', 'garantia', 'plano', 'dados'];
 function mostrarView(view) {
     VIEWS.forEach(v => {
         document.getElementById('view-' + v).classList.toggle('ativo', v === view);
@@ -36,6 +36,7 @@ function definirFiltros(parcial) {
     });
     desenharGraficosIndiretas();
     if (typeof garRedesenhar === 'function') garRedesenhar();
+    if (typeof planoDesenhar === 'function') planoDesenhar();
 }
 
 // Superintendência nas abas por grupo (Resumo e Diretas): marca só os grupos da SUP escolhida (pela Localidade do cronograma)
@@ -212,6 +213,7 @@ function filtrarPorGrupo() {
     refazTops();                                            // Top 100 refeito só com os grupos marcados
     sitlRecalcular();                                       // cards da Situação de lançamento
     if (typeof garRedesenhar === 'function') garRedesenhar();   // aba Garantia (Top 1000, análise e resumo)
+    if (typeof planoDesenhar === 'function') planoDesenhar();   // aba Plano de ação
 }
 
 function recalcularTotais() {
@@ -1286,6 +1288,7 @@ function gerarExecutivo(libs) {
         ['Orçado x Realizado', qa('#view-tabelas .orc-ciclo-bloco:not([hidden]) > .card')],
         ['Faturamento Mês a Mês', [card('#tabela-agua'), card('#tabela-esgoto')]],
         ['Indiretas', qa(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .prev-card`)],
+        ['Plano de Ação', [q('#plano-card.tem-dados')]],
         ['Análise de Ciclo', [q('#card-justificativa')]],         // título só no PDF, em cima das justificativas
     ];
     secoes.forEach(([nome, els]) => {
@@ -1543,7 +1546,7 @@ function marcaNuvem(nome, r) {
 // clique na nuvem: grava tudo o que está na tela e relê a pasta; devolve true se tudo foi salvo
 window.sincronizarTudo = async function () {
     if (!compartilhado()) return false;
-    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncConfig.empurrar(), await syncGarantia.empurrar(), await salvarJustificativas()];
+    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncConfig.empurrar(), await syncGarantia.empurrar(), await syncPlano.empurrar(), await salvarJustificativas()];
     puxarAjustesCompartilhados(); lerJustificativasDaPasta();
     return r.every(Boolean);
 };
@@ -1608,6 +1611,7 @@ function puxarAjustesCompartilhados() {
     syncForecast.puxar(); syncSituacao.puxar();
     if (typeof syncConfig !== 'undefined') syncConfig.puxar();
     if (typeof syncGarantia !== 'undefined') syncGarantia.puxar();
+    if (typeof syncPlano !== 'undefined') syncPlano.puxar();
 }
 // chamado pelo site quando o arquivo da pasta mudou (outra pessoa salvou) ou ao voltar para a aba
 window.puxarTudoDaPasta = function () { puxarAjustesCompartilhados(); lerJustificativasDaPasta(); };
@@ -2123,3 +2127,128 @@ var syncGarantia = criaSync('garantia', 'Análise de garantia', () => garItens,
     () => garRedesenhar(),
     () => !!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#garTabelaAnalise')));
 garCarregar().then(() => { garRedesenhar(); syncGarantia.puxar(); }).catch((e) => console.warn('Garantia: dados não carregaram', e));
+
+// ===== Aba Plano de ação: tabela colada da planilha =====
+// Cada referência (mês) tem um plano { colunas, linhas, atualizado } na seção "plano" do ajustes_relatorio.json — o
+// mesmo para todos e incluído no PDF executivo. Sem plano no mês, aparece o último colado (com aviso).
+const PLANO_LS = 'faturamento_plano';
+let planoMapa = {};
+try { planoMapa = JSON.parse(localStorage.getItem(PLANO_LS) || '{}') || {}; } catch (e) { /* sem armazenamento */ }
+const planoNorm = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+const planoRefChave = (r) => { const m = /^(\d{2})\/(\d{4})$/.exec(r || ''); return m ? m[2] + m[1] : String(r || ''); };
+function planoInfo() {
+    const el = document.getElementById('planoEntrada');
+    return el ? { ref: el.dataset.ref, mes: el.dataset.mes } : null;
+}
+function planoAtual() {                          // [ref, plano] do mês; sem plano no mês, o último colado antes dele
+    const inf = planoInfo(); if (!inf) return [null, null];
+    if (planoMapa[inf.ref] && planoMapa[inf.ref].linhas && planoMapa[inf.ref].linhas.length) return [inf.ref, planoMapa[inf.ref]];
+    const antes = Object.keys(planoMapa).filter((r) => planoMapa[r] && (planoMapa[r].linhas || []).length && planoRefChave(r) < planoRefChave(inf.ref))
+        .sort((a, b) => (planoRefChave(a) < planoRefChave(b) ? 1 : -1));
+    return antes.length ? [antes[0], planoMapa[antes[0]]] : [null, null];
+}
+function planoSalvar() {
+    try { localStorage.setItem(PLANO_LS, JSON.stringify(planoMapa)); } catch (e) { /* ignora */ }
+    if (typeof syncPlano !== 'undefined') syncPlano.agendar();
+}
+function planoDataDe(t) {                        // "dd/mm/aaaa" (ou dd/mm/aa) → Date
+    const m = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(String(t || '')); if (!m) return null;
+    const d = new Date(+(m[3].length === 2 ? '20' + m[3] : m[3]), +m[2] - 1, +m[1]); return isNaN(d) ? null : d;
+}
+function planoClasseStatus(v) {
+    const n = planoNorm(v);
+    if (!n) return '';
+    if (/CONCLU|FINALIZ|REALIZAD|ENTREGUE|^OK$/.test(n)) return 'pl-ok';
+    if (/ATRAS|VENCID|CRITIC/.test(n)) return 'pl-atraso';
+    if (/ANDAMENTO|EXECU|INICIAD/.test(n) && !/NAO INICIAD/.test(n)) return 'pl-andamento';
+    if (/PENDENTE|NAO INICIAD|A FAZER|AGUARD|PLANEJ/.test(n)) return 'pl-pendente';
+    if (/CANCEL|SUSPEN/.test(n)) return 'pl-cancel';
+    return 'pl-outro';
+}
+function planoDesenhar() {
+    const tab = document.getElementById('planoTabela'); if (!tab) return;
+    const card = document.getElementById('plano-card'), info = document.getElementById('planoInfo'), inf = planoInfo();
+    const [ref, plano] = planoAtual();
+    if (!plano) {
+        card.classList.remove('tem-dados');
+        tab.tHead.innerHTML = ''; tab.tBodies[0].innerHTML = '<tr><td class="gar-vazio">Nenhum plano de ação colado ainda. Copie as linhas da planilha (com o cabeçalho) e cole no campo acima.</td></tr>';
+        info.textContent = ''; return;
+    }
+    const cols = plano.colunas, cab = cols.map(planoNorm);
+    const iStatus = cab.findIndex((c) => /^STATUS|SITUACAO|ANDAMENTO/.test(c));
+    const iPrazo = cab.findIndex((c) => /PRAZO|DATA LIMITE|DATA FIM|TERMINO|CONCLUSAO PREVISTA/.test(c));
+    const iSup = cab.findIndex((c) => /^SUP\b|SUPERINTEND/.test(c)), iGrupo = cab.findIndex((c) => /^GRUPO/.test(c));
+    const grupos = typeof gruposFiltro === 'function' ? gruposFiltro() : null;
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const linhas = plano.linhas.filter((l) => {
+        if (iSup >= 0 && ESTADO.sup !== 'TODAS' && l[iSup] && !planoNorm(l[iSup]).includes(planoNorm(ESTADO.sup))
+            && !planoNorm(ESTADO.sup).includes(planoNorm(l[iSup]))) return false;
+        if (iGrupo >= 0 && grupos && l[iGrupo]) {
+            const gs = String(l[iGrupo]).split(/[^0-9.]+/).filter((t) => /\d/.test(t)).map(normGrupo);   // "Todos"/"Geral" = sempre aparece
+            if (gs.length && !gs.some((g) => grupos.has(g))) return false;
+        }
+        return true;
+    });
+    tab.tHead.innerHTML = '<tr>' + cols.map((c) => `<th>${garEsc(c)}</th>`).join('') + '</tr>';
+    tab.tBodies[0].innerHTML = linhas.map((l) => {
+        const st = iStatus >= 0 ? planoClasseStatus(l[iStatus]) : '';
+        const prazo = iPrazo >= 0 ? planoDataDe(l[iPrazo]) : null, vencido = prazo && prazo < hoje && st !== 'pl-ok' && st !== 'pl-cancel';
+        return '<tr>' + cols.map((c, i) => {
+            const v = l[i] == null ? '' : String(l[i]);
+            if (i === iStatus && v) return `<td><span class="pl-status ${st}">${garEsc(v)}</span></td>`;
+            if (i === iPrazo && vencido) return `<td class="pl-vencido" title="Prazo vencido">${garEsc(v)}</td>`;
+            return `<td>${garEsc(v).replace(/\n/g, '<br>')}</td>`;
+        }).join('') + '</tr>';
+    }).join('') || `<tr><td colspan="${cols.length}" class="gar-vazio">Nenhuma ação para os filtros escolhidos.</td></tr>`;
+    const quando = plano.atualizado ? new Date(plano.atualizado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    const outro = ref !== inf.ref;
+    const resumo = iStatus >= 0 ? (() => {
+        const c = {}; linhas.forEach((l) => { const k = planoClasseStatus(l[iStatus]); if (k) c[k] = (c[k] || 0) + 1; });
+        const nomes = { 'pl-ok': 'concluídas', 'pl-andamento': 'em andamento', 'pl-pendente': 'pendentes', 'pl-atraso': 'atrasadas', 'pl-cancel': 'canceladas', 'pl-outro': 'outras' };
+        return Object.keys(nomes).filter((k) => c[k]).map((k) => `${c[k]} ${nomes[k]}`).join(' · ');
+    })() : '';
+    const vencidas = iPrazo >= 0 ? linhas.filter((l) => { const d = planoDataDe(l[iPrazo]), st = iStatus >= 0 ? planoClasseStatus(l[iStatus]) : '';
+        return d && d < hoje && st !== 'pl-ok' && st !== 'pl-cancel'; }).length : 0;
+    info.innerHTML = `${linhas.length} ação(ões)` + (resumo ? ` · ${resumo}` : '') + (vencidas ? ` · <b class="pl-vencido-txt">${vencidas} com prazo vencido</b>` : '')
+        + (quando ? ` · colado em ${quando}` : '') + (outro ? ` · <b>plano de ${garEsc(ref)}</b> (o mês atual ainda não tem plano colado)` : '');
+    card.classList.toggle('tem-dados', linhas.length > 0);
+}
+function planoImportar(texto) {
+    const tab = garLerTSV(texto).map((l) => l.map((c) => String(c == null ? '' : c).trim()));
+    const linhas = tab.filter((l) => l.some((c) => c !== ''));
+    if (linhas.length < 2) { avisoNuvem('Cole as linhas da planilha com o cabeçalho (pelo menos o cabeçalho e uma linha).', true); return; }
+    let cab = linhas[0];
+    const usadas = cab.map((c, i) => c !== '' || linhas.slice(1).some((l) => (l[i] || '') !== ''));   // tira colunas vazias
+    const pega = (l) => cab.map((_, i) => l[i] || '').filter((_, i) => usadas[i]);
+    const colunas = pega(cab).map((c, i) => c || `Coluna ${i + 1}`), corpo = linhas.slice(1).map(pega);
+    const inf = planoInfo();
+    const ja = planoMapa[inf.ref] && (planoMapa[inf.ref].linhas || []).length;
+    if (!confirm(`${ja ? 'Substituir' : 'Salvar'} o plano de ação de ${inf.mes} por ${corpo.length} linha(s) e ${colunas.length} coluna(s)?\n\nColunas: ${colunas.join(' · ')}`)) return;
+    planoMapa[inf.ref] = { colunas, linhas: corpo, atualizado: new Date().toISOString() };
+    planoSalvar(); planoDesenhar();
+    const msg = document.getElementById('planoMsg'); if (msg) msg.textContent = `${corpo.length} linha(s) coladas.`;
+}
+document.addEventListener('paste', (e) => {
+    if (e.target.id !== 'planoColar') return;
+    e.preventDefault();
+    planoImportar((e.clipboardData || window.clipboardData).getData('text'));
+    e.target.value = '';
+});
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'planoLimpar') {
+        const inf = planoInfo();
+        if (!planoMapa[inf.ref]) { avisoNuvem(`O mês ${inf.mes} não tem plano colado.`, true); return; }
+        if (!confirm(`Apagar o plano de ação de ${inf.mes}?`)) return;
+        delete planoMapa[inf.ref]; planoSalvar(); planoDesenhar(); return;
+    }
+    if (e.target.id === 'planoBaixar') {
+        const [ref, plano] = planoAtual(); if (!plano) return;
+        const t = document.getElementById('planoTabela');
+        const linhas = Array.from(t.tBodies[0].rows).filter((r) => !r.querySelector('.gar-vazio')).map((r) => Array.from(r.cells).map((c) => c.innerText));
+        baixarTexto(csvDe(plano.colunas, linhas), `Plano_de_acao_${String(ref).replace('/', '-')}.csv`);
+    }
+});
+var syncPlano = criaSync('plano', 'Plano de ação', () => planoMapa,
+    (m) => { planoMapa = m; try { localStorage.setItem(PLANO_LS, JSON.stringify(planoMapa)); } catch (e) {} },
+    () => planoDesenhar(), () => false);
+document.addEventListener('DOMContentLoaded', () => { planoDesenhar(); syncPlano.puxar(); });
