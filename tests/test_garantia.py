@@ -155,3 +155,12 @@ def test_copia_para_celular_le_ajustes_embutidos(sessao):
     assert "function ajustesCopia()" in html and "return ajustesCopia() ? COPIA_LEITURA : null;" in html
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert 'const ARQ_COPIA = "Relatorio_Faturamento.html";' in site and 'id="btnAbrirRel"' in site and "@media (max-width: 760px)" in site
+
+
+def test_aba_plano_de_acao(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    for trecho in ('id="view-plano"', 'id="btn-plano"', 'id="planoColar"', 'id="plano-card"', "var syncPlano = criaSync('plano'",
+                   "['Plano de Ação', [q('#plano-card.tem-dados')]]"):
+        assert trecho in html, trecho
+    worker = open(os.path.join(os.path.dirname(__file__), "..", "analisador.worker.js"), encoding="utf-8").read()
+    assert '"faturamento/plano_acao.py"' in worker

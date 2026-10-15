@@ -179,6 +179,9 @@ class Sessao:
         passo(93, "Criando aba Garantia: Top 1000, análise de garantia e resumo de ganhos")
         from .garantia import gera_aba_garantia_html
         aba_garantia_html = gera_aba_garantia_html(ctx)
+        passo(93.5, "Criando aba Plano de ação")
+        from .plano_acao import gera_aba_plano_html
+        aba_plano_html = gera_aba_plano_html(ctx)
         passo(94, "Criando aba Dados: explicação de cada cálculo e bases para download")
         aba_dados_html = gera_aba_dados_html(ctx)
         passo(98, "Montando o relatório final (HTML)")
@@ -209,6 +212,7 @@ class Sessao:
             aba_dados_html=aba_dados_html,
             aba_forecast_html=aba_forecast_html,
             aba_garantia_html=aba_garantia_html,
+            aba_plano_html=aba_plano_html,
             filtros_dre_html=gera_filtros_dre_html(ctx),
             info_filtros_json=gera_info_filtros_json(ctx),
         )

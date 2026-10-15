@@ -317,9 +317,9 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 .painel-vazio .rodape { margin-top: 8px; }
 
 /* ===== Cabeçalho no mesmo layout do DRE Unificado: título à esquerda, filtros e botões à direita, na mesma linha ===== */
-.top-linha { flex-wrap: nowrap; align-items: center; gap: 8px 14px; }
+.top-linha { flex-wrap: wrap; align-items: center; gap: 8px 14px; }   /* o que não couber (botões) desce para a linha de baixo, alinhado à direita */
 .fonte-status[hidden] { display: none; }
-.ferramentas { flex: none; flex-wrap: nowrap; }
+.ferramentas { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
 .filtros { flex-wrap: nowrap; }
 .top-linha h1 { white-space: nowrap; }
 .fsel select, .fsel .dropdown > button { padding: 5px 6px; max-width: 102px; text-overflow: ellipsis; }
@@ -400,7 +400,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v80</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v81</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -445,6 +445,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   <button class="tab" data-view="forecast" type="button">Forecast</button>
   <button class="tab" data-view="dre" type="button">DRE</button>
   <button class="tab" data-view="garantia" type="button">Garantia</button>
+  <button class="tab" data-view="plano" type="button">Plano de ação</button>
   <button class="tab" data-view="dados" type="button">Dados</button>
 </nav>
 
@@ -541,7 +542,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v80-20261015"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v81-20261015"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -925,6 +926,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     document.title = periodo ? `Relatório ${periodo}` : "Relatório";
     btnAtualizar.hidden = !pastaHandle;
     btnEtapa2.hidden = !pastaHandle;
+    $("btnAbrirRel").hidden = !!pastaHandle;      // com a pasta conectada (computador) o "Abrir relatório" não é preciso
 
     htmlAtual = htmlRelatorio;
     if (pastaHandle) agendaCopia(3000);
@@ -1410,6 +1412,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   const escapa = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const TITULOS_VAZIO = {
     garantia: ["Garantia", "Top 1000 por média do faturado, análise de garantia matrícula a matrícula e resumo de ganhos"],
+    plano: ["Plano de ação", "Plano de ação colado da planilha, salvo na pasta para todos e incluído no PDF executivo"],
     dre: ["DRE: orçado × realizado", "Realizado do mês contra o orçado RF e o orçado SUP, por superintendência"],
     indiretas: ["Indiretas", "Orçado × realizado por classe, evolução mensal e ticket médio do serviço avulso"],
     resumo: ["Resumo", "KPIs, gráfico de faturamento por grupo e destaques do mês"],
@@ -1418,7 +1421,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     forecast: ["Forecast", "Previsão de fechamento do mês, editável: ao mudar um valor, os totais e comparações se refazem"],
   };
   // quais filtros valem em cada aba (os demais ficam esmaecidos)
-  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo"], tabelas: ["Sup", "Grupo"], analise: ["Sup", "Grupo"], dados: [], forecast: ["Sup", "Ref"], garantia: ["Sup", "Grupo"] };
+  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo"], tabelas: ["Sup", "Grupo"], analise: ["Sup", "Grupo"], dados: [], forecast: ["Sup", "Ref"], garantia: ["Sup", "Grupo"], plano: ["Sup", "Grupo"] };
 
   function aplicaFiltros() {
     document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
@@ -1443,7 +1446,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     try { infoFiltros = el ? JSON.parse(el.textContent) : null; } catch (e) { infoFiltros = null; }
     // esconde, dentro do relatório, os controles que ficam no cabeçalho do site
     const estilo = doc.createElement("style");
-    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-analise, #view-dre, #view-indiretas, #view-garantia, #view-dados { padding-top: 16px; }";
+    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-analise, #view-dre, #view-indiretas, #view-garantia, #view-plano, #view-dados { padding-top: 16px; }";
     doc.head.appendChild(estilo);
     filtrosEstado.sup = "TODAS"; filtrosEstado.ref = infoFiltros.refPadrao || "";
     filtrosEstado.mes = infoFiltros ? infoFiltros.mesAtual : null;
