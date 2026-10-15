@@ -96,6 +96,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
 <head>
 <meta charset="UTF-8">
 <title>Relatório Comparativo Água x Esgoto</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMxMDI4NDAiLz48cGF0aCBkPSJNMzIgOEMzMiA4IDE1IDI5IDE1IDQwYTE3IDE3IDAgMCAwIDM0IDBDNDkgMjkgMzIgOCAzMiA4eiIgZmlsbD0iIzE2YTViOCIvPjxwYXRoIGQ9Ik0yMy41IDQxYTguNSA4LjUgMCAwIDAgOC41IDguNSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjQuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PC9zdmc+">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">

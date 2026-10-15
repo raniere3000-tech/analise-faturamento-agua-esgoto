@@ -143,3 +143,8 @@ def test_analitico_diretas_conta_cada_mes_pelo_grupo_daquele_mes(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert "porMes: [[`Grupo ${rn}`, [eAnt, cAnt, vAnt]], [`Grupo ${ra}`, [eAt, cAt, vAt]]]" in html
     assert "const leitor = (l) =>" in html
+
+
+def test_icone_da_aba(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,' in html
