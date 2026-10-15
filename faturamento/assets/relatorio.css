@@ -480,3 +480,12 @@ tr.gar-linha-forte td:nth-child(2) { font-weight:800; }
 .gar-aviso-os { border-left:5px solid #C2560C; background:#fff8f1; }
 .gar-aviso-os h2 { color:#9a3412; }
 @media print { .gar-aviso-os, .gar-os-ok { display:none !important; } }
+
+/* celular: sub-abas da Garantia ocupam a largura, barras de ação quebram em linhas */
+@media (max-width: 640px) {
+    .gar-topo { flex-wrap:wrap; }
+    .gar-sub { margin-left:0; width:100%; display:flex; }
+    .gar-sub button { flex:1 1 0; padding:6px 4px; white-space:nowrap; font-size:12px; }
+    .gar-busca { width:100%; } .gar-busca input { flex:1; width:auto; max-width:none; }
+    .card { padding:12px; }
+}
