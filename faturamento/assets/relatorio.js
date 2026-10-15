@@ -523,9 +523,28 @@ function configurarTooltipGrafico() {
 // Justificativas: guardadas neste navegador e, quando o relatório é aberto pelo site com a pasta conectada, também no
 // arquivo justificativas_relatorio.json da pasta (sincronizada com o SharePoint) — a cópia da pasta vale para todos.
 function justCompartilhada() {
-    try { const p = window.parent; return p && p !== window && p.justificativasCompartilhadas && p.justificativasCompartilhadas.disponivel() ? p.justificativasCompartilhadas : null; }
-    catch (e) { return null; }
+    try { const p = window.parent; if (p && p !== window && p.justificativasCompartilhadas && p.justificativasCompartilhadas.disponivel()) return p.justificativasCompartilhadas; }
+    catch (e) { /* relatório aberto fora do site */ }
+    const c = ajustesCopia();                              // cópia salva para o celular: lê os ajustes embutidos
+    return c ? { disponivel: () => true, pasta: COPIA_LEITURA.pasta, ler: async () => c.justificativas || {},
+                 gravar: async () => ({ ok: false, motivo: COPIA_MOTIVO }) } : null;
 }
+// Relatorio_Faturamento.html (cópia que o site grava na pasta para abrir no celular) traz os ajustes do momento em
+// <script id="ajustes-copia">: sem a pasta, o relatório usa esses ajustes, só para leitura.
+const COPIA_MOTIVO = 'relatório salvo, somente leitura — altere no computador com a pasta conectada';
+function ajustesCopia() {
+    if (ajustesCopia.v) return ajustesCopia.v;
+    const el = document.getElementById('ajustes-copia');
+    if (!el) return null;
+    try { ajustesCopia.v = JSON.parse(el.textContent); ajustesCopia.salvo = el.dataset.salvo || ''; } catch (e) { return null; }
+    return ajustesCopia.v;
+}
+const COPIA_LEITURA = {
+    disponivel: () => true,
+    pasta: () => 'relatório salvo' + (ajustesCopia.salvo ? ' em ' + new Date(ajustesCopia.salvo).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''),
+    ler: async () => ajustesCopia(),
+    atualizar: async () => ({ ok: false, motivo: COPIA_MOTIVO }),
+};
 function justStatus(texto, erro) {
     const el = document.getElementById('statusJust');
     if (!el) return;
@@ -1505,8 +1524,9 @@ document.addEventListener('keydown', e => {
 // sincroniza): quem abrir a mesma pasta vê os mesmos valores. Ao gravar, só as chaves alteradas aqui entram no arquivo
 // (o que outra pessoa mudou em outras linhas é mantido). A cada minuto o relatório relê o arquivo.
 function compartilhado() {
-    try { const p = window.parent; return p && p !== window && p.arquivoCompartilhado && p.arquivoCompartilhado.disponivel() ? p.arquivoCompartilhado : null; }
-    catch (e) { return null; }
+    try { const p = window.parent; if (p && p !== window && p.arquivoCompartilhado && p.arquivoCompartilhado.disponivel()) return p.arquivoCompartilhado; }
+    catch (e) { /* relatório aberto fora do site */ }
+    return ajustesCopia() ? COPIA_LEITURA : null;
 }
 // Nuvem ao lado da versão (no site): ✓ quando tudo foi salvo na pasta, ✕ quando alguma alteração ficou só aqui.
 const pendentesNuvem = new Set();

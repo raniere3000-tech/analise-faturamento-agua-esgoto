@@ -148,3 +148,10 @@ def test_analitico_diretas_conta_cada_mes_pelo_grupo_daquele_mes(sessao):
 def test_icone_da_aba(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,' in html
+
+
+def test_copia_para_celular_le_ajustes_embutidos(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert "function ajustesCopia()" in html and "return ajustesCopia() ? COPIA_LEITURA : null;" in html
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert 'const ARQ_COPIA = "Relatorio_Faturamento.html";' in site and 'id="btnAbrirRel"' in site and "@media (max-width: 760px)" in site

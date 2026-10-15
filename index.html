@@ -360,6 +360,39 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 .etapas li.atual { color: #fff; font-weight: 700; }
 .etapas li.atual span { color: #ffd166; animation: pulsa 1s infinite alternate; }
 @keyframes pulsa { from { opacity: .35; } to { opacity: 1; } }
+
+/* ===== Celular / telas estreitas: cabeçalho em várias linhas, filtros e botões ocupando a largura, alvos de toque maiores ===== */
+.so-celular { display: none; margin-bottom: 10px; }
+#btnFiltrosCel { display: none; }
+@media (max-width: 1200px) {                 /* tablet / notebook pequeno: o cabeçalho quebra em linhas em vez de vazar */
+  .top-linha { flex-wrap: wrap; }
+  .top-linha h1 { white-space: normal; }
+  .filtros, .ferramentas { flex-wrap: wrap; }
+}
+@media (max-width: 760px) {
+  .top { padding: 8px 12px; }
+  .top-linha { flex-wrap: wrap; gap: 6px; }
+  .top-linha > div:first-child { flex: 1 1 100%; min-width: 0; }
+  .top-linha h1 { white-space: normal; font-size: 14px; }
+  .filtros { flex-wrap: wrap; width: 100%; gap: 6px; }
+  .fsel { flex: 1 1 calc(50% - 6px); min-width: 0; }
+  .fsel > span { flex: none; }
+  .fsel select, .fsel .dropdown > button { flex: 1 1 0; min-width: 0; max-width: none; padding: 7px 8px; font-size: 13px; }
+  .fsel .dropdown { flex: 1 1 0; min-width: 0; } .fsel .dropdown > button { width: 100%; }
+  .ferramentas { flex-wrap: wrap; width: 100%; gap: 6px; }
+  .ferramentas button, .ferramentas .btn-top { flex: 1 1 calc(33% - 6px); min-width: 0; text-align: center; padding: 8px 4px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #btnFiltrosCel { display: inline-block; }
+  .top:not(.filtros-abertos) .filtros { display: none; }   /* filtros recolhidos atrás do botão "Filtros" */
+  #btnFiltrosCel[aria-expanded="true"] { background: rgba(255,255,255,.28); }
+  .top .fonte-status { font-size: 11px; }
+  .nav { padding: 0 6px; }
+  .tab { padding: 10px 12px; font-size: 13.5px; }
+  .vazio-wrap { padding: 10px 12px 16px; }
+  body.relatorio-aberto { height: 100dvh; }
+  #avisoSite { left: 12px; right: 12px; max-width: none; }
+  .so-celular { display: block; }
+}
+body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 </style>
 </head>
 <body>
@@ -367,7 +400,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v79</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v80</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -380,6 +413,9 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     <div class="ferramentas">
       <span id="downloads" style="display:contents"></span>
       <button type="button" class="btn-top" id="btnPasta">📁 Conectar pasta</button>
+      <button type="button" class="btn-top" id="btnFiltrosCel" aria-expanded="false" aria-controls="filtros" title="Mostrar ou esconder os filtros">⚙ Filtros</button>
+      <button type="button" class="btn-top" id="btnAbrirRel" title="Abrir um relatório já gerado (Relatorio_Faturamento.html, salvo na pasta a cada relatório gerado no computador) — é o jeito de ver no celular">📄 Abrir relatório</button>
+      <input type="file" id="inputRelatorio" accept=".html,.htm,.json,text/html,application/json" multiple hidden>
       <a class="btn-top" href="https://raniere3000-tech.github.io/bookcomercial/">🏠 Menu</a>
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
       <button type="button" class="btn-top" id="btnEtapa2" hidden title="Reler a pasta e abrir a conferência dos clientes em análise (etapa 2), mesmo sem arquivo novo">✎ Etapa 2</button>
@@ -417,6 +453,8 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     <div class="painel-vazio">
       <h2 id="vazioTitulo">DRE: orçado × realizado</h2>
       <div class="dica" id="vazioDica">Realizado do mês contra o orçado RF e o orçado SUP, por superintendência</div>
+      <div class="vazio so-celular"><b>No celular:</b> toque em <b>📄 Abrir relatório</b> e escolha o arquivo <code>Relatorio_Faturamento.html</code> na pasta do OneDrive/SharePoint.<br>
+        Ele é salvo na pasta sozinho sempre que o relatório é gerado no computador, com os ajustes do dia.</div>
       <div class="vazio"><b>Sem dados para o período.</b><br>Conecte a pasta com os arquivos (fatura, consumo, cronograma, serviço avulso e orçados RF) usando o botão <b>📁 Conectar pasta</b>.</div>
       <ul class="esperados">
         <li><b>Fatura</b>, <b>consumo</b> (com o mês no nome, ex.: <code>Consumo 09-2026.csv</code>) e <b>cronograma</b> — CSV, XLSX ou XLS, do mês atual e do anterior.</li>
@@ -503,7 +541,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v79-20261015"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v80-20261015"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -541,6 +579,33 @@ body.relatorio-aberto .conteudo { min-height: 0; }
       throw e;
     }
   }
+  // ===== Cópia do relatório na pasta (para abrir no celular, onde não dá para conectar a pasta) =====
+  // Relatorio_Faturamento.html = o relatório gerado + os ajustes do momento (forecast, situação, garantia, justificativas...)
+  // embutidos em <script id="ajustes-copia">; no celular o relatório lê esses ajustes (somente leitura).
+  const ARQ_COPIA = "Relatorio_Faturamento.html";
+  let htmlAtual = null, timerCopia = null;
+  const RE_COPIA = /<script type="application\/json" id="ajustes-copia"[^>]*>[\s\S]*?<\/script>/;
+  function comAjustes(html, ajustes) {
+    const tag = `<script type="application/json" id="ajustes-copia" data-salvo="${new Date().toISOString()}">`
+      + JSON.stringify(ajustes || {}).replace(/</g, "\\u003c") + "<\/script>";
+    html = html.replace(RE_COPIA, "");
+    const i = html.indexOf("</head>");
+    return i >= 0 ? html.slice(0, i) + tag + html.slice(i) : tag + html;
+  }
+  async function salvaCopia() {
+    timerCopia = null;
+    if (!htmlAtual || !pastaHandle) return;
+    try {
+      if ((await pastaHandle.queryPermission({ mode: "readwrite" })) !== "granted") return;   // não pede permissão só para a cópia
+      const ajustes = await lerUnificado().catch(() => ({}));
+      const fh = await pastaHandle.getFileHandle(ARQ_COPIA, { create: true });
+      const w = await fh.createWritable();
+      await w.write(comAjustes(htmlAtual, ajustes));
+      await w.close();
+    } catch (e) { console.warn("Cópia do relatório para o celular não foi salva", e); }
+  }
+  function agendaCopia(ms) { if (!htmlAtual) return; clearTimeout(timerCopia); timerCopia = setTimeout(salvaCopia, ms); }
+
   async function lerUnificado() {
     const d = await lerJson(ARQ_AJUSTES);
     if (!d.justificativas) {
@@ -573,6 +638,7 @@ body.relatorio-aberto .conteudo { min-height: 0; }
           await w.close();
           try { ultimaModificacao = (await fh.getFile()).lastModified; } catch (e) {}
           try { canalAjustes && canalAjustes.postMessage("mudou"); } catch (e) {}     // outras abas deste PC atualizam na hora
+          agendaCopia(120000);                     // a cópia do celular recebe os ajustes novos (2 min depois da última alteração)
           return { ok: true, dados };
         } catch (e) {
           console.warn("Ajustes compartilhados: gravação falhou", e);
@@ -860,6 +926,8 @@ body.relatorio-aberto .conteudo { min-height: 0; }
     btnAtualizar.hidden = !pastaHandle;
     btnEtapa2.hidden = !pastaHandle;
 
+    htmlAtual = htmlRelatorio;
+    if (pastaHandle) agendaCopia(3000);
     // o cabeçalho do relatório repete o do site; aqui ele some (no arquivo/PDF continua)
     $("quadroRelatorio").srcdoc = htmlRelatorio;
     $("quadroRelatorio").hidden = false;
@@ -1464,6 +1532,40 @@ body.relatorio-aberto .conteudo { min-height: 0; }
   quadro().addEventListener("load", () => { if (quadro().srcdoc) montaFiltros(); });
 
   btnPasta.addEventListener("click", escolhePasta);
+  // Abrir um relatório já gerado (no celular: Relatorio_Faturamento.html da pasta). Escolher junto o ajustes_relatorio.json
+  // usa os ajustes mais recentes do arquivo no lugar dos que vieram embutidos.
+  $("btnAbrirRel").addEventListener("click", () => $("inputRelatorio").click());
+  $("btnFiltrosCel").addEventListener("click", () => {
+    const aberto = document.querySelector(".top").classList.toggle("filtros-abertos");
+    $("btnFiltrosCel").setAttribute("aria-expanded", aberto ? "true" : "false");
+  });
+  $("inputRelatorio").addEventListener("change", async () => {
+    const arqs = Array.from($("inputRelatorio").files || []);
+    $("inputRelatorio").value = "";
+    const h = arqs.find((f) => /\.html?$/i.test(f.name)), j = arqs.find((f) => /\.json$/i.test(f.name));
+    if (!h) { window.avisoSite("Escolha o arquivo do relatório (.html), ex.: Relatorio_Faturamento.html.", true); return; }
+    let html = await h.text();
+    if (j) {
+      try { html = comAjustes(html, JSON.parse(await j.text())); }
+      catch (e) { window.avisoSite("O arquivo de ajustes (.json) não pôde ser lido: usando os ajustes que vieram no relatório.", true); }
+    }
+    let mes = "";
+    try { const m = /id="info-filtros">([\s\S]*?)<\/script>/.exec(html); mes = m ? nomeMes(JSON.parse(m[1]).mesAtual) : ""; } catch (e) {}
+    const salvo = (/id="ajustes-copia" data-salvo="([^"]+)"/.exec(html) || [])[1];
+    htmlAtual = null;                             // relatório aberto de arquivo: não regrava a cópia
+    $("titulo").textContent = "Faturamento" + (mes ? ` — ${mes}` : "") + " (relatório salvo)";
+    document.title = "Relatório" + (mes ? ` ${mes}` : "");
+    progresso.hidden = true;
+    $("fonteStatus").hidden = true;
+    $("quadroRelatorio").srcdoc = html;
+    $("quadroRelatorio").hidden = false;
+    $("vazioWrap").hidden = true;
+    document.body.classList.add("relatorio-aberto");
+    window.avisoSite(`Relatório "${h.name}" aberto` + (salvo ? ` · ajustes de ${new Date(salvo).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}` : "")
+      + " — somente leitura: as alterações são feitas no computador com a pasta conectada.");
+  });
+  // celular/tablet sem acesso a pastas: só o "Abrir relatório"
+  if (!("showDirectoryPicker" in window) && matchMedia("(pointer: coarse)").matches) document.body.classList.add("sem-pasta");
   $("btnLimparCache").addEventListener("click", () => {
     if (!confirm("Apagar os arquivos já lidos guardados neste navegador? A próxima análise vai ler todos os arquivos de novo.")) return;
     pegaWorker().postMessage({ fase: "limparCache" });
