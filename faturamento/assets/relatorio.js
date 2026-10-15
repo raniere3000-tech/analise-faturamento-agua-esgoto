@@ -941,7 +941,10 @@ function definicaoAnalitico(tipo, ra, rn) {
         const serv = d[1] === 'agua' ? 'água' : 'esgoto';
         const [eAnt, eAt] = par(`Economias faturadas ${serv}`), [cAnt, cAt] = par(`Consumo ${serv}`), [vAnt, vAt] = par(`Valor ${serv}`);
         const n = (v, c) => numBR(v(c)) || 0, dif = (a, b) => (v) => Math.round((n(v, b) - n(v, a)) * 100) / 100;
+        // com grupos filtrados, cada mês só conta se a matrícula estava num grupo marcado NAQUELE mês (como o painel):
+        // quem mudou de grupo aparece na lista, mas os números do outro mês ficam em branco
         return { nome: `Diretas_${d[1] === 'agua' ? 'Agua' : 'Esgoto'}`, grupos: par('Grupo'),
+            porMes: [[`Grupo ${rn}`, [eAnt, cAnt, vAnt]], [`Grupo ${ra}`, [eAt, cAt, vAt]]],
             cols: base.concat(par('Grupo'), ['Migração de grupo'], par('Situação Ligação'), par('Situação Lançamento'),
                 [eAnt, eAt, 'Δ economias', cAnt, cAt, 'Δ consumo', vAnt, vAt, 'Δ valor', 'Δ % valor', 'O que aconteceu']),
             filtro: (v) => n(v, vAnt) !== 0 || n(v, vAt) !== 0 || n(v, eAnt) !== 0 || n(v, eAt) !== 0,
@@ -950,9 +953,9 @@ function definicaoAnalitico(tipo, ra, rn) {
                 'Δ % valor': (v) => { const a = n(v, vAnt); return a ? Math.round((n(v, vAt) - a) / a * 1000) / 10 : null; },
                 'O que aconteceu': (v) => {
                     const a = n(v, vAnt), b = n(v, vAt), ga = v(`Grupo ${rn}`), gb = v(`Grupo ${ra}`);
+                    if (ga && gb && normGrupo(ga) !== normGrupo(gb)) return `Mudou do grupo ${ga} para o ${gb}`;
                     if (a && !b) return 'Deixou de faturar no mês atual';
                     if (!a && b) return 'Passou a faturar no mês atual';
-                    if (ga && gb && normGrupo(ga) !== normGrupo(gb)) return `Mudou do grupo ${ga} para o ${gb}`;
                     if (n(v, eAt) < n(v, eAnt)) return b < a ? 'Caiu: perdeu economias' : 'Perdeu economias';
                     if (n(v, eAt) > n(v, eAnt)) return b > a ? 'Subiu: ganhou economias' : 'Ganhou economias';
                     return b < a ? 'Caiu: menor consumo/valor' : b > a ? 'Subiu: maior consumo/valor' : 'Igual';
@@ -988,14 +991,21 @@ document.addEventListener('click', async function (e) {
         const idx = Object.fromEntries(a.cab.map((c, i) => [c, i]));
         const bloco = b.closest('.sup-top-bloco');
         const sup = bloco ? bloco.dataset.sup : (ESTADO.sup || 'TODAS'), grupos = gruposFiltro();
+        const leitor = (l) => {
+            const bruto = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || ''));
+            if (!def.porMes || !grupos) return bruto;
+            const fora = new Set();
+            def.porMes.forEach(([gc, cols]) => { const g = bruto(gc); if (!g || !grupos.has(normGrupo(g))) cols.forEach((c) => fora.add(c)); });
+            return fora.size ? (c) => (fora.has(c) ? '' : bruto(c)) : bruto;
+        };
         let linhas = a.linhas.filter((l) => {
-            const v = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || ''));
+            const v = leitor(l);
             const sit = b.dataset.sit !== undefined ? v(`Situação Lançamento ${a.ra}`) === b.dataset.sit
                 : b.dataset.gsit !== undefined ? v(`Leitura da situação ${a.ra}`) === b.dataset.gsit : true;
             return (sup === 'TODAS' || v('Superintendência') === sup) && sit && def.filtro(v)
                 && (!grupos || (def.grupos || ['Grupo']).some((c) => v(c) !== '' && grupos.has(normGrupo(v(c)))));
         }).map((l) => {
-            const v = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || ''));
+            const v = leitor(l);
             return def.cols.map((c) => (def.extra && def.extra[c] ? def.extra[c](v) : c === 'Ranking' ? 0 : v(c)));
         });
         if (def.ordem) {
