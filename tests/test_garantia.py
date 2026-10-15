@@ -137,3 +137,9 @@ def test_justificativas_agua_e_esgoto_por_grupo(sessao):
     info = json.loads(re.search(r'<script type="application/json" id="just-grupos">(.*?)</script>', html, re.S).group(1))
     assert info["grupos"] and set(info["esgoto"]) <= set(info["grupos"])
     assert "function justBloco(g, agua, esgoto)" in html and "function justConverterAntigo(lista)" in html
+
+
+def test_analitico_diretas_conta_cada_mes_pelo_grupo_daquele_mes(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert "porMes: [[`Grupo ${rn}`, [eAnt, cAnt, vAnt]], [`Grupo ${ra}`, [eAt, cAt, vAt]]]" in html
+    assert "const leitor = (l) =>" in html
