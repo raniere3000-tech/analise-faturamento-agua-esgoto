@@ -400,7 +400,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v90</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v91</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -420,7 +420,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
       <button type="button" class="btn-top" id="btnEtapa2" hidden title="Reler a pasta e abrir a conferência dos clientes em análise (etapa 2), mesmo sem arquivo novo">✎ Etapa 2</button>
       <button type="button" class="btn-top" id="btnPdf" hidden title="PDF executivo conforme os filtros da tela">📄 Executivo</button>
-      <button type="button" class="btn-top" id="btnOnePage" hidden title="One page executivo (uma página 16:9) conforme os filtros da tela">📊 One page</button>
+      <button type="button" class="btn-top" id="btnOnePage" hidden title="One page (acompanhamento do faturamento em uma página, conforme os filtros da tela)">📊 One page</button>
       <button type="button" class="btn-top" id="btnAcomp" hidden title="Baixar as tabelas da planilha de Acompanhamento Mensal (Excel, uma aba por tabela) da Superintendência escolhida">📥 Acompanhamento</button>
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
     </div>
@@ -545,7 +545,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v90-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v91-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1418,7 +1418,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   const TITULOS_VAZIO = {
     garantia: ["Garantia", "Top 1000 por média do faturado, análise de garantia matrícula a matrícula e resumo de ganhos"],
     plano: ["Plano de ação", "Plano de ação colado da planilha, salvo na pasta para todos e incluído no PDF executivo"],
-    onepage: ["One page", "Resumo do mês numa folha só, montado com blocos e textos, salvo na pasta para todos e baixado em PDF de uma página"],
+    onepage: ["One page", "Acompanhamento do faturamento numa folha vertical (lê bem no celular), baixado em PDF de uma página"],
     dre: ["DRE: orçado × realizado", "Realizado do mês contra o orçado RF e o orçado SUP, por superintendência"],
     indiretas: ["Indiretas", "Orçado × realizado por classe, evolução mensal e ticket médio do serviço avulso"],
     resumo: ["Resumo", "KPIs, gráfico de faturamento por grupo e destaques do mês"],

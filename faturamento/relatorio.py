@@ -128,7 +128,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
   </div>
   {filtros_dre_html}
   <button class="btn-filtro btn-imprimir" type="button" onclick="gerarExecutivo()" aria-label="Gerar o relatório executivo em PDF" title="PDF com KPIs, gráfico, forecast, orçado por ciclo, comparativos, indiretas e justificativas, conforme os filtros da tela">Executivo (PDF)</button>
-  <button class="btn-filtro btn-imprimir" type="button" onclick="gerarOnePage()" aria-label="Baixar o One page em PDF" title="Painel executivo de uma página (16:9), conforme os filtros da tela">One page (PDF)</button>
+  <button class="btn-filtro btn-imprimir" type="button" onclick="gerarOnePage()" aria-label="Baixar o One page em PDF" title="Acompanhamento do faturamento em uma página, conforme os filtros da tela">One page (PDF)</button>
   {filtro_html}
 </div>
 
