@@ -529,3 +529,5 @@ td.pl-vencido { color:#9C0006; font-weight:700; } .pl-vencido-txt { color:#9C000
 .gar-dd-lista hr { margin:4px 0; border:none; border-top:1px solid var(--linha); }
 .gar-dd-lista input[type=checkbox] { width:auto; accent-color:var(--marinho); }
 .gar-painel[data-gar="top"] > .card { overflow:visible; }   /* a lista de categorias não fica cortada pelo cartão */
+
+table.tabela-garantia th[data-ord-an] { cursor:pointer; white-space:nowrap; }

@@ -1866,17 +1866,61 @@ function garCalcItem(it) {
     const dif = atual != null && it.anterior != null ? atual - it.anterior : null;
     return { d, calc, atual, dif };
 }
+// colunas da Análise de Garantia (todas ordenáveis pelo cabeçalho): [campo, título, n = número / t = texto, dica]
+const GAR_COLS_ANALISE = [
+    ['lig', 'Matrícula', 't'], ['nome', 'Cliente', 't'], ['cat', 'Categoria', 't'], ['loc', 'Localidade', 't'],
+    ['res', 'Res.', 'n'], ['com', 'Com.', 'n'], ['ind', 'Ind.', 'n'], ['pub', 'Púb.', 'n'], ['tot', 'Total', 'n'],
+    ['grupo', 'Grupo', 't'], ['rota', 'Rota', 't'], ['sit', 'Situação conta', 't'],
+    ['media', 'Média volume fat. (m³)', 'n', 'Média faturada do sistema (m³) — preenchida manualmente'],
+    ['calc', 'Fat. calculado (R$)', 'n', 'Valor da média pela estrutura tarifária'],
+    ['anterior', 'Fat. anterior (R$)', 'n', 'Foto do faturado quando a matrícula entrou na análise'],
+    ['atual', 'Fat. ajustado (R$)', 'n', 'Faturado atual (muda quando a fatura é liberada)'], ['dif', 'Dif. (R$)', 'n'],
+    ['motivo', 'Motivo', 't'], ['retorno', 'Retorno superintendência', 't'],
+    ['obs', 'O.S.', 't', 'Abrir O.S.: a matrícula entra no controle de prazo (D+10) do Resumo de Ganhos'],
+];
+GAR.ordemAnalise = { campo: null, desc: false };              // null = ordem em que as matrículas entraram
+function garValorAnalise(it, c) {
+    const { d, calc, atual, dif } = garCalcItem(it);
+    switch (c) {
+        case 'lig': return it.lig;
+        case 'tot': return d ? (d.res || 0) + (d.com || 0) + (d.ind || 0) + (d.pub || 0) : null;
+        case 'sit': return d ? (garEmAnalise(d) ? 'Em análise' : (d.sit || '')) : '';
+        case 'media': return it.media; case 'calc': return calc; case 'anterior': return it.anterior;
+        case 'atual': return atual; case 'dif': return dif;
+        case 'motivo': return it.motivo === 'QUEDA' ? 'Queda de consumo' : it.motivo === 'AUMENTO' ? 'Aumento de consumo' : '';
+        case 'retorno': return it.retorno || '';
+        case 'obs': return (it.obs || '') + (it.os_num ? ' ' + it.os_num : '');
+        default: return d ? d[c] : null;
+    }
+}
+function garOrdenarAnalise(itens) {
+    const { campo, desc } = GAR.ordemAnalise;
+    if (!campo) return itens;
+    const num = (GAR_COLS_ANALISE.find((c) => c[0] === campo) || [])[2] === 'n';
+    const vazio = (v) => v == null || v === '' || (typeof v === 'number' && isNaN(v));
+    return itens.slice().sort((a, b) => {
+        const x = garValorAnalise(a, campo), y = garValorAnalise(b, campo);
+        if (vazio(x) || vazio(y)) return vazio(x) && vazio(y) ? 0 : vazio(x) ? 1 : -1;       // vazios sempre no fim
+        const r = num ? x - y : String(x).localeCompare(String(y), 'pt-BR', { numeric: true });
+        return desc ? -r : r;
+    });
+}
+document.addEventListener('click', (e) => {
+    const th = e.target.closest && e.target.closest('#garTabelaAnalise th[data-ord-an]'); if (!th) return;
+    const c = th.dataset.ordAn, o = GAR.ordemAnalise;
+    GAR.ordemAnalise = o.campo === c ? (o.desc ? { campo: null, desc: false } : { campo: c, desc: true }) : { campo: c, desc: false };
+    garDesenharAnalise();
+});
+document.addEventListener('keydown', (e) => {
+    const th = e.target.closest && e.target.closest('#garTabelaAnalise th[data-ord-an]');
+    if (th && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); th.click(); }
+});
 function garDesenharAnalise() {
     const tab = document.getElementById('garTabelaAnalise'); if (!tab || !GAR.dados) return;
-    tab.tHead.innerHTML = '<tr><th>Matrícula</th><th>Cliente</th><th>Categoria</th><th>Localidade</th><th class="num">Res.</th><th class="num">Com.</th>'
-        + '<th class="num">Ind.</th><th class="num">Púb.</th><th class="num">Total</th><th>Grupo</th><th>Rota</th><th>Situação conta</th>'
-        + '<th class="num" title="Média faturada do sistema (m³) — preenchida manualmente">Média volume fat. (m³)</th>'
-        + '<th class="num" title="Valor da média pela estrutura tarifária">Fat. calculado (R$)</th>'
-        + '<th class="num" title="Foto do faturado quando a matrícula entrou na análise">Fat. anterior (R$)</th>'
-        + '<th class="num" title="Faturado atual (muda quando a fatura é liberada)">Fat. ajustado (R$)</th><th class="num">Dif. (R$)</th>'
-        + '<th>Motivo</th><th>Retorno superintendência</th><th title="Abrir O.S.: a matrícula entra no controle de prazo (D+10) do Resumo de Ganhos">O.S.</th><th></th></tr>';
+    const { campo, desc } = GAR.ordemAnalise;
+    tab.tHead.innerHTML = '<tr>' + GAR_COLS_ANALISE.map(([c, t, tipo, dica]) => `<th class="gar-ord ${tipo === 'n' ? 'num' : ''}" data-ord-an="${c}" tabindex="0" title="${garEsc((dica ? dica + ' — ' : '') + 'clique para ordenar')}">${t}${c === campo ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '<th></th></tr>';
     let mudouFoto = false;
-    const itens = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)));
+    const itens = garOrdenarAnalise(garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig))));
     tab.tBodies[0].innerHTML = itens.map((it) => {
         const { d, calc, atual, dif } = garCalcItem(it);
         if (it.anterior == null && atual != null) { garItens[garChave(it.lig)].anterior = atual; garItens[garChave(it.lig)].foto = new Date().toISOString(); it.anterior = atual; mudouFoto = true; }

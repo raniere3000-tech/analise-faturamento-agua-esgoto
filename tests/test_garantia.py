@@ -209,3 +209,8 @@ def test_filtros_padrao_e_pessoais(sessao):
     assert "window.aplicarGruposPadrao = function ()" in html and "v === 'Liberado' || v === 'Em Análise'" in html
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert "lerFiltrosSalvos()" in site and '"INTERIOR"' in site and "salvaFiltros({ grupos:" in site
+
+
+def test_analise_de_garantia_ordenavel(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert "const GAR_COLS_ANALISE = [" in html and "function garOrdenarAnalise(itens)" in html and 'data-ord-an="${c}"' in html
