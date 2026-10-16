@@ -164,3 +164,29 @@ def test_aba_plano_de_acao(sessao):
         assert trecho in html, trecho
     worker = open(os.path.join(os.path.dirname(__file__), "..", "analisador.worker.js"), encoding="utf-8").read()
     assert '"faturamento/plano_acao.py"' in worker
+
+
+def test_analise_so_economias_que_faturam_esgoto(sessao):
+    """A versão "só esgoto" das tabelas da aba Análise conta só as ligações com esgoto faturado no mês."""
+    import re as _re
+    from faturamento.tabelas_html import tabelas_so_esgoto
+    ctx = sessao.ctx
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert html.count('class="vista-serv"') == 6 and 'data-vista-btn="esgoto"' in html
+    b = ctx.base_final
+    ligs = sorted(b["N. Ligação"].astype(str).str.strip().unique())
+    sem_esgoto = set(ligs[::3])                                   # um terço das ligações deixa de ter esgoto
+    tira = (b["__serv"] == "E") & b["N. Ligação"].astype(str).str.strip().isin(sem_esgoto)
+    original = ctx.base_final
+    try:
+        ctx.base_final = b[~tira]
+        c, _, _ = tabelas_so_esgoto(ctx, "", "", "")
+    finally:
+        ctx.base_final = original
+    total = lambda seg: [int(x.replace(".", "")) for x in _re.findall(r">(-?[\d.]+)<", _re.search(r'class="linha-total".*?</tr>', seg, _re.S).group(0))]
+    so = total(c[c.index('data-vista="esgoto"'):])
+    agua = b[(b["__serv"] == "A") & (b["Referencia de Leitura"] == ctx.ref_atual) & (b["Consumo Faturado"] > 0)
+             & ~b["N. Ligação"].astype(str).str.strip().isin(sem_esgoto)]
+    ativa = agua[agua["Situacao Ligacao"].astype(str).str.upper().str.contains("ATIV")]["Economias_Totais"].sum()
+    assert so[0] == int(ativa)
+    assert ctx.base_final is original                            # a base do resto do relatório não muda

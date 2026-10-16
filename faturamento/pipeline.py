@@ -90,6 +90,10 @@ class Sessao:
 
         passo(74, "Criando tabela: Economias acima × abaixo do consumo mínimo")
         tabela_minimo_html, ctx.df_minimo_por_grupo = gera_tabela_acima_abaixo_minimo(ctx)
+        passo(76, "Criando as mesmas tabelas só com as economias que faturam esgoto")
+        from .tabelas_html import barra_vista_analise, tabelas_so_esgoto
+        quadro_ciclos_html, matriz_html, tabela_minimo_html = tabelas_so_esgoto(ctx, quadro_ciclos_html, matriz_html, tabela_minimo_html)
+        quadro_ciclos_html = barra_vista_analise() + quadro_ciclos_html
 
         passo(78, "Criando tabelas: Top 100 maior queda de consumo (água e esgoto)")
         from .dre import lista_sups, prepara, _nome_sup

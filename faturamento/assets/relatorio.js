@@ -290,9 +290,8 @@ function recalcularTotais() {
     });
 }
 
-function recalcularTotalAtivaCortada() {
-    const tabela = document.querySelector('table.tabela-ativa-cortada');
-    if (!tabela) return;
+function recalcularTotalAtivaCortada() { document.querySelectorAll('table.tabela-ativa-cortada').forEach(recalcAtivaCortadaTabela); }   // versões "todas" e "só esgoto"
+function recalcAtivaCortadaTabela(tabela) {
     const marcados = Array.from(document.querySelectorAll('.chk-grupo:checked')).map(c => c.value);
     let ativaAt=0, ativaAnt=0, cortAt=0, cortAnt=0;
     tabela.querySelectorAll('tr[data-grupo]').forEach(function (tr) {
@@ -320,9 +319,8 @@ function recalcularTotalAtivaCortada() {
     elCort.style.color = deltaCort < 0 ? '#C2560C' : '#05050D';
 }
 
-function recalcularTabelaMinimo() {
-    const tabela = document.querySelector('table.tabela-min-consumo');
-    if (!tabela) return;
+function recalcularTabelaMinimo() { document.querySelectorAll('table.tabela-min-consumo').forEach(recalcMinimoTabela); }   // versões "todas" e "só esgoto"
+function recalcMinimoTabela(tabela) {
     const marcados = Array.from(document.querySelectorAll('.chk-grupo:checked')).map(c => c.value);
     let acimaAt=0, acimaAnt=0, abaixoAt=0, abaixoAnt=0;
     tabela.querySelectorAll('tr[data-grupo]').forEach(function (tr) {
@@ -350,9 +348,8 @@ function recalcularTabelaMinimo() {
     elAbaixo.style.color = deltaAbaixo > 0 ? '#C2560C' : '#1A2740';
 }
 
-function recalcularMatrizGrupos() {
-    const tabela = document.querySelector('table.tabela-matriz-grupo');
-    if (!tabela) return;
+function recalcularMatrizGrupos() { document.querySelectorAll('table.tabela-matriz-grupo').forEach(recalcMatrizTabela); }   // versões "todas" e "só esgoto"
+function recalcMatrizTabela(tabela) {
     const marcados = Array.from(document.querySelectorAll('.chk-grupo:checked')).map(c => c.value);
     let totalGeral = 0;
     const totalPorColuna = {};
@@ -944,11 +941,11 @@ function definicaoAnalitico(tipo, ra, rn) {
     const par = (nome) => [`${nome} ${rn}`, `${nome} ${ra}`];
     const algum = (...cols) => (v) => cols.some((c) => v(c) !== '');
     switch (tipo) {
-        case 'ativas': return { nome: 'Ativas_x_Cortadas', cols: base.concat(par('Grupo'), par('Situação Ligação'), par('Ativa/Cortada'),
+        case 'ativas': return { nome: 'Ativas_x_Cortadas', esgMes: (ref) => [`Ativa/Cortada ${ref}`], cols: base.concat(par('Grupo'), par('Situação Ligação'), par('Ativa/Cortada'),
             par('Economias'), par('Consumo água')), filtro: algum(...par('Ativa/Cortada')) };
-        case 'matriz': return { nome: 'Migracao_de_Grupos', cols: base.concat(par('Grupo'), ['Migração de grupo'], par('Economias'), par('Consumo água')),
+        case 'matriz': return { nome: 'Migracao_de_Grupos', esgLinha: true, cols: base.concat(par('Grupo'), ['Migração de grupo'], par('Economias'), par('Consumo água')),
             filtro: (v) => v('Migração de grupo') !== 'Sem consumo nos dois meses' };
-        case 'minimo': return { nome: 'Consumo_Minimo', cols: base.concat(par('Economias'), par('Consumo água'), par('Mínimo da matrícula'),
+        case 'minimo': return { nome: 'Consumo_Minimo', esgMes: (ref) => [`Acima/Abaixo do mínimo ${ref}`], cols: base.concat(par('Economias'), par('Consumo água'), par('Mínimo da matrícula'),
             [`Conta do mínimo ${ra}`], par('Acima/Abaixo do mínimo'), ['Mudança de classe']), filtro: algum(...par('Acima/Abaixo do mínimo')),
             extra: { 'Mudança de classe': (v) => { const a = v(`Acima/Abaixo do mínimo ${rn}`), b = v(`Acima/Abaixo do mínimo ${ra}`);
                 return a && b ? (a === b ? 'Manteve' : `${a} → ${b}`) : ''; } } };
@@ -1012,8 +1009,19 @@ document.addEventListener('click', async function (e) {
         const idx = Object.fromEntries(a.cab.map((c, i) => [c, i]));
         const bloco = b.closest('.sup-top-bloco');
         const sup = bloco ? bloco.dataset.sup : (ESTADO.sup || 'TODAS'), grupos = gruposFiltro();
+        const soEsg = analiseVista === 'esgoto' && (def.esgMes || def.esgLinha);
         const leitor = (l) => {
-            const bruto = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || ''));
+            const bruto0 = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || ''));
+            let bruto = bruto0;
+            if (soEsg) {                             // vista "só esgoto": o mês só conta se a ligação faturou esgoto nele
+                const semEsg = (ref) => !(numBR(bruto0(`Consumo esgoto ${ref}`)) > 0);
+                if (def.esgLinha) { if (semEsg(a.rn) && semEsg(a.ra)) bruto = () => ''; }
+                else {
+                    const fora = new Set();
+                    [a.rn, a.ra].forEach((ref) => { if (semEsg(ref)) def.esgMes(ref).forEach((c) => fora.add(c)); });
+                    if (fora.size) bruto = (c) => (fora.has(c) ? '' : bruto0(c));
+                }
+            }
             if (!def.porMes || !grupos) return bruto;
             const fora = new Set();
             def.porMes.forEach(([gc, cols]) => { const g = bruto(gc); if (!g || !grupos.has(normGrupo(g))) cols.forEach((c) => fora.add(c)); });
@@ -1036,7 +1044,7 @@ document.addEventListener('click', async function (e) {
         }
         const sitNome = (b.dataset.sit || b.dataset.gsit || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
-        const nome = `${def.nome}${sitNome ? '_' + sitNome : ''}_${a.mes}${sup !== 'TODAS' ? '_' + sup.replace(/[^A-Za-z0-9]/g, '') : ''}${grupos ? '_grupos_filtrados' : ''}.csv`;
+        const nome = `${def.nome}${soEsg ? '_so_esgoto' : ''}${sitNome ? '_' + sitNome : ''}_${a.mes}${sup !== 'TODAS' ? '_' + sup.replace(/[^A-Za-z0-9]/g, '') : ''}${grupos ? '_grupos_filtrados' : ''}.csv`;
         baixarTexto(csvDe(def.cols, linhas), nome);
     } catch (erro) {
         alert('Não foi possível baixar o analítico neste navegador (' + erro.message + ').');
@@ -2252,3 +2260,16 @@ var syncPlano = criaSync('plano', 'Plano de ação', () => planoMapa,
     (m) => { planoMapa = m; try { localStorage.setItem(PLANO_LS, JSON.stringify(planoMapa)); } catch (e) {} },
     () => planoDesenhar(), () => false);
 document.addEventListener('DOMContentLoaded', () => { planoDesenhar(); syncPlano.puxar(); });
+
+// ===== Aba Análise: ver as tabelas com todas as economias ou só com as que faturam esgoto =====
+// Ativas × cortadas, matriz de migração e acima × abaixo do mínimo vêm nas duas versões (.vista-serv); a escolha é de
+// cada pessoa e fica lembrada neste navegador. Os downloads ⬇≡ dessas tabelas seguem a versão escolhida.
+let analiseVista = 'todas';
+function analiseAplicarVista(v) {
+    analiseVista = v === 'esgoto' ? 'esgoto' : 'todas';
+    document.querySelectorAll('.vista-serv').forEach((el) => { el.hidden = el.dataset.vista !== analiseVista; });
+    document.querySelectorAll('[data-vista-btn]').forEach((b) => { const ok = b.dataset.vistaBtn === analiseVista; b.classList.toggle('ativo', ok); b.setAttribute('aria-pressed', ok ? 'true' : 'false'); });
+    try { localStorage.setItem('faturamento_analise_vista', analiseVista); } catch (e) { /* sem armazenamento */ }
+}
+document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-vista-btn]'); if (b) analiseAplicarVista(b.dataset.vistaBtn); });
+document.addEventListener('DOMContentLoaded', () => { let v = null; try { v = localStorage.getItem('faturamento_analise_vista'); } catch (e) {} analiseAplicarVista(v); });
