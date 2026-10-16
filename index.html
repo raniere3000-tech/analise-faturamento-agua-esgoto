@@ -400,7 +400,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v85</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v86</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -542,7 +542,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v85-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v86-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1464,17 +1464,42 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     $("btnGrupo").textContent = "Todos ▾"; $("btnGrupo").disabled = false;
     $("btnPdf").hidden = false;
     filtrosEstado.view = "resumo";
-    // padrão ao abrir: SUP Interior (se houver) — a última SUP salva na pasta vem por cima, em avisaRelatorio()
-    if (Array.from($("selSupTop").options).some((o) => o.value === "INTERIOR")) { filtrosEstado.sup = "INTERIOR"; $("selSupTop").value = "INTERIOR"; }
+    // filtros de cada pessoa (neste navegador): a última escolha volta ao abrir; sem escolha salva, SUP Interior,
+    // Comparar padrão, mês vigente e grupos Liberados/Em Análise. Mês e grupos só voltam se o mês vigente for o mesmo.
+    const salvo = lerFiltrosSalvos(), tem = (sel, v) => !!v && Array.from($(sel).options).some((o) => o.value === v);
+    const supIni = tem("selSupTop", salvo.sup) ? salvo.sup : (tem("selSupTop", "INTERIOR") ? "INTERIOR" : "TODAS");
+    filtrosEstado.sup = supIni; $("selSupTop").value = supIni;
+    if (salvo.ref !== undefined) {
+      const [s1, s2] = String(salvo.ref || "").split("|");
+      if ((!s1 || tem("selRef1Top", s1)) && (!s2 || tem("selRef2Top", s2))) { $("selRef1Top").value = s1 || ""; $("selRef2Top").value = s2 || ""; filtrosEstado.ref = salvo.ref || ""; }
+    }
+    const mesmoMes = infoFiltros && salvo.mesAtual === infoFiltros.mesAtual;
+    if (mesmoMes && tem("selMesTop", salvo.mes)) { filtrosEstado.mes = salvo.mes; $("selMesTop").value = salvo.mes; }
     aplicaFiltros();
-    try { const w = janela(); if (w.aplicarGruposPadrao) w.aplicarGruposPadrao(); } catch (e) {}   // grupos Liberados e Em Análise
+    try {
+      const w = janela();
+      if (mesmoMes && Array.isArray(salvo.grupos)) {                    // grupos escolhidos pela pessoa neste mês
+        const marc = new Set(salvo.grupos);
+        w.document.querySelectorAll(".chk-grupo").forEach((c) => { const l = c.closest("label"); if (!l || l.style.display !== "none") c.checked = marc.has(c.value); });
+        w.gruposAuto = false; if (w.filtrarPorGrupo) w.filtrarPorGrupo();
+      } else if (w.aplicarGruposPadrao) w.aplicarGruposPadrao();       // grupos Liberados e Em Análise
+    } catch (e) {}
     sincronizaGrupos();
     avisaRelatorio();                 // aplica as configurações salvas no JSON (ex.: "Comparar") por cima das padrões
   }
 
+  // ===== Filtros de cada pessoa: guardados só neste navegador (não mudam a tela de mais ninguém) =====
+  const FILTROS_LS = "faturamento_filtros_pessoais";
+  function lerFiltrosSalvos() { try { return JSON.parse(localStorage.getItem(FILTROS_LS) || "{}") || {}; } catch (e) { return {}; } }
+  function salvaFiltros(extra) {
+    const atual = Object.assign(lerFiltrosSalvos(), { sup: filtrosEstado.sup, ref: filtrosEstado.ref, mes: filtrosEstado.mes,
+      mesAtual: infoFiltros ? infoFiltros.mesAtual : null }, extra || {});
+    try { localStorage.setItem(FILTROS_LS, JSON.stringify(atual)); } catch (e) { /* sem armazenamento */ }
+  }
   function aplicaGrupos() {
     const w = janela(), todos = Array.from(document.querySelectorAll(".chk-grupo-top"));
-    w.gruposAuto = false;                         // a pessoa escolheu os grupos: não volta mais ao padrão nesta abertura
+    w.gruposAuto = false;                         // a pessoa escolheu os grupos: não volta mais ao padrão
+    salvaFiltros({ grupos: todos.filter((c) => c.checked).map((c) => c.value) });
     const marcados = new Set(todos.filter((c) => c.checked).map((c) => c.value));
     w.document.querySelectorAll(".chk-grupo").forEach((c) => { c.checked = marcados.has(c.value); });
     if (w.filtrarPorGrupo) w.filtrarPorGrupo();
@@ -1497,36 +1522,17 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   }
   $("selSupTop").addEventListener("change", (e) => {
     filtrosEstado.sup = e.target.value; aplicaFiltros(); sincronizaGrupos();
-    try { const w = janela(); if (w && w.configAlterada) w.configAlterada(); } catch (er) {}   // a SUP vai para o JSON (vale para todos)
+    salvaFiltros({ grupos: null });               // outra SUP: os grupos voltam ao padrão dela
   });
-  // o relatório lê/aplica a Superintendência compartilhada (seção config do JSON) por aqui
-  window.supCompartilhada = {
-    obter: () => filtrosEstado.sup || "TODAS",
-    definir(sup) {
-      if (!Array.from($("selSupTop").options).some((o) => o.value === sup)) return;
-      $("selSupTop").value = sup; filtrosEstado.sup = sup; aplicaFiltros(); sincronizaGrupos();
-    },
-  };
   window.sincronizaGruposTopo = () => sincronizaGrupos();
   const mudouRef = () => {
     const escolhidas = [$("selRef1Top").value, $("selRef2Top").value].filter((v, i, a) => v && a.indexOf(v) === i);
-    filtrosEstado.ref = escolhidas.join("|"); aplicaFiltros();
-    try { const w = janela(); if (w && w.configAlterada) w.configAlterada(); } catch (e) {}     // "Comparar" vai para o JSON
+    filtrosEstado.ref = escolhidas.join("|"); aplicaFiltros(); salvaFiltros();
   };
-  // o relatório lê/aplica a "Comparar" compartilhada (seção config do JSON) por aqui
-  window.referenciaCompartilhada = {
-    obter: () => filtrosEstado.ref || "",
-    definir(ref) {
-      const [r1, r2] = String(ref || "").split("|");
-      const tem = (sel, v) => !v || Array.from($(sel).options).some((o) => o.value === v);
-      if (!tem("selRef1Top", r1) || !tem("selRef2Top", r2)) return;        // planilha que não existe nesta pasta: ignora
-      $("selRef1Top").value = r1 || ""; $("selRef2Top").value = r2 || "";
-      filtrosEstado.ref = ref || ""; aplicaFiltros();
-    },
-  };
+
   $("selRef1Top").addEventListener("change", mudouRef);
   $("selRef2Top").addEventListener("change", mudouRef);
-  $("selMesTop").addEventListener("change", (e) => { filtrosEstado.mes = e.target.value; aplicaFiltros(); });
+  $("selMesTop").addEventListener("change", (e) => { filtrosEstado.mes = e.target.value; aplicaFiltros(); salvaFiltros(); });
   $("btnGrupo").addEventListener("click", (e) => { e.stopPropagation(); $("ddGrupo").classList.toggle("aberto"); });
   document.addEventListener("click", (e) => { if (!e.target.closest("#ddGrupo")) $("ddGrupo").classList.remove("aberto"); });
   $("listaGrupos").addEventListener("change", (e) => {

@@ -306,11 +306,15 @@ def test_sincronizacao_continua_entre_versoes_abertas(analise):
     assert "setInterval(verificaPasta, 2000)" in site and 'new BroadcastChannel("faturamento_ajustes")' in site
 
 
-def test_configuracoes_do_relatorio_no_json(analise):
+def test_preferencias_de_visualizacao_por_pessoa(analise):
+    """Visualização (ocultar forecast, orçado por ciclo, analítica/sintética, colunas) e filtros (SUP, Comparar, Mês,
+    Grupos) ficam no navegador de cada pessoa; os dados editados continuam no JSON da pasta."""
     import os
     html = open(analise.caminho_html, encoding="utf-8").read()
-    assert "var syncConfig = criaSync('config'" in html
-    for chave in ("ocultaForecast", "ocultaIndiretas", "referencia", "orcadoCiclo", "visaoSituacao", "todasColunas"):
+    assert "criaSync('config'" not in html and "const CONFIG_LS = 'faturamento_config_local';" in html
+    for chave in ("ocultaForecast", "ocultaIndiretas", "orcadoCiclo", "visaoSituacao", "todasColunas"):
         assert chave + ":" in html, chave
+    for secao in ("criaSync('forecast'", "criaSync('situacao'", "criaSync('garantia'", "criaSync('plano'"):
+        assert secao in html, secao
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
-    assert "window.referenciaCompartilhada" in site and "w.configAlterada()" in site
+    assert 'const FILTROS_LS = "faturamento_filtros_pessoais";' in site and "configAlterada" not in site
