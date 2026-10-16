@@ -32,3 +32,15 @@ def continuar(ajustes_json):
     """Fase 2. Devolve (referência atual, referência anterior)."""
     ajustes = json.loads(ajustes_json or "[]")
     return _estado["sessao"].continuar(ajustes)
+
+
+def acompanhamento(sup, fotos_json, caminho):
+    """Export "Acompanhamento Mensal" (botão do site): grava o .xlsx em `caminho` e devolve JSON com o nome do arquivo
+    e a "foto" do realizado acumulado das indiretas, que o site guarda no ajustes_relatorio.json para o próximo export."""
+    from faturamento.acompanhamento import dados_acompanhamento, gera_xlsx, nome_arquivo
+    ctx = _estado["sessao"].ctx
+    dados = dados_acompanhamento(ctx, sup or "TODAS")
+    conteudo, foto = gera_xlsx(dados, json.loads(fotos_json or "[]"))
+    with open(caminho, "wb") as f:
+        f.write(conteudo)
+    return json.dumps({"nome": nome_arquivo(dados), "foto": foto, "ref": dados["ref"], "sup": dados["sup"]}, ensure_ascii=False)
