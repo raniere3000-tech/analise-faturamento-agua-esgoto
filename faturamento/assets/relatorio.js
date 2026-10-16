@@ -49,9 +49,11 @@ function aplicarSupNosGrupos() {
     const caixas = Array.from(document.querySelectorAll('.chk-grupo'));
     const daSup = (c) => ESTADO.sup === 'TODAS' || mapa[c.value] === ESTADO.sup;
     const algum = caixas.some(daSup);                       // SUP sem grupo conhecido: não esconde tudo
+    let padrao = null;                                      // ainda no padrão: só os Liberados e Em Análise ficam marcados
+    try { if (window.gruposAuto) padrao = gruposPadrao(); } catch (e) { padrao = null; }
     caixas.forEach(c => {
         const ok = !algum || daSup(c);
-        c.checked = ok;
+        c.checked = ok && (!padrao || padrao.has(normGrupo(c.value)));
         const rotulo = c.closest('label'); if (rotulo) rotulo.style.display = ok ? '' : 'none';
     });
     if (typeof filtrarPorGrupo === 'function' && document.getElementById('badgeFiltro')) filtrarPorGrupo();
@@ -1507,6 +1509,23 @@ function sitAplicarGrupo(ref, grupo) {
     });
 }
 document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach(sitAplicar);
+// Grupos que abrem marcados: os Liberados e os Em Análise (situação manual, se houver, senão a automática). Vale até a
+// pessoa mexer no filtro de grupos nesta abertura (gruposAuto = false).
+window.gruposAuto = true;
+function gruposPadrao() {
+    const ok = new Set(), vistos = new Set();
+    document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach((el) => {
+        const g = el.dataset.sitGrupo, man = (sitManuais[el.dataset.sitRef] || {})[g], v = man || el.dataset.sitAuto;
+        vistos.add(g); if (v === 'Liberado' || v === 'Em Análise') ok.add(g);
+    });
+    return vistos.size && ok.size ? ok : null;                     // sem situação nos dados: todos marcados
+}
+window.aplicarGruposPadrao = function () {
+    const ok = gruposPadrao();
+    document.querySelectorAll('.chk-grupo').forEach((c) => { c.checked = !ok || ok.has(normGrupo(c.value)); });
+    if (typeof filtrarPorGrupo === 'function') filtrarPorGrupo();
+    try { const p = window.parent; if (p && p !== window && p.sincronizaGruposTopo) p.sincronizaGruposTopo(); } catch (e) {}
+};
 function sitEditar(el) {
     if (el.nextElementSibling && el.nextElementSibling.classList.contains('sit-escolha')) return;
     const ref = el.dataset.sitRef, grupo = el.dataset.sitGrupo, man = (sitManuais[ref] || {})[grupo] || '';
@@ -1623,7 +1642,8 @@ var syncSituacao = criaSync('situacao', 'Situação do grupo',
     () => { const plano = {}; Object.entries(sitManuais).forEach(([ref, gs]) => Object.entries(gs).forEach(([g, v]) => { plano[ref + '|' + g] = v; })); return plano; },
     (plano) => { sitManuais = {}; Object.entries(plano).forEach(([k, v]) => { const i = k.lastIndexOf('|'); (sitManuais[k.slice(0, i)] = sitManuais[k.slice(0, i)] || {})[k.slice(i + 1)] = v; });
                  try { localStorage.setItem(SIT_LS, JSON.stringify(sitManuais)); } catch (e) {} },
-    () => document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach(sitAplicar),
+    () => { document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach(sitAplicar);
+            if (window.gruposAuto) window.aplicarGruposPadrao(); },        // situação manual chegou da pasta: refaz os grupos padrão
     () => !!document.querySelector('select.sit-escolha'));
 function puxarAjustesCompartilhados() {
     syncForecast.puxar(); syncSituacao.puxar();
@@ -1638,22 +1658,27 @@ setInterval(puxarAjustesCompartilhados, 60000);
 
 
 // ===== Configurações do relatório compartilhadas (seção "config" do JSON) =====
-// Ocultar forecast (Forecast e Indiretas), Comparar (orçado de referência), Orçado por ciclo, visão Analítica/Sintética e
-// Mostrar todas as colunas: quem abrir a pasta vê o relatório configurado igual. Os filtros de navegação (Superintendência,
-// Mês e Grupos) continuam de cada pessoa.
+// Ocultar forecast (Forecast e Indiretas), Comparar (orçado de referência), Superintendência, Orçado por ciclo, visão
+// Analítica/Sintética e Mostrar todas as colunas: quem abrir a pasta vê o relatório como foi deixado por último. O Mês abre
+// sempre no vigente e os Grupos abrem marcados nos que estão Liberados ou Em Análise (ver gruposPadrao).
 let aplicandoConfig = false;
 function configAlterada() { if (!aplicandoConfig && typeof syncConfig !== 'undefined') syncConfig.agendar(); }
 function refDoSite() {
     try { const p = window.parent; if (p && p !== window && p.referenciaCompartilhada) return p.referenciaCompartilhada; } catch (e) {}
     return null;
 }
+function supDoSite() {
+    try { const p = window.parent; if (p && p !== window && p.supCompartilhada) return p.supCompartilhada; } catch (e) {}
+    return null;
+}
 function lerConfig() {
     const sel = document.getElementById('selOrcCiclo'), vt = document.getElementById('view-tabelas');
     const sint = document.querySelector('.sitl-visao button[data-visao="sintetica"].ativo');
-    const site = refDoSite();
+    const site = refDoSite(), siteSup = supDoSite();
     return {
         ocultaForecast: !!prevOculta, ocultaIndiretas: !!prevOcultaInd,
         referencia: (site ? site.obter() : ESTADO.ref) || '',
+        superintendencia: (siteSup ? siteSup.obter() : ESTADO.sup) || 'TODAS',
         orcadoCiclo: sel ? sel.value : '',
         visaoSituacao: sint ? 'sintetica' : 'analitica',
         todasColunas: vt ? !vt.classList.contains('compacto') : false,
@@ -1672,6 +1697,10 @@ function aplicarConfig(c) {
         if (c.visaoSituacao) sitlVisao(c.visaoSituacao);
         const vt = document.getElementById('view-tabelas');
         if ('todasColunas' in c && vt && vt.classList.contains('compacto') === !!c.todasColunas) alternarColunas();
+        if (c.superintendencia && c.superintendencia !== lerConfig().superintendencia) {
+            const siteSup = supDoSite();
+            if (siteSup) siteSup.definir(c.superintendencia); else definirFiltros({ sup: c.superintendencia });
+        }
         if (c.referencia !== undefined && c.referencia !== lerConfig().referencia) {
             const site = refDoSite();
             if (site) site.definir(c.referencia); else definirFiltros({ ref: c.referencia });

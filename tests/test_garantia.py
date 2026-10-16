@@ -202,3 +202,11 @@ def test_top1000_filtro_de_categoria(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert 'id="garCatBtn"' in html and 'id="garCatLista"' in html
     assert "(!GAR.cats || GAR.cats.has(garCat(d)))" in html and "function garMontarCategorias()" in html
+
+
+def test_filtros_padrao_e_sup_compartilhada(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert "superintendencia: (siteSup ? siteSup.obter() : ESTADO.sup) || 'TODAS'," in html
+    assert "window.aplicarGruposPadrao = function ()" in html and "v === 'Liberado' || v === 'Em Análise'" in html
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert "window.supCompartilhada = {" in site and 'filtrosEstado.sup = "INTERIOR"' in site
