@@ -10,7 +10,7 @@ const ARQUIVOS_PY = [
   "faturamento/dre.py", "faturamento/dados.py",
   "faturamento/config.py", "faturamento/contexto.py", "faturamento/formatacao.py", "faturamento/leitura.py",
   "faturamento/origem.py", "faturamento/orcado_ciclo.py", "faturamento/previsao.py", "faturamento/projecao_grupos.py", "faturamento/validacao.py", "faturamento/painel_html.py", "faturamento/pipeline.py", "faturamento/progresso.py",
-  "faturamento/relatorio.py", "faturamento/situacao_grupo.py", "faturamento/tarifa.py", "faturamento/garantia.py", "faturamento/plano_acao.py", "faturamento/one_page.py", "faturamento/situacao_lancamento.py", "faturamento/tabelas_html.py", "faturamento/top20.py",
+  "faturamento/relatorio.py", "faturamento/situacao_grupo.py", "faturamento/tarifa.py", "faturamento/garantia.py", "faturamento/plano_acao.py", "faturamento/one_page.py", "faturamento/acompanhamento.py", "faturamento/situacao_lancamento.py", "faturamento/tabelas_html.py", "faturamento/top20.py",
   "faturamento/regras.json", "faturamento/assets/relatorio.css", "faturamento/assets/relatorio.js", "faturamento/assets/tarifa.js",
 ];
 const SAIDAS = [
@@ -251,8 +251,24 @@ async function faseContinuar(ajustes) {
     saidas.map((s) => s.conteudo));
 }
 
+// Export "Acompanhamento Mensal" (botão do site): usa a análise que já está carregada aqui
+async function faseAcompanhamento(sup, fotos) {
+  const pyodide = await iniciaPyodide();
+  const caminho = "/tmp/acompanhamento.xlsx";
+  const acomp = pyodide.globals.get("acompanhamento");
+  const info = JSON.parse(acomp(sup || "TODAS", JSON.stringify(fotos || []), caminho));
+  acomp.destroy();
+  const bytes = pyodide.FS.readFile(caminho);
+  avisa("acompanhamento", { info, conteudo: bytes.buffer }, [bytes.buffer]);
+}
+
 self.onmessage = async (evento) => {
   const { fase, arquivos, ajustes } = evento.data;
+  if (fase === "acompanhamento") {
+    try { await faseAcompanhamento(evento.data.sup, evento.data.fotos); }
+    catch (erro) { avisa("acompanhamentoErro", { motivo: String((erro && erro.message) || erro).split("\n").slice(-3).join(" ") }); }
+    return;
+  }
   try {
     if (fase === "limparCache") { await limpaCache(); return; }
     if (fase === "continuar") await faseContinuar(ajustes);

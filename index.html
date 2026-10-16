@@ -400,7 +400,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v88</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v89</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -421,6 +421,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       <button type="button" class="btn-top" id="btnEtapa2" hidden title="Reler a pasta e abrir a conferência dos clientes em análise (etapa 2), mesmo sem arquivo novo">✎ Etapa 2</button>
       <button type="button" class="btn-top" id="btnPdf" hidden title="PDF executivo conforme os filtros da tela">📄 Executivo</button>
       <button type="button" class="btn-top" id="btnOnePage" hidden title="One page executivo (uma página 16:9) conforme os filtros da tela">📊 One page</button>
+      <button type="button" class="btn-top" id="btnAcomp" hidden title="Baixar as tabelas da planilha de Acompanhamento Mensal (Excel, uma aba por tabela) da Superintendência escolhida">📥 Acompanhamento</button>
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
     </div>
   </div>
@@ -544,7 +545,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v88-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v89-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -886,6 +887,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     else if (msg.tipo === "top20") { salvaEta(); mostraLeitura(msg.dados.leitura); decideEtapa2(msg.dados); }
     else if (msg.tipo === "cacheLimpo") { $("statusNota").textContent = "Arquivos guardados apagados: a próxima análise lê todos os arquivos de novo."; }
     else if (msg.tipo === "concluido") { salvaEta(); abreRelatorio(msg); }
+    else if (msg.tipo === "acompanhamento" || msg.tipo === "acompanhamentoErro") { if (esperaAcomp) { esperaAcomp(msg); esperaAcomp = null; } }
   }
 
   function abreRelatorio({ saidas, refAtual, refAnterior }) {
@@ -932,6 +934,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 
     htmlAtual = htmlRelatorio;
     if (pastaHandle) agendaCopia(3000);
+    $("btnAcomp").hidden = false;                 // a análise está carregada no Python: dá para gerar o Acompanhamento
     // o cabeçalho do relatório repete o do site; aqui ele some (no arquivo/PDF continua)
     $("quadroRelatorio").srcdoc = htmlRelatorio;
     $("quadroRelatorio").hidden = false;
@@ -1568,6 +1571,37 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   quadro().addEventListener("load", () => { if (quadro().srcdoc) montaFiltros(); });
 
   btnPasta.addEventListener("click", escolhePasta);
+  // ===== Export "Acompanhamento Mensal" (não aparece no painel nem no PDF) =====
+  // Gera no Python (análise já carregada) as tabelas da planilha semanal da SUP escolhida. As indiretas dividem o realizado
+  // de cada semana pelos dias úteis da semana: cada export guarda o realizado acumulado ("foto") no ajustes_relatorio.json,
+  // seção "acompanhamento", e o próximo usa a diferença.
+  let esperaAcomp = null;
+  $("btnAcomp").addEventListener("click", async () => {
+    if (!worker || esperaAcomp) return;
+    const b = $("btnAcomp"), texto = b.textContent;
+    b.disabled = true; b.textContent = "⏳ Gerando…";
+    try {
+      const sup = filtrosEstado.sup || "TODAS", ref = infoFiltros ? infoFiltros.mesAtual : "";
+      let fotos = [];
+      if (pastaHandle) {
+        const d = await window.arquivoCompartilhado.ler();
+        fotos = (d && d.acompanhamento && d.acompanhamento[ref] && d.acompanhamento[ref][sup]) || [];
+      }
+      const msg = await new Promise((ok) => { esperaAcomp = ok; worker.postMessage({ fase: "acompanhamento", sup, fotos }); });
+      if (msg.tipo === "acompanhamentoErro") { window.avisoSite("Não foi possível gerar o Acompanhamento: " + msg.motivo, true); return; }
+      const url = URL.createObjectURL(new Blob([msg.conteudo], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const a = document.createElement("a"); a.href = url; a.download = msg.info.nome; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      if (pastaHandle) {                          // guarda a foto desta data (substitui a do mesmo dia)
+        const foto = msg.info.foto, r = msg.info.ref, sp = msg.info.sup;
+        const res = await window.arquivoCompartilhado.atualizar((d) => {
+          const m = (d.acompanhamento = d.acompanhamento || {}), mr = (m[r] = m[r] || {});
+          mr[sp] = (mr[sp] || []).filter((f) => f.ate !== foto.ate).concat([foto]).sort((x, y) => (x.ate < y.ate ? -1 : 1));
+        });
+        window.avisoSite(`Acompanhamento baixado (${msg.info.nome})` + (res.ok ? "." : ` — a semana não ficou guardada na pasta (${res.motivo}).`), !res.ok);
+      } else window.avisoSite(`Acompanhamento baixado (${msg.info.nome}). Sem pasta conectada, as indiretas dividem o realizado do mês pelos dias que já passaram.`);
+    } finally { b.disabled = false; b.textContent = texto; esperaAcomp = null; }
+  });
   // Abrir um relatório já gerado (no celular: Relatorio_Faturamento.html da pasta). Escolher junto o ajustes_relatorio.json
   // usa os ajustes mais recentes do arquivo no lugar dos que vieram embutidos.
   $("btnAbrirRel").addEventListener("click", () => $("inputRelatorio").click());
@@ -1589,6 +1623,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     try { const m = /id="info-filtros">([\s\S]*?)<\/script>/.exec(html); mes = m ? nomeMes(JSON.parse(m[1]).mesAtual) : ""; } catch (e) {}
     const salvo = (/id="ajustes-copia" data-salvo="([^"]+)"/.exec(html) || [])[1];
     htmlAtual = null;                             // relatório aberto de arquivo: não regrava a cópia
+    $("btnAcomp").hidden = true;                  // sem a análise carregada não há como gerar o Acompanhamento
     $("titulo").textContent = "Faturamento" + (mes ? ` — ${mes}` : "") + " (relatório salvo)";
     document.title = "Relatório" + (mes ? ` ${mes}` : "");
     progresso.hidden = true;
