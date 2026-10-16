@@ -86,7 +86,7 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
                tabela_minimo_html, tabela_top100_agua_html, cards_situacao_html="", tabela_top100_esgoto_html,
                tabela_aumento_agua_html, tabela_aumento_esgoto_html,
                aba_dre_html, aba_indiretas_html, aba_dados_html, aba_forecast_html, filtros_dre_html, info_filtros_json,
-               aba_garantia_html="", aba_plano_html=""):
+               aba_garantia_html="", aba_plano_html="", aba_onepage_html=""):
     chave_justificativa = "justificativas_" + ctx.mes_atual.replace(" ", "_").replace("/", "_")
     html_style = "\n<style>\n" + carrega_asset("relatorio.css") + "</style>\n"
     script_js = "\n<script>\n" + carrega_asset("tarifa.js") + "\n" + carrega_asset("relatorio.js").replace("__CHAVE_JUSTIFICATIVA__", chave_justificativa) + "</script>\n"
@@ -123,10 +123,12 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
     <button id="btn-dre" onclick="mostrarView('dre')">DRE</button>
     <button id="btn-garantia" onclick="mostrarView('garantia')">Garantia</button>
     <button id="btn-plano" onclick="mostrarView('plano')">Plano de ação</button>
+    <button id="btn-onepage" onclick="mostrarView('onepage')">One page</button>
     <button id="btn-dados" onclick="mostrarView('dados')">Dados</button>
   </div>
   {filtros_dre_html}
   <button class="btn-filtro btn-imprimir" type="button" onclick="gerarExecutivo()" aria-label="Gerar o relatório executivo em PDF" title="PDF com KPIs, gráfico, forecast, orçado por ciclo, comparativos, indiretas e justificativas, conforme os filtros da tela">Executivo (PDF)</button>
+  <button class="btn-filtro btn-imprimir" type="button" onclick="gerarOnePage()" aria-label="Baixar o One page em PDF" title="Painel executivo de uma página (16:9), conforme os filtros da tela">One page (PDF)</button>
   {filtro_html}
 </div>
 
@@ -153,6 +155,10 @@ def monta_html(ctx, *, alerta_minimo_html, aviso_ajustes_html, filtro_html, card
 
 <div id="view-plano">
     {aba_plano_html}
+</div>
+
+<div id="view-onepage">
+    {aba_onepage_html}
 </div>
 
 <div id="view-dados">

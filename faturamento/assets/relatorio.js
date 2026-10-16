@@ -1,6 +1,6 @@
 const CHAVE_JUSTIFICATIVA = '__CHAVE_JUSTIFICATIVA__';
 
-const VIEWS = ['resumo', 'tabelas', 'analise', 'indiretas', 'forecast', 'dre', 'garantia', 'plano', 'dados'];
+const VIEWS = ['resumo', 'tabelas', 'analise', 'indiretas', 'forecast', 'dre', 'garantia', 'plano', 'onepage', 'dados'];
 function mostrarView(view) {
     VIEWS.forEach(v => {
         document.getElementById('view-' + v).classList.toggle('ativo', v === view);
@@ -9,6 +9,7 @@ function mostrarView(view) {
     });
     const seletor = document.getElementById('seletorSup');
     if (seletor) seletor.hidden = !(view === 'dre' || view === 'indiretas' || view === 'forecast');
+    if (view === 'onepage' && typeof opDesenhar === 'function') opDesenhar();
 }
 
 // Filtros da DRE/Indiretas: superintendência, mês e referência (RF / SUP / ambos)
@@ -37,6 +38,7 @@ function definirFiltros(parcial) {
     desenharGraficosIndiretas();
     if (typeof garRedesenhar === 'function') garRedesenhar();
     if (typeof planoDesenhar === 'function') planoDesenhar();
+    if (typeof opDesenhar === 'function') opDesenhar();
 }
 
 // Superintendência nas abas por grupo (Resumo e Diretas): marca só os grupos da SUP escolhida (pela Localidade do cronograma)
@@ -216,6 +218,7 @@ function filtrarPorGrupo() {
     sitlRecalcular();                                       // cards da Situação de lançamento
     if (typeof garRedesenhar === 'function') garRedesenhar();   // aba Garantia (Top 1000, análise e resumo)
     if (typeof planoDesenhar === 'function') planoDesenhar();   // aba Plano de ação
+    if (typeof opDesenhar === 'function') opDesenhar();         // aba One page
 }
 
 function recalcularTotais() {
@@ -1583,7 +1586,7 @@ function marcaNuvem(nome, r) {
 // clique na nuvem: grava tudo o que está na tela e relê a pasta; devolve true se tudo foi salvo
 window.sincronizarTudo = async function () {
     if (!compartilhado()) return false;
-    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncGarantia.empurrar(), await syncPlano.empurrar(), await salvarJustificativas()];
+    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncGarantia.empurrar(), await syncPlano.empurrar(), await syncOnePage.empurrar(), await salvarJustificativas()];
     puxarAjustesCompartilhados(); lerJustificativasDaPasta();
     return r.every(Boolean);
 };
@@ -1649,6 +1652,7 @@ function puxarAjustesCompartilhados() {
     syncForecast.puxar(); syncSituacao.puxar();
     if (typeof syncGarantia !== 'undefined') syncGarantia.puxar();
     if (typeof syncPlano !== 'undefined') syncPlano.puxar();
+    if (typeof syncOnePage !== 'undefined') syncOnePage.puxar();
 }
 // chamado pelo site quando o arquivo da pasta mudou (outra pessoa salvou) ou ao voltar para a aba
 window.puxarTudoDaPasta = function () { puxarAjustesCompartilhados(); lerJustificativasDaPasta(); };
@@ -2375,3 +2379,422 @@ function analiseAplicarVista(v) {
 }
 document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-vista-btn]'); if (b) analiseAplicarVista(b.dataset.vistaBtn); });
 document.addEventListener('DOMContentLoaded', () => { let v = null; try { v = localStorage.getItem('faturamento_analise_vista'); } catch (e) {} analiseAplicarVista(v); });
+
+
+// ===== Aba One page: painel executivo de faturamento numa folha 16:9 =====
+// Responde: quanto faturamos, se estamos atingindo o orçamento, o que impactou o resultado e quais ações estão em curso.
+// Números: DRE da superintendência (realizado e orçado de cada mês — o primeiro orçado escolhido em Comparar) e Resumo
+// (grupos marcados). Faturamento total = direto + indireto; água/esgoto é outra visão do mesmo total (sem dupla contagem).
+// Tarifa média = faturamento direto ÷ volume faturado de água; ticket médio = faturamento direto ÷ economias de água
+// faturadas (as mesmas definições dos KPIs do Resumo). O que é editado na folha fica em opMapa — seção "onepage" do
+// ajustes_relatorio.json, o mesmo para todos: "titulo", "analise|<inc|desv|aten>|<mês>|<SUP>" e "projetos|<SUP>".
+const OP_LS = 'faturamento_onepage';
+const OP_W = 1280, OP_H = 720;                          // 16:9 (13,33 × 7,5 pol., o tamanho de um slide)
+const OP_RELEVANTE = 0.03;                              // variação a partir da qual o desvio ganha cor
+const OP_TITULO = 'Faturamento — One Page Executivo';
+const OP_ANALISE = [
+    ['inc', 'Incrementos', 'Principais fatores que contribuíram positivamente (com o impacto em R$)…'],
+    ['desv', 'Desvios', 'Principais impactos negativos frente ao orçamento ou ao mês anterior (com o impacto em R$)…'],
+    ['aten', 'Pontos de atenção', 'Riscos que podem comprometer os próximos fechamentos…'],
+];
+const OP_PROJETOS_PADRAO = [['Incremento de esgoto', '', '', ''], ['Regularização cadastral', '', '', ''],
+    ['Recuperação de faturamento', '', '', ''], ['Ações comerciais', '', '', '']];
+const OP_MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+let opMapa = {};
+try { opMapa = JSON.parse(localStorage.getItem(OP_LS) || '{}') || {}; } catch (e) { /* sem armazenamento */ }
+let opGraficos = [], opTimerAjuste = null;
+
+function opSalvar() {
+    try { localStorage.setItem(OP_LS, JSON.stringify(opMapa)); } catch (e) { /* ignora */ }
+    if (typeof syncOnePage !== 'undefined') syncOnePage.agendar();
+}
+const opAtiva = () => { const v = document.getElementById('view-onepage'); return !!v && v.classList.contains('ativo'); };
+const opEditor = () => document.getElementById('opEditor');
+// "R$ 119.432" · "R$ (3.240)" · "22,64" · "-27,0%" → número (null quando vazio ou "-")
+function opNum(t) {
+    t = String(t == null ? '' : t).trim();
+    if (!t || /^[-–—]$/.test(t)) return null;
+    const n = parseFloat(t.replace(/[^\d,]/g, '').replace(',', '.'));
+    return isNaN(n) ? null : (/[(\-−]/.test(t) ? -n : n);
+}
+const opChaveMes = (m) => { const x = /^(\d{2})\/(\d{4})$/.exec(m || ''); return x ? +x[2] * 12 + (+x[1] - 1) : null; };
+const opMesDeChave = (k) => String(k % 12 + 1).padStart(2, '0') + '/' + Math.floor(k / 12);
+const opMesCurto = (m) => { const k = opChaveMes(m); return k == null ? m : OP_MESES[k % 12] + '/' + String(Math.floor(k / 12)).slice(2); };
+function opMoeda(v, dec) {
+    if (v == null || isNaN(v)) return '–';
+    const a = Math.abs(v), s = v < 0 ? '-' : '';
+    if (a >= 1e6) return `${s}R$ ${fmtBR(a / 1e6, dec == null ? 2 : dec)} mi`;
+    if (a >= 1e3) return `${s}R$ ${fmtBR(a / 1e3, dec == null ? 1 : dec)} mil`;
+    return `${s}R$ ${fmtBR(a, 0)}`;
+}
+const opPct = (v, sinal) => (v == null || !isFinite(v) ? '–' : (sinal && v > 0 ? '+' : '') + fmtBR(v * 100, 1) + '%');
+const opVar = (a, b) => (a == null || b == null || !b ? null : (a - b) / Math.abs(b));
+function opSeta(v, rot) {                       // ▲ 3,5% vs Ago/26 — cor só quando o desvio é relevante
+    if (v == null || !isFinite(v)) return `<span class="op-var">– ${garEsc(rot)}</span>`;
+    const cls = Math.abs(v) < OP_RELEVANTE ? '' : v > 0 ? ' op-pos' : ' op-neg';
+    return `<span class="op-var${cls}">${v > 0 ? '▲' : v < 0 ? '▼' : '■'} ${opPct(Math.abs(v))} ${garEsc(rot)}</span>`;
+}
+
+// Uma DRE (superintendência + mês) em números: realizado (r) e orçado (o) das linhas usadas no One page
+const OP_LINHAS = [['bruto', /^FATURAMENTO BRUTO/], ['diretas', /^DIRETAS TOTAIS/], ['dAgua', /^DIRETAS AGUA/], ['dEsg', /^DIRETAS ESGOTO/],
+    ['iEsg', /^FAT\.? DE ESGOTO\s*-\s*INDIRETO/], ['iAgua', /^FAT\.? DE AGUA\s*-\s*INDIRETO/],
+    ['eco', /^ECONOMIAS DE AGUA/], ['vol', /^VOLUME DE AGUA\s*-\s*FATURADO/]];
+function opRefOrcado() {
+    const sel = (ESTADO.ref || '').replace(/^cmp:/, '').split('|').filter(Boolean);
+    if (sel.length) return sel[0];
+    const th = document.querySelector('#view-dre th[data-tipo="orc"]');
+    return th ? th.dataset.src : null;
+}
+function opDre(sup, mes, ref) {
+    const t = document.querySelector(`#view-dre .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] table.tabela-dre`);
+    if (!t) return null;
+    const d = {};
+    t.querySelectorAll('tbody tr').forEach((tr) => {
+        const rot = tr.querySelector('td.dre-rotulo'); if (!rot) return;
+        const n = planoNorm(rot.textContent).replace(/\s+/g, ' ');
+        const l = OP_LINHAS.find(([, re]) => re.test(n)); if (!l || d[l[0]]) return;
+        const orc = ref ? tr.querySelector(`td[data-tipo="orc"][data-src="${ref}"]`) : null;
+        d[l[0]] = { r: opNum((tr.querySelector('td.col-real') || {}).textContent), o: orc ? opNum(orc.textContent) : null };
+    });
+    if (!d.bruto) return null;
+    const soma = (a, b, k) => (d[a] && d[a][k] != null) || (d[b] && d[b][k] != null) ? ((d[a] || {})[k] || 0) + ((d[b] || {})[k] || 0) : null;
+    const div = (a, b) => (a == null || !b ? null : a / b);
+    d.ind = { r: soma('iAgua', 'iEsg', 'r'), o: soma('iAgua', 'iEsg', 'o') };
+    d.agua = { r: soma('dAgua', 'iAgua', 'r'), o: soma('dAgua', 'iAgua', 'o') };
+    d.esg = { r: soma('dEsg', 'iEsg', 'r'), o: soma('dEsg', 'iEsg', 'o') };
+    const dir = d.diretas || {}, vol = d.vol || {}, eco = d.eco || {};
+    d.tarifa = { r: div(dir.r, vol.r), o: div(dir.o, vol.o) };
+    d.ticket = { r: div(dir.r, eco.r), o: div(dir.o, eco.o) };
+    return d;
+}
+// Resumo (grupos marcados, só o mês vigente): somas das linhas visíveis da tabela consolidada por grupo
+function opResumo() {
+    const linhas = Array.from(document.querySelectorAll('#tabela-dados-resumo tbody tr[data-grupo]')).filter((tr) => tr.style.display !== 'none');
+    if (!linhas.length) return null;
+    const s = (campo) => linhas.reduce((t, tr) => t + (parseFloat(tr.dataset[campo]) || 0), 0);
+    const par = (c) => ({ r: s(c + 'Atual'), a: s(c + 'Anterior') });
+    const r = { fat: par('fat'), agua: par('fatagua'), esg: par('fatesgoto'), eco: par('eco'), vol: par('volfat'), acima: par('acima') };
+    r.tarifa = { r: r.vol.r ? r.fat.r / r.vol.r : null, a: r.vol.a ? r.fat.a / r.vol.a : null };
+    r.ticket = { r: r.eco.r ? r.fat.r / r.eco.r : null, a: r.eco.a ? r.fat.a / r.eco.a : null };
+    r.temAcima = linhas.some((tr) => tr.dataset.acimaAtual != null);
+    return r;
+}
+// Faturamento bruto previsto (Realizado + Forecast) do mês vigente, quando o Forecast tem valor
+function opProjecao(sup) {
+    const tr = document.querySelector(`#view-forecast .prev-bloco[data-sup="${sup}"] tr[data-k="bruto"]`);
+    return tr ? opNum((tr.querySelector('.p-fech') || {}).textContent) : null;
+}
+
+function opDados() {
+    const sup = ESTADO.sup, ed = opEditor();
+    const mes = ESTADO.mes || (ed ? ed.dataset.ref : ''), ref = opRefOrcado(), k = opChaveMes(mes);
+    const meses = Array.from(new Set(Array.from(document.querySelectorAll(`#view-dre .sup-bloco[data-sup="${sup}"]`)).map((b) => b.dataset.mes)))
+        .filter((m) => opChaveMes(m) != null && opChaveMes(m) <= k).sort((a, b) => opChaveMes(a) - opChaveMes(b)).slice(-12);
+    const serie = meses.map((m) => ({ mes: m, d: opDre(sup, m, ref) })).filter((x) => x.d);
+    const atual = opDre(sup, mes, ref), ant = k != null ? opDre(sup, opMesDeChave(k - 1), ref) : null;
+    const anoAnt = k != null ? opDre(sup, opMesDeChave(k - 12), ref) : null;
+    const vigente = !!ed && mes === ed.dataset.ref;
+    return { sup, mes, ref, serie, atual, ant, anoAnt, vigente, resumo: vigente ? opResumo() : null,
+             projecao: vigente ? opProjecao(sup) : null, rotAnt: k != null ? opMesCurto(opMesDeChave(k - 1)) : 'mês anterior' };
+}
+
+// ---- Bloco 1: indicadores executivos ----
+function opCard(rot, valor, linhas, destaque) {
+    return `<div class="op-kpi${destaque ? ' ' + destaque : ''}"><span class="op-kpi-rot">${garEsc(rot)}</span><b class="op-kpi-val">${valor}</b>`
+        + linhas.filter(Boolean).map((l) => `<span class="op-kpi-lin">${l}</span>`).join('') + '</div>';
+}
+function opBlocoKpis(D) {
+    const A = D.atual, P = D.ant, Y = D.anoAnt, R = D.resumo, rot = 'vs ' + D.rotAnt;
+    const v = (o) => (o ? o.r : null);
+    const orcLinha = (o, fmt) => (o && o.o != null ? `Orç. ${fmt(o.o)} ${opSeta(opVar(o.r, o.o), '')}` : '');
+    const m3 = (x) => (x == null ? '–' : fmtBR(x, 0) + ' m³'), n0 = (x) => (x == null ? '–' : fmtBR(x, 0)), r2 = (x) => (x == null ? '–' : 'R$ ' + fmtBR(x, 2));
+    if (!A) {                                    // sem DRE (sem orçado na pasta): só o que o Resumo tem, para o mês vigente
+        if (!R) return '<p class="op-vazio">Sem dados para o mês e a superintendência escolhidos.</p>';
+        const c = (rt, o, f) => opCard(rt, f(o.r), [opSeta(opVar(o.r, o.a), rot)]);
+        return [c('Faturamento Total', R.fat, opMoeda), opCard('Atingimento Orçamentário', '–', ['sem orçado na pasta']),
+            c('Faturamento Direto', R.fat, opMoeda), opCard('Faturamento Indireto', '–', ['sem DRE na pasta']),
+            c('Volume Faturado', R.vol, m3), c('Tarifa Média (R$/m³)', R.tarifa, r2), c('Ticket Médio', R.ticket, r2),
+            c('Economias Faturadas', R.eco, n0)].join('');
+    }
+    const ating = A.bruto.o ? A.bruto.r / A.bruto.o : null;
+    const proj = D.projecao != null && A.bruto.o ? D.projecao / A.bruto.o : null;
+    const destAting = ating == null ? '' : ating >= 1 ? 'op-bom' : ating < 1 - OP_RELEVANTE ? 'op-ruim' : '';
+    const anual = Y && Y.bruto.r ? opSeta(opVar(A.bruto.r, Y.bruto.r), 'vs ano anterior') : '';
+    return [
+        opCard('Faturamento Total', opMoeda(A.bruto.r), [opSeta(opVar(A.bruto.r, v(P && P.bruto)), rot), anual]),
+        opCard('Atingimento Orçamentário', opPct(ating), [A.bruto.o != null ? `Realizado ÷ orçado ${garEsc(D.ref || '')}: ${opMoeda(A.bruto.r)} de ${opMoeda(A.bruto.o)}` : 'sem orçado para o mês',
+            proj != null ? `<span class="op-proj">Projeção de fechamento: ${opPct(proj)} (${opMoeda(D.projecao)})</span>` : ''], destAting),
+        opCard('Faturamento Direto', opMoeda(A.diretas && A.diretas.r), [opSeta(opVar(v(A.diretas), v(P && P.diretas)), rot), orcLinha(A.diretas, opMoeda)]),
+        opCard('Faturamento Indireto', opMoeda(A.ind.r), [opSeta(opVar(A.ind.r, P && P.ind.r), rot), orcLinha(A.ind, opMoeda)]),
+        opCard('Volume Faturado', m3(v(A.vol)), [opSeta(opVar(v(A.vol), v(P && P.vol)), rot), orcLinha(A.vol, m3)]),
+        opCard('Tarifa Média (R$/m³)', r2(A.tarifa.r), [opSeta(opVar(A.tarifa.r, P && P.tarifa.r), rot), orcLinha(A.tarifa, r2)]),
+        opCard('Ticket Médio (R$/economia)', r2(A.ticket.r), [opSeta(opVar(A.ticket.r, P && P.ticket.r), rot), orcLinha(A.ticket, r2)]),
+        opCard('Economias Faturadas', n0(v(A.eco)), [opSeta(opVar(v(A.eco), v(P && P.eco)), rot), orcLinha(A.eco, n0)]),
+    ].join('');
+}
+
+// ---- Bloco 2: evolução do faturamento (realizado × orçado, últimos 12 meses) ----
+function opBlocoEvolucao(D, sec) {
+    const s = D.serie;
+    if (!s.length || typeof Chart === 'undefined') { sec.insertAdjacentHTML('beforeend', '<p class="op-vazio">Sem DRE na pasta para montar a evolução.</p>'); return; }
+    const A = D.atual, k = opChaveMes(D.mes);
+    const dm = A && A.bruto.o != null ? `Desvio no mês: <b>${opMoeda(A.bruto.r - A.bruto.o)}</b> (${opPct(opVar(A.bruto.r, A.bruto.o), true)})` : 'Mês sem orçado';
+    const ano = s.filter((x) => Math.floor(opChaveMes(x.mes) / 12) === Math.floor(k / 12) && x.d.bruto.o != null);
+    const ar = ano.reduce((t, x) => t + (x.d.bruto.r || 0), 0), ao = ano.reduce((t, x) => t + x.d.bruto.o, 0);
+    const acum = ano.length ? ` · Acumulado ${Math.floor(k / 12)}: <b>${opMoeda(ar - ao)}</b> (${opPct(opVar(ar, ao), true)})` : '';
+    sec.insertAdjacentHTML('beforeend', `<p class="op-nota">${dm}${acum}${D.vigente && D.projecao != null ? ' · mês vigente com realizado até D-1' : ''}</p>`);
+    const area = document.createElement('div'); area.className = 'op-grafico'; const cv = document.createElement('canvas'); area.appendChild(cv); sec.appendChild(area);
+    const desvios = s.map((x) => opVar(x.d.bruto.r, x.d.bruto.o));
+    const compacto = (v) => (Math.abs(v) >= 1e6 ? fmtBR(v / 1e6, 1) + ' mi' : Math.abs(v) >= 1e3 ? fmtBR(v / 1e3, 0) + ' mil' : fmtBR(v, 0));
+    opGraficos.push(new Chart(cv, {
+        data: { labels: s.map((x) => opMesCurto(x.mes)), datasets: [
+            { type: 'line', label: 'Orçado ' + (D.ref || ''), data: s.map((x) => x.d.bruto.o), borderColor: '#E8710A', backgroundColor: '#E8710A',
+              borderWidth: 2, borderDash: [5, 3], pointRadius: 2.5, tension: 0, spanGaps: true, order: 0 },
+            { type: 'bar', label: 'Realizado', data: s.map((x) => x.d.bruto.r), backgroundColor: s.map((x) => (x.mes === D.mes ? '#176b9c' : '#1A2740')),
+              borderRadius: 3, maxBarThickness: 34, order: 1 }] },
+        options: { animation: false, responsive: true, maintainAspectRatio: false, devicePixelRatio: 2,
+            layout: { padding: { top: 16 } },
+            plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 10, boxHeight: 8, font: { size: 9.5 } } }, tooltip: { enabled: false } },
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+                      y: { beginAtZero: true, ticks: { font: { size: 8.5 }, maxTicksLimit: 5, callback: compacto }, grid: { color: '#EEF2F6' } } } },
+        plugins: [{ id: 'opDesvios', afterDatasetsDraw(c) {            // desvio % sobre cada barra; cor só se relevante
+            const g = c.ctx, meta = c.getDatasetMeta(1); g.save();
+            g.font = "600 8.5px 'IBM Plex Sans Condensed', 'Segoe UI', Arial, sans-serif"; g.textAlign = 'center'; g.textBaseline = 'bottom';
+            meta.data.forEach((bar, i) => {
+                const d = desvios[i]; if (d == null) return;
+                g.fillStyle = Math.abs(d) < OP_RELEVANTE ? '#64748b' : d > 0 ? '#15803d' : '#C2560C';
+                g.fillText(opPct(d, true), bar.x, Math.min(bar.y, c.scales.y.getPixelForValue(s[i].d.bruto.o || 0)) - 3);
+            });
+            g.restore(); } }],
+    }));
+}
+
+// ---- Bloco 3: composição (natureza e serviço — cada visão soma o total; não se somam entre si) ----
+function opBlocoComposicao(D) {
+    const A = D.atual, P = D.ant;
+    if (!A) return '<p class="op-vazio">Sem DRE na pasta para o mês e a superintendência escolhidos.</p>';
+    const visao = (titulo, itens, cores) => {
+        const tot = itens.reduce((t, [, o]) => t + (o.r || 0), 0);
+        const barra = itens.map(([, o], i) => `<span style="width:${tot ? Math.max(0, (o.r || 0) / tot * 100) : 0}%; background:${cores[i]}"></span>`).join('');
+        return `<div class="op-comp"><div class="op-comp-tit">${titulo}</div><div class="op-comp-barra">${barra}</div><table class="op-mini"><tbody>`
+            + itens.map(([nome, o, ant], i) => `<tr><td><i style="background:${cores[i]}"></i>${nome}</td><td class="num">${opMoeda(o.r)}</td>`
+                + `<td class="num">${tot ? opPct((o.r || 0) / tot) : '–'}</td><td class="num">${opSeta(opVar(o.r, ant), '')}</td></tr>`).join('')
+            + '</tbody></table></div>';
+    };
+    const ant = (k) => (P && P[k] ? P[k].r : null);
+    return visao('Por natureza', [['Direto', A.diretas || {}, ant('diretas')], ['Indireto', A.ind, ant('ind')]], ['#1A2740', '#16a5b8'])
+        + visao('Por serviço', [['Água', A.agua, ant('agua')], ['Esgoto', A.esg, ant('esg')]], ['#176b9c', '#8a6a12'])
+        + `<p class="op-nota">Participação no faturamento total e variação vs ${garEsc(D.rotAnt)}. Água e esgoto incluem as indiretas de cada serviço.</p>`;
+}
+
+// ---- Bloco 4: indicadores operacionais (com a evolução dos últimos meses) ----
+function opSpark(vals) {
+    const v = vals.map((x) => (x == null || !isFinite(x) ? null : x)), ok = v.filter((x) => x != null);
+    if (ok.length < 2) return '';
+    const mn = Math.min(...ok), mx = Math.max(...ok), W = 70, H = 18, n = v.length;
+    const pts = v.map((x, i) => (x == null ? null : `${(i / (n - 1) * W).toFixed(1)},${(H - 2 - (mx === mn ? 0.5 : (x - mn) / (mx - mn)) * (H - 4)).toFixed(1)}`)).filter(Boolean);
+    return `<svg class="op-spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${pts.join(' ')}" fill="none" stroke="#176b9c" stroke-width="1.5"/>`
+        + `<circle cx="${pts[pts.length - 1].split(',')[0]}" cy="${pts[pts.length - 1].split(',')[1]}" r="2" fill="#176b9c"/></svg>`;
+}
+function opBlocoOperacionais(D) {
+    const A = D.atual, P = D.ant, R = D.resumo, s = D.serie;
+    const linhas = [];
+    const lin = (nome, val, ant, fmt, serie) => linhas.push(`<tr><td>${nome}</td><td class="num"><b>${fmt(val)}</b></td><td class="num">${opSeta(opVar(val, ant), '')}</td><td>${serie ? opSpark(serie) : ''}</td></tr>`);
+    const n0 = (x) => (x == null ? '–' : fmtBR(x, 0)), m3 = (x) => (x == null ? '–' : fmtBR(x, 0) + ' m³'), r2 = (x) => (x == null ? '–' : 'R$ ' + fmtBR(x, 2));
+    const g = (o) => (o ? o.r : null), ser = (f) => s.map((x) => f(x.d));
+    if (A) {
+        lin('Economias faturadas', g(A.eco), g(P && P.eco), n0, ser((d) => g(d.eco)));
+        lin('Volume faturado', g(A.vol), g(P && P.vol), m3, ser((d) => g(d.vol)));
+    } else if (R) {
+        lin('Economias faturadas', R.eco.r, R.eco.a, n0); lin('Volume faturado', R.vol.r, R.vol.a, m3);
+    }
+    if (R && R.temAcima) lin('Economias acima do mínimo', R.acima.r, R.acima.a, n0);
+    if (A) {
+        lin('Tarifa média (R$/m³)', A.tarifa.r, P && P.tarifa.r, r2, ser((d) => d.tarifa.r));
+        lin('Ticket médio (R$/economia)', A.ticket.r, P && P.ticket.r, r2, ser((d) => d.ticket.r));
+    } else if (R) {
+        lin('Tarifa média (R$/m³)', R.tarifa.r, R.tarifa.a, r2); lin('Ticket médio (R$/economia)', R.ticket.r, R.ticket.a, r2);
+    }
+    if (!linhas.length) return '<p class="op-vazio">Sem dados operacionais para os filtros.</p>';
+    return `<table class="op-mini op-oper"><thead><tr><th></th><th class="num">${garEsc(opMesCurto(D.mes))}</th><th class="num">vs ${garEsc(D.rotAnt)}</th><th>Evolução</th></tr></thead><tbody>${linhas.join('')}</tbody></table>`
+        + (!D.vigente ? '<p class="op-nota">Economias acima do mínimo: só no mês vigente.</p>' : '');
+}
+
+// ---- Bloco 5: análise crítica (texto livre por mês e superintendência) ----
+function opBlocoAnalise(D) {
+    return '<div class="op-analise">' + OP_ANALISE.map(([k, nome, dica]) => {
+        const chave = `analise|${k}|${D.mes}|${D.sup}`;
+        return `<div class="op-an op-an-${k}"><div class="op-an-tit">${nome}</div><div class="op-texto" contenteditable="true" spellcheck="true" data-chave="${garEsc(chave)}" data-dica="${garEsc(dica)}">${garEsc(opMapa[chave] || '')}</div></div>`;
+    }).join('') + '</div>';
+}
+
+// ---- Bloco 6: projetos e oportunidades (por superintendência; oportunidade projetada, fora do realizado) ----
+const opChaveProj = () => `projetos|${ESTADO.sup}`;
+const opProjetos = () => (Array.isArray(opMapa[opChaveProj()]) ? opMapa[opChaveProj()] : copiaJson(OP_PROJETOS_PADRAO));
+function opBlocoProjetos() {
+    const ps = opProjetos();
+    const tot = ps.reduce((t, p) => t + (opNum(p[1]) || 0), 0);
+    const corpo = ps.map((p, i) => '<tr>' + [0, 1, 2, 3].map((c) => {
+        const v = garEsc(p[c] || ''), st = c === 2 && p[2] ? planoClasseStatus(p[2]) : '';
+        return `<td class="${c === 1 ? 'num' : ''}"><div class="op-cel${st ? ' pl-status ' + st : ''}" contenteditable="true" data-l="${i}" data-c="${c}">${v}</div></td>`;
+    }).join('') + `<td class="op-so-tela"><button type="button" class="op-proj-del" data-l="${i}" title="Tirar este projeto">×</button></td></tr>`).join('');
+    return `<table class="op-mini op-proj-tab"><thead><tr><th>Projeto / iniciativa</th><th class="num">Potencial financeiro (R$)</th><th>Status</th><th>Prazo</th><th class="op-so-tela"></th></tr></thead>`
+        + `<tbody>${corpo || '<tr><td colspan="4" class="op-vazio">Nenhum projeto: use “+ projeto” ou cole da planilha.</td></tr>'}</tbody>`
+        + `<tfoot><tr><td>Potencial total (oportunidade projetada — não está no realizado)</td><td class="num">${tot ? opMoeda(tot) : '–'}</td><td colspan="3"></td></tr></tfoot></table>`;
+}
+
+function opSecao(cls, titulo, extra) {
+    const s = document.createElement('section'); s.className = 'op-bloco ' + cls;
+    s.innerHTML = `<h3>${titulo}${extra || ''}</h3>`;
+    return s;
+}
+function opDesenhar() {
+    const folha = document.getElementById('opFolha'); if (!folha) return;
+    const tit = document.getElementById('opTitulo');
+    if (tit && document.activeElement !== tit) tit.value = typeof opMapa.titulo === 'string' ? opMapa.titulo : OP_TITULO;
+    if (!opAtiva()) return;
+    if (folha.contains(document.activeElement) && document.activeElement.isContentEditable) return;   // não atrapalha quem escreve
+    opGraficos.forEach((g) => { try { g.destroy(); } catch (e) { /* já destruído */ } }); opGraficos = [];
+    const D = opDados(), ed = opEditor();
+    const marcados = document.querySelectorAll('.chk-grupo:checked').length, grupos = document.querySelectorAll('.chk-grupo').length;
+    folha.innerHTML = '';
+    const cab = document.createElement('header'); cab.className = 'op-cab';
+    cab.innerHTML = `<div><div class="op-marca">Águas do Rio · Faturamento</div><h2></h2></div><p></p>`;
+    cab.querySelector('h2').textContent = (typeof opMapa.titulo === 'string' && opMapa.titulo) || OP_TITULO;
+    cab.querySelector('p').innerHTML = `Competência <b>${garEsc(opMesCurto(D.mes))}</b> · Superintendência <b>${garEsc(D.sup === 'TODAS' ? 'Todas' : D.sup)}</b>`
+        + ` · Orçado <b>${garEsc(D.ref || '—')}</b> · Grupos ${marcados === grupos ? 'todos' : marcados + ' de ' + grupos}`
+        + `<br>Dados até ${garEsc(ed ? ed.dataset.corte : '')} (D-1) · gerado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`;
+    folha.appendChild(cab);
+    const k = opSecao('op-b-kpis', 'Quanto faturamos e o atingimento do orçamento'); k.insertAdjacentHTML('beforeend', `<div class="op-kpis">${opBlocoKpis(D)}</div>`); folha.appendChild(k);
+    const ev = opSecao('op-b-evol', 'Evolução do faturamento — realizado × orçado'); folha.appendChild(ev); opBlocoEvolucao(D, ev);
+    const co = opSecao('op-b-comp', 'Composição do faturamento'); co.insertAdjacentHTML('beforeend', opBlocoComposicao(D)); folha.appendChild(co);
+    const op = opSecao('op-b-oper', 'Indicadores operacionais'); op.insertAdjacentHTML('beforeend', opBlocoOperacionais(D)); folha.appendChild(op);
+    const an = opSecao('op-b-anal', 'Análise crítica do resultado'); an.insertAdjacentHTML('beforeend', opBlocoAnalise(D)); folha.appendChild(an);
+    const pj = opSecao('op-b-proj', 'Projetos e oportunidades', ' <button type="button" class="op-so-tela op-proj-add" title="Acrescentar um projeto">+ projeto</button>');
+    pj.insertAdjacentHTML('beforeend', opBlocoProjetos()); folha.appendChild(pj);
+    opEncaixar();
+}
+// Folha na tela: reduzida para caber na largura; textos e tabela de projetos diminuem a letra até caber no quadro
+function opEncaixar() {
+    const folha = document.getElementById('opFolha'), palco = document.getElementById('opPalco'); if (!folha || !palco) return;
+    folha.querySelectorAll('.op-texto, .op-b-proj table').forEach((el) => {
+        const caixa = el.classList.contains('op-texto') ? el : el.closest('.op-bloco');
+        let f = 11; el.style.fontSize = f + 'px';
+        while (f > 7 && caixa.scrollHeight > caixa.clientHeight + 1) { f -= 0.5; el.style.fontSize = f + 'px'; }
+    });
+    const k = Math.min(1, (palco.clientWidth || OP_W) / OP_W);
+    folha.style.transform = k < 1 ? `scale(${k})` : ''; palco.style.height = Math.ceil(OP_H * k) + 'px';
+    const msg = document.getElementById('opEscala');
+    if (msg) { const cheio = Array.from(folha.querySelectorAll('.op-texto')).some((t) => t.scrollHeight > t.clientHeight + 1);
+        msg.textContent = cheio ? 'Algum texto da análise não cabe no quadro: resuma para aparecer inteiro no PDF.' : ''; }
+}
+window.addEventListener('resize', () => { if (opAtiva()) opEncaixar(); });
+
+function opSalvarProjetos(ps) { opMapa[opChaveProj()] = ps; opSalvar(); }
+document.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.id === 'opTitulo') {
+        opMapa.titulo = t.value; opSalvar();
+        const h = document.querySelector('#opFolha .op-cab h2'); if (h) h.textContent = t.value || OP_TITULO;
+        return;
+    }
+    if (!t.closest || !t.closest('#opFolha')) return;
+    if (t.classList.contains('op-texto')) {
+        const v = t.innerText.replace(/\s+$/, '');
+        if (v) opMapa[t.dataset.chave] = v; else delete opMapa[t.dataset.chave];
+        opSalvar();
+    } else if (t.classList.contains('op-cel')) {
+        const ps = opProjetos(); (ps[+t.dataset.l] = ps[+t.dataset.l] || ['', '', '', ''])[+t.dataset.c] = t.innerText.trim();
+        opSalvarProjetos(ps);
+    }
+    clearTimeout(opTimerAjuste); opTimerAjuste = setTimeout(opEncaixar, 150);
+});
+document.addEventListener('focusout', (e) => {
+    const t = e.target;
+    if (!t.closest || !t.closest('#opFolha') || !t.isContentEditable) return;
+    if (!t.innerText.trim()) t.innerHTML = '';                                  // volta a dica do quadro vazio
+    if (t.classList.contains('op-cel')) setTimeout(() => { if (!document.querySelector('#opFolha [contenteditable]:focus')) opDesenhar(); }, 0);   // status e total refeitos
+});
+document.addEventListener('paste', (e) => {
+    const t = e.target.closest ? e.target.closest('#opFolha [contenteditable]') : null; if (!t) return;
+    const texto = (e.clipboardData || window.clipboardData).getData('text');
+    e.preventDefault();
+    if (t.classList.contains('op-cel') && /\t|\n./.test(texto.trim())) {      // várias células da planilha: viram linhas de projeto
+        let ls = garLerTSV(texto).map((l) => l.map((c) => String(c == null ? '' : c).trim())).filter((l) => l.some(Boolean));
+        if (ls.length && /PROJETO|INICIATIVA/.test(planoNorm(ls[0][0]))) ls = ls.slice(1);
+        if (!ls.length) return;
+        if (!confirm(`Substituir os projetos de ${ESTADO.sup === 'TODAS' ? 'Todas' : ESTADO.sup} por ${ls.length} linha(s) coladas (Projeto, Potencial, Status, Prazo)?`)) return;
+        opSalvarProjetos(ls.map((l) => [l[0] || '', l[1] || '', l[2] || '', l[3] || ''])); t.blur(); opDesenhar(); return;
+    }
+    document.execCommand('insertText', false, texto);                          // só o texto, sem a formatação copiada
+});
+document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t.id === 'opPdf') { gerarOnePage(); return; }
+    if (t.classList && t.classList.contains('op-proj-add')) { const ps = opProjetos(); ps.push(['', '', '', '']); opSalvarProjetos(ps); opDesenhar(); return; }
+    if (t.classList && t.classList.contains('op-proj-del')) {
+        const ps = opProjetos(), i = +t.dataset.l;
+        if ((ps[i] || []).some(Boolean) && !confirm(`Tirar o projeto "${ps[i][0] || 'sem nome'}"?`)) return;
+        ps.splice(i, 1); opSalvarProjetos(ps); opDesenhar();
+    }
+});
+
+// PDF de uma página 16:9: a folha é copiada (gráfico como imagem, sem botões e dicas de edição) para um documento à
+// parte, fotografada (html2canvas) e posta numa página do tamanho de um slide (jsPDF). Sem as bibliotecas, imprime.
+async function gerarOnePage(libs) {
+    if (!opAtiva()) mostrarView('onepage'); else opDesenhar();
+    const folha = document.getElementById('opFolha');
+    const copia = folha.cloneNode(true);
+    const origs = folha.querySelectorAll('canvas'), copias = copia.querySelectorAll('canvas');
+    origs.forEach((cv, i) => { try { const img = new Image(); img.src = cv.toDataURL('image/png'); img.className = 'op-grafico-img'; copias[i].replaceWith(img); } catch (e) { copias[i].remove(); } });
+    copia.querySelectorAll('[contenteditable]').forEach((x) => x.removeAttribute('contenteditable'));
+    copia.querySelectorAll('.op-so-tela').forEach((x) => x.remove());
+    copia.removeAttribute('id'); copia.style.transform = ''; copia.classList.add('op-pdf');
+    const nomeMes = opMesCurto(ESTADO.mes || '');
+    const nome = `OnePage_${ESTADO.sup}_${nomeMes}`;
+    if (!libs) { try { const p = window.parent; if (p && p !== window && p.libsPdfSite) libs = await p.libsPdfSite(); } catch (e) { libs = null; } }
+    const l = await obterLibsPdf(libs);
+    const aviso = document.createElement('div');
+    aviso.textContent = 'Gerando o PDF do One page…';
+    aviso.style.cssText = 'position:fixed; right:16px; bottom:16px; z-index:99999; background:#1A2740; color:#fff; padding:10px 16px; border-radius:8px; font:600 13px sans-serif; box-shadow:0 6px 20px rgba(0,0,0,.25);';
+    document.body.appendChild(aviso);
+    const fr = document.createElement('iframe');
+    fr.setAttribute('aria-hidden', 'true'); fr.title = 'One page';
+    fr.style.cssText = `position:fixed; left:0; top:0; width:${OP_W}px; height:${OP_H}px; border:0; opacity:0; pointer-events:none; z-index:-1;`;
+    document.body.appendChild(fr);
+    try {
+        const estilos = Array.from(document.querySelectorAll('style')).map((s) => s.textContent).join('\n');
+        const doc = fr.contentDocument;
+        doc.open();
+        doc.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>' + estilos
+            + '\nhtml, body { margin:0; padding:0; background:#FFFFFF; overflow:hidden !important; }</style></head><body>' + copia.outerHTML + '</body></html>');
+        doc.close();
+        const imgs = Array.from(doc.images);
+        await Promise.race([Promise.all([...imgs.map((i) => (i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; }))),
+            doc.fonts && doc.fonts.ready ? doc.fonts.ready.catch(() => null) : null]), new Promise((r) => setTimeout(r, 4000))]);
+        await Promise.race([injetaLibs(doc, l), new Promise((_, r) => setTimeout(() => r(new Error('bibliotecas do PDF demoraram')), 15000))]);
+        const w = fr.contentWindow;
+        if (!w.jspdf || !w.html2canvas) throw new Error('bibliotecas do PDF indisponíveis');
+        const foto = await w.html2canvas(doc.body.firstElementChild, { scale: 2, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 3000,
+            windowWidth: OP_W, windowHeight: OP_H, width: OP_W, height: OP_H });
+        const PW = 338.67, PH = 190.5;                                 // mm: 13,33 × 7,5 pol.
+        const pdf = new w.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: [PW, PH], compress: true });
+        pdf.addImage(foto.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, PW, PH);
+        const url = URL.createObjectURL(new Blob([pdf.output('blob')], { type: 'application/pdf' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = nome.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_') + '.pdf';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (erro) {
+        console.warn('PDF do One page indisponível, usando a impressão:', erro);
+        const cont = document.createElement('div'); cont.id = 'view-executivo'; cont.appendChild(copia);
+        imprimirDocumentoLeve(cont);
+    } finally {
+        fr.remove(); aviso.remove();
+    }
+}
+var syncOnePage = criaSync('onepage', 'One page', () => opMapa,
+    (m) => { opMapa = m; try { localStorage.setItem(OP_LS, JSON.stringify(opMapa)); } catch (e) {} },
+    () => opDesenhar(),
+    () => !!(document.activeElement && (document.activeElement.isContentEditable && document.activeElement.closest('#opFolha') || document.activeElement.id === 'opTitulo')));
+document.addEventListener('DOMContentLoaded', () => { opDesenhar(); syncOnePage.puxar(); });

@@ -400,7 +400,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v88</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v89</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -420,6 +420,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
       <button type="button" class="btn-top" id="btnEtapa2" hidden title="Reler a pasta e abrir a conferência dos clientes em análise (etapa 2), mesmo sem arquivo novo">✎ Etapa 2</button>
       <button type="button" class="btn-top" id="btnPdf" hidden title="PDF executivo conforme os filtros da tela">📄 Executivo</button>
+      <button type="button" class="btn-top" id="btnOnePage" hidden title="One page executivo (uma página 16:9) conforme os filtros da tela">📊 One page</button>
       <button type="button" class="btn-top" id="btnAcomp" hidden title="Baixar as tabelas da planilha de Acompanhamento Mensal (Excel, uma aba por tabela) da Superintendência escolhida">📥 Acompanhamento</button>
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
     </div>
@@ -447,6 +448,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   <button class="tab" data-view="dre" type="button">DRE</button>
   <button class="tab" data-view="garantia" type="button">Garantia</button>
   <button class="tab" data-view="plano" type="button">Plano de ação</button>
+  <button class="tab" data-view="onepage" type="button">One page</button>
   <button class="tab" data-view="dados" type="button">Dados</button>
 </nav>
 
@@ -543,7 +545,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v88-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v89-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -943,7 +945,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   function fechaRelatorio() {
     $("etapaTop20").hidden = true;
     $("quadroRelatorio").hidden = true;
-    $("btnPdf").hidden = true;
+    $("btnPdf").hidden = true; $("btnOnePage").hidden = true;
     $("vazioWrap").hidden = false;
     document.body.classList.remove("relatorio-aberto", "top20-aberto");
     document.title = "Análise de Faturamento — Água e Esgoto";
@@ -1416,6 +1418,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   const TITULOS_VAZIO = {
     garantia: ["Garantia", "Top 1000 por média do faturado, análise de garantia matrícula a matrícula e resumo de ganhos"],
     plano: ["Plano de ação", "Plano de ação colado da planilha, salvo na pasta para todos e incluído no PDF executivo"],
+    onepage: ["One page", "Resumo do mês numa folha só, montado com blocos e textos, salvo na pasta para todos e baixado em PDF de uma página"],
     dre: ["DRE: orçado × realizado", "Realizado do mês contra o orçado RF e o orçado SUP, por superintendência"],
     indiretas: ["Indiretas", "Orçado × realizado por classe, evolução mensal e ticket médio do serviço avulso"],
     resumo: ["Resumo", "KPIs, gráfico de faturamento por grupo e destaques do mês"],
@@ -1424,7 +1427,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     forecast: ["Forecast", "Previsão de fechamento do mês, editável: ao mudar um valor, os totais e comparações se refazem"],
   };
   // quais filtros valem em cada aba (os demais ficam esmaecidos)
-  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo"], tabelas: ["Sup", "Grupo"], analise: ["Sup", "Grupo"], dados: [], forecast: ["Sup", "Ref"], garantia: ["Sup", "Grupo"], plano: ["Sup", "Grupo"] };
+  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo"], tabelas: ["Sup", "Grupo"], analise: ["Sup", "Grupo"], dados: [], forecast: ["Sup", "Ref"], garantia: ["Sup", "Grupo"], plano: ["Sup", "Grupo"], onepage: ["Sup", "Ref", "Mes", "Grupo"] };
 
   function aplicaFiltros() {
     document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
@@ -1449,7 +1452,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     try { infoFiltros = el ? JSON.parse(el.textContent) : null; } catch (e) { infoFiltros = null; }
     // esconde, dentro do relatório, os controles que ficam no cabeçalho do site
     const estilo = doc.createElement("style");
-    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-analise, #view-dre, #view-indiretas, #view-garantia, #view-plano, #view-dados { padding-top: 16px; }";
+    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-analise, #view-dre, #view-indiretas, #view-garantia, #view-plano, #view-onepage, #view-dados { padding-top: 16px; }";
     doc.head.appendChild(estilo);
     filtrosEstado.sup = "TODAS"; filtrosEstado.ref = infoFiltros.refPadrao || "";
     filtrosEstado.mes = infoFiltros ? infoFiltros.mesAtual : null;
@@ -1465,7 +1468,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     $("listaGrupos").innerHTML = `<label><input type="checkbox" id="chkTodosGrupos" checked> <b>Selecionar todos</b></label><hr>` +
       grupos.map((g) => `<label><input type="checkbox" class="chk-grupo-top" value="${escapa(g.value)}" checked> ${escapa(g.value)}</label>`).join("");
     $("btnGrupo").textContent = "Todos ▾"; $("btnGrupo").disabled = false;
-    $("btnPdf").hidden = false;
+    $("btnPdf").hidden = false; $("btnOnePage").hidden = false;
     filtrosEstado.view = "resumo";
     // filtros de cada pessoa (neste navegador): a última escolha volta ao abrir; sem escolha salva, SUP Interior,
     // Comparar padrão, mês vigente e grupos Liberados/Em Análise. Mês e grupos só voltam se o mês vigente for o mesmo.
@@ -1553,10 +1556,17 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     }
     try { return { codigo: await codigoLibsPdf }; } catch (e) { codigoLibsPdf = null; console.warn(e); return null; }
   }
+  window.libsPdfSite = libsPdf;                                    // o PDF da aba One page usa as mesmas bibliotecas
   $("btnPdf").addEventListener("click", async () => {
     const w = janela(); w.focus();
     if (!w.gerarExecutivo) { w.print(); return; }                 // relatório antigo (sem executivo): imprime a tela
     w.gerarExecutivo(await libsPdf());                             // sem as bibliotecas, o relatório tenta o CDN e depois a impressão
+  });
+  $("btnOnePage").addEventListener("click", async () => {
+    const w = janela(); w.focus();
+    if (!w.gerarOnePage) { alert("Este relatório foi gerado por uma versão anterior do painel: atualize a análise para ter o One page."); return; }
+    filtrosEstado.view = "onepage"; aplicaFiltros();               // mostra a folha que vai para o PDF
+    w.gerarOnePage(await libsPdf());
   });
   quadro().addEventListener("load", () => { if (quadro().srcdoc) montaFiltros(); });
 

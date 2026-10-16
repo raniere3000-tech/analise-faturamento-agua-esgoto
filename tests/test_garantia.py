@@ -214,3 +214,15 @@ def test_filtros_padrao_e_pessoais(sessao):
 def test_analise_de_garantia_ordenavel(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert "const GAR_COLS_ANALISE = [" in html and "function garOrdenarAnalise(itens)" in html and 'data-ord-an="${c}"' in html
+
+
+def test_aba_one_page(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    for trecho in ('id="view-onepage"', 'id="btn-onepage"', 'id="opEditor"', 'id="opFolha"', "var syncOnePage = criaSync('onepage'",
+                   "function gerarOnePage(libs)", 'onclick="gerarOnePage()"'):
+        assert trecho in html, trecho
+    raiz = os.path.join(os.path.dirname(__file__), "..")
+    worker = open(os.path.join(raiz, "analisador.worker.js"), encoding="utf-8").read()
+    assert '"faturamento/one_page.py"' in worker
+    site = open(os.path.join(raiz, "index.html"), encoding="utf-8").read()
+    assert 'id="btnOnePage"' in site and "w.gerarOnePage(await libsPdf())" in site and 'data-view="onepage"' in site
