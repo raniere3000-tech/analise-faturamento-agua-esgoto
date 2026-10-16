@@ -49,8 +49,6 @@ def sessao(tmp_path_factory):
 def test_arquivo_com_uma_aba_por_tabela(sessao):
     dados = dados_acompanhamento(sessao.ctx, "INTERIOR")
     assert dados["fonte"] and dados["linhas"]
-    orc = sum(l["orcA"] for l in dados["linhas"])
-    assert orc == pytest.approx(sessao.ctx.orcado and __import__("faturamento.dre", fromlist=["orcado"]).orcado(sessao.ctx, dados["fonte"], "INTERIOR").get("dA") or 0)
     conteudo, foto = gera_xlsx(dados, [])
     wb = openpyxl.load_workbook(io.BytesIO(conteudo))
     assert wb.sheetnames == ["Leia-me", "1 Faturamento", "2 Cancelamento", "3 Economias Água", "4 Volume Água",
@@ -61,3 +59,14 @@ def test_arquivo_com_uma_aba_por_tabela(sessao):
     assert '"faturamento/acompanhamento.py"' in worker and 'fase === "acompanhamento"' in worker
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert 'id="btnAcomp"' in site and "d.acompanhamento" in site
+
+
+def test_faturamento_por_ciclo_usa_o_rf_mais_recente(sessao):
+    from faturamento.acompanhamento import rf_mais_recente
+    from faturamento.dre import orcado
+    assert rf_mais_recente(["RF01T26", "RF02T26", "RF3T25"]) == "RF02T26"
+    dados = dados_acompanhamento(sessao.ctx, "INTERIOR")
+    assert dados["fonte_rf"] == "RF01T26"                         # nos dados de teste: RF01T26 e RF3T25
+    rf = orcado(sessao.ctx, "RF01T26", "INTERIOR")
+    assert sum(l["orcA"] for l in dados["linhas"]) == pytest.approx(rf["dA"])
+    assert sum(l["orcE"] for l in dados["linhas"]) == pytest.approx(rf["dE"])
