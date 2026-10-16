@@ -1259,15 +1259,27 @@ document.querySelectorAll('#view-tabelas th[data-full]').forEach(th => { th.colS
 
 
 // ===== Relatório executivo (PDF): copia o que está na tela agora — filtros, orçado escolhido e botões de ocultar valem =====
-function gerarExecutivo(libs) {
+// modo 'celular' (padrão): folha em pé na largura do celular, letra grande e tabelas só com as colunas principais;
+// modo 'a4': folhas A4 deitadas, com todas as colunas (para imprimir)
+function gerarExecutivo(libs, modo) {
+    const celular = modo !== 'a4';
     const antigo = document.getElementById('view-executivo'); if (antigo) antigo.remove();
     const cont = document.createElement('div'); cont.id = 'view-executivo';
     if (document.getElementById('view-tabelas').classList.contains('compacto')) cont.classList.add('compacto');
+    if (celular) cont.classList.add('exec-celular');
+    // gráfico: vira imagem do que está desenhado; no celular é redesenhado estreito (letras do mesmo tamanho da tela)
+    const fotoGrafico = (cv) => {
+        const ch = celular && window.Chart && Chart.getChart ? Chart.getChart(cv) : null;
+        if (!ch) return cv.toDataURL('image/png');
+        const dpr = ch.options.devicePixelRatio;
+        try { ch.options.devicePixelRatio = 3; ch.resize(EXEC_CEL_W - 40, 340); return ch.toBase64Image('image/png'); }
+        finally { ch.options.devicePixelRatio = dpr; ch.resize(); }
+    };
     const clona = (el) => {
         if (!el) return null;
         const c = el.cloneNode(true), origs = el.querySelectorAll('canvas'), copias = c.querySelectorAll('canvas');
-        origs.forEach((cv, i) => {                                    // gráfico: vira imagem do que está desenhado
-            try { const img = new Image(); img.src = cv.toDataURL('image/png'); img.className = 'exec-grafico'; copias[i].replaceWith(img); }
+        origs.forEach((cv, i) => {
+            try { const img = new Image(); img.src = fotoGrafico(cv); img.className = 'exec-grafico'; copias[i].replaceWith(img); }
             catch (e) { copias[i].remove(); }
         });
         c.querySelectorAll('script').forEach(x => x.remove());          // só o conteúdo: nada roda no documento do PDF
@@ -1278,6 +1290,7 @@ function gerarExecutivo(libs) {
         c.querySelectorAll('.btn-remover-item').forEach(x => x.remove());
         c.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
         c.removeAttribute('id');
+        if (celular) c.querySelectorAll('table').forEach(enxugaTabelaCelular);
         return c;
     };
     const q = (sel) => document.querySelector(sel), qa = (sel) => Array.from(document.querySelectorAll(sel));
@@ -1322,8 +1335,44 @@ function gerarExecutivo(libs) {
         copias.forEach(c => { c.classList.add('exec-item'); cont.appendChild(c); });
     });
     // PDF gerado direto (arquivo .pdf baixado, sem a janela de impressão); sem as bibliotecas, cai na impressão
-    obterLibsPdf(libs).then(l => (l ? gerarPdfDireto(cont, l, `Executivo_${sup}_${nomeMes}`) : Promise.reject(new Error('sem bibliotecas'))))
+    obterLibsPdf(libs).then(l => (l ? gerarPdfDireto(cont, l, `Executivo_${sup}_${nomeMes}` + (celular ? '_celular' : '')) : Promise.reject(new Error('sem bibliotecas'))))
         .catch(erro => { console.warn('PDF direto indisponível, usando a impressão:', erro); imprimirDocumentoLeve(cont); });
+}
+
+const EXEC_CEL_W = 430;      // largura (px) da folha do Executivo para celular: as letras ficam do tamanho da tela do telefone
+
+// Executivo no celular: as tabelas largas ficam só com as colunas principais.
+// Comparativos (mês a mês e orçado por ciclo): Grupo, Faturamento (atual/realizado e anterior/orçado) e Δ Fat. (Abs e %).
+// Forecast e indiretas: sai a coluna de diferença em valor (Δ R$ / Δ eventos); fica o Δ %.
+function enxugaTabelaCelular(t) {
+    // grade da tabela: cada célula com a coluna em que começa e quantas ocupa (considera colspan e rowspan)
+    const celulas = [], ocupadas = [];
+    Array.from(t.rows).forEach((tr, r) => {
+        let col = 0;
+        Array.from(tr.cells).forEach((td) => {
+            while (ocupadas[r] && ocupadas[r][col]) col++;
+            const span = td.colSpan || 1, rs = td.rowSpan || 1;
+            for (let i = 0; i < rs; i++) for (let j = 0; j < span; j++) (ocupadas[r + i] = ocupadas[r + i] || [])[col + j] = true;
+            celulas.push({ td, col, span, cab: td.tagName === 'TH' && !!td.closest('thead') });
+            col += span;
+        });
+    });
+    const nCols = Math.max(0, ...ocupadas.map(l => (l || []).length));
+    // rótulo de cada coluna: os títulos do cabeçalho que a cobrem (ex.: "Δ Fat. %")
+    const rotulos = Array.from({ length: nCols }, () => []);
+    celulas.filter(c => c.cab).forEach(c => { for (let j = 0; j < c.span; j++) rotulos[c.col + j].push(c.td.textContent.replace(/\s+/g, ' ').trim()); });
+    const rot = rotulos.map(l => l.join(' '));
+    let manter;
+    if (t.classList.contains('tabela-comparativo')) manter = (r) => /^(Grupo|Faturamento |Δ Fat\.)/.test(r);
+    else if (t.querySelector('th[data-tipo="dreal"]')) manter = (r) => !/^Δ (R\$|eventos)/.test(r);
+    else return;
+    const fica = rot.map(manter);
+    if (!fica.some(Boolean) || fica.every(Boolean)) return;
+    celulas.forEach(({ td, col, span }) => {
+        let n = 0; for (let j = 0; j < span; j++) if (fica[col + j]) n++;
+        if (!n) td.remove(); else if (n < span) td.colSpan = n;
+    });
+    t.classList.add('exec-enxuta');
 }
 
 // jsPDF + html2canvas: o código das bibliotecas vem do site (pasta lib/, passado pelo botão do site como texto);
@@ -1355,7 +1404,9 @@ async function gerarPdfDireto(cont, libs, nome) {
     fr.setAttribute('aria-hidden', 'true'); fr.title = 'Executivo';
     // largura de uma folha A4 paisagem (281 mm úteis a 96 dpi): as letras saem do mesmo tamanho da impressão
     // dentro da tela (transparente e atrás de tudo): fora dela o html2canvas desenha a página em branco
-    fr.style.cssText = 'position:fixed; left:0; top:0; width:1062px; height:800px; border:0; opacity:0; pointer-events:none; z-index:-1;';
+    // no celular, a largura da tela de um telefone (EXEC_CEL_W)
+    const celular = cont.classList.contains('exec-celular'), larguraBase = celular ? EXEC_CEL_W : 1062;
+    fr.style.cssText = `position:fixed; left:0; top:0; width:${larguraBase}px; height:800px; border:0; opacity:0; pointer-events:none; z-index:-1;`;
     document.body.appendChild(fr);
     try {
         const doc = fr.contentDocument;
@@ -1365,22 +1416,24 @@ async function gerarPdfDireto(cont, libs, nome) {
             doc.fonts && doc.fonts.ready ? doc.fonts.ready.catch(() => null) : null]), new Promise(r => setTimeout(r, 4000))]);
         // tabela mais larga que a folha (ex.: orçado por ciclo com Abs e %): alarga o documento para caber inteira;
         // a imagem depois é reduzida para a largura da página
-        let largura = 1062;
-        doc.querySelectorAll('#view-executivo table').forEach(t => { largura = Math.max(largura, Math.ceil(t.scrollWidth) + 48); });
-        if (largura > 1062) { fr.style.width = largura + 'px'; await new Promise(r => setTimeout(r, 50)); }
+        // no celular, a tabela que ainda não cabe diminui a letra (até 9px) antes de alargar a folha
+        if (celular) doc.querySelectorAll('#view-executivo table').forEach(t => {
+            const cabe = () => t.scrollWidth <= t.parentElement.clientWidth + 1;
+            for (let px = 11; px >= 9 && !cabe(); px--) t.style.fontSize = px + 'px';
+        });
+        let largura = larguraBase;
+        doc.querySelectorAll('#view-executivo table').forEach(t => { largura = Math.max(largura, Math.ceil(t.scrollWidth) + (celular ? 24 : 48)); });
+        if (largura > larguraBase) { fr.style.width = largura + 'px'; await new Promise(r => setTimeout(r, 50)); }
         await Promise.race([injetaLibs(doc, libs), new Promise((_, r) => setTimeout(() => r(new Error('bibliotecas do PDF demoraram')), 15000))]);
         const w = fr.contentWindow;
         if (!w.jspdf || !w.html2canvas) throw new Error('bibliotecas do PDF indisponíveis');
-        const pdf = new w.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
-        const W = 297, H = 210, M = 8, LW = W - 2 * M, LH = H - 2 * M - 6;       // 6 mm do rodapé
-        let y = M, primeira = true;
-        const novaPagina = () => { pdf.addPage(); y = M; };
         const raiz = doc.getElementById('view-executivo') || doc.body.firstElementChild;
         // uma única "foto" do Executivo inteiro (rápido); depois cada quadro é recortado dela pela posição.
         // As posições são medidas na CÓPIA que o html2canvas desenha (onclone), não no documento original: em alguns
         // computadores (barra de rolagem, escala do Windows, fontes) a cópia quebra o texto diferente, os quadros ficam
         // com outra altura e o recorte "escorregava" — o título da seção seguinte ia parar no fim da página anterior.
-        const ESC = 2;
+        // celular: imagem mais fina (a tela do telefone tem mais pontos), sem passar do limite de altura de um canvas (~32 mil px)
+        const ESC = celular ? Math.max(1, Math.min(3, Math.floor(300000 / Math.max(1, raiz.scrollHeight + 100)) / 10)) : 2;
         let medidas = null;
         const foto = await w.html2canvas(raiz, { scale: ESC, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 3000,
             windowWidth: largura, windowHeight: Math.max(800, Math.ceil(raiz.scrollHeight) + 100),
@@ -1405,6 +1458,12 @@ async function gerarPdfDireto(cont, libs, nome) {
             c.getContext('2d').drawImage(foto, 0, Math.round(topoPx), foto.width, c.height, 0, 0, foto.width, c.height);
             return c.toDataURL('image/jpeg', 0.92);
         };
+        const pdf = celular ? paginaCelular(w, foto, filhos, posicao, recorte) : null;
+        if (pdf) { baixaPdf(pdf, nome); return; }
+        const pdf4 = new w.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+        const W = 297, H = 210, M = 8, LW = W - 2 * M, LH = H - 2 * M - 6;       // 6 mm do rodapé
+        let y = M, primeira = true;
+        const novaPagina = () => { pdf4.addPage(); y = M; };
         const mmPorPx = LW / foto.width;
         for (const [i, el] of filhos.entries()) {
             const { topo, altPx } = posicao(el, i);
@@ -1413,7 +1472,7 @@ async function gerarPdfDireto(cont, libs, nome) {
             if (el.classList.contains('exec-secao') && !primeira && y > M) novaPagina();
             if (alt <= LH) {
                 if (y + alt > M + LH) novaPagina();
-                pdf.addImage(recorte(topo, altPx), 'JPEG', M, y, LW, alt);
+                pdf4.addImage(recorte(topo, altPx), 'JPEG', M, y, LW, alt);
                 y += alt + 3;
             } else {                                                  // quadro mais alto que a página: fatias de uma página
                 // começa logo abaixo do que já está na página (ex.: o título da seção) — antes pulava para a página
@@ -1423,28 +1482,72 @@ async function gerarPdfDireto(cont, libs, nome) {
                 while (d < altPx) {
                     const h = Math.min(Math.floor((M + LH - y) / mmPorPx), altPx - d);
                     if (h < 20) { novaPagina(); continue; }               // sem espaço nesta página: segue na próxima
-                    pdf.addImage(recorte(topo + d, h), 'JPEG', M, y, LW, h * mmPorPx);
+                    pdf4.addImage(recorte(topo + d, h), 'JPEG', M, y, LW, h * mmPorPx);
                     y += h * mmPorPx + 3; d += h;
                     if (d < altPx) novaPagina();
                 }
             }
             primeira = false;
         }
-        const total = pdf.getNumberOfPages();
+        const total = pdf4.getNumberOfPages();
         for (let i = 1; i <= total; i++) {                            // rodapé: página X de N
-            pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(73, 102, 140);
-            pdf.text(`Águas do Rio · Relatório Executivo · página ${i} de ${total}`, W - M, H - 5, { align: 'right' });
+            pdf4.setPage(i); pdf4.setFontSize(8); pdf4.setTextColor(73, 102, 140);
+            pdf4.text(`Águas do Rio · Relatório Executivo · página ${i} de ${total}`, W - M, H - 5, { align: 'right' });
         }
-        // baixa pelo documento do relatório (o iframe do PDF é removido logo depois; um clique dentro dele cancelaria o download)
-        const blob = pdf.output('blob');
-        const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-        const a = document.createElement('a');
-        a.href = url; a.download = String(nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_') + '.pdf';
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        baixaPdf(pdf4, nome);
     } finally {
         fr.remove(); aviso.remove();
     }
+}
+
+// baixa pelo documento do relatório (o iframe do PDF é removido logo depois; um clique dentro dele cancelaria o download)
+function baixaPdf(pdf, nome) {
+    const url = URL.createObjectURL(new Blob([pdf.output('blob')], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = String(nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_') + '.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+// Executivo no celular: folhas em pé, na largura do telefone, sem espaço em branco. Cada seção é uma folha com a altura
+// do seu conteúdo (o leitor de PDF do celular mostra a folha na largura da tela e a pessoa só rola para baixo).
+// Seção muito comprida é dividida entre quadros; quadro sozinho mais alto que o limite é fatiado.
+function paginaCelular(w, foto, filhos, posicao, recorte) {
+    const PW = 120, M = 4, RODAPE = 7, LW = PW - 2 * M, mmPorPx = LW / foto.width;
+    const MAX = 1400;                                              // altura máxima de uma folha (mm); o PDF aceita até ~5000
+    // grupos: o cabeçalho com os indicadores, depois um por título de seção
+    const grupos = [];
+    filhos.forEach((el, i) => {
+        const p = posicao(el, i); if (!p.altPx) return;
+        if (!grupos.length || el.classList.contains('exec-secao')) grupos.push([]);
+        grupos[grupos.length - 1].push(p);
+    });
+    // folhas: [{ partes: [{topo, altPx}] }]; cada parte é um recorte contínuo da foto
+    const folhas = [];
+    const maxPx = (MAX - 2 * M - RODAPE) / mmPorPx;
+    grupos.forEach((g) => {
+        let atual = null;
+        g.forEach((p) => {
+            const fim = p.topo + p.altPx;
+            if (atual && fim - atual.topo <= maxPx) { atual.fim = fim; return; }
+            if (atual) folhas.push(atual);
+            if (p.altPx <= maxPx) { atual = { topo: p.topo, fim }; return; }
+            for (let d = 0; d < p.altPx; d += maxPx) folhas.push({ topo: p.topo + d, fim: Math.min(fim, p.topo + d + maxPx) });
+            atual = null;
+        });
+        if (atual) folhas.push(atual);
+    });
+    if (!folhas.length) return null;
+    const alturaMm = (f) => (f.fim - f.topo) * mmPorPx + 2 * M + RODAPE;
+    const pdf = new w.jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: [PW, alturaMm(folhas[0])], compress: true });
+    folhas.forEach((f, i) => {
+        const PH = alturaMm(f);
+        if (i) pdf.addPage([PW, PH], 'portrait');
+        pdf.addImage(recorte(f.topo, f.fim - f.topo), 'JPEG', M, M, LW, (f.fim - f.topo) * mmPorPx);
+        pdf.setFontSize(7); pdf.setTextColor(73, 102, 140);
+        pdf.text(`Águas do Rio · Relatório Executivo · ${i + 1} de ${folhas.length}`, PW - M, PH - 3.5, { align: 'right' });
+    });
+    return pdf;
 }
 
 // Imprime só o conteúdo do Executivo num documento à parte (iframe escondido), com os estilos do relatório.

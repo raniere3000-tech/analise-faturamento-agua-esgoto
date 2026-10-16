@@ -513,6 +513,31 @@ td.pl-vencido { color:#9C0006; font-weight:700; } .pl-vencido-txt { color:#9C000
 
 /* PDF executivo: justificativas com um bloco por grupo (a página quebra entre grupos) */
 #view-executivo .exec-just-bloco { max-width:1800px; margin:0 auto; }
+/* Executivo para celular: a folha tem a largura de um telefone (EXEC_CEL_W no relatorio.js) e letra grande.
+   Os seletores com .exec-celular vencem as regras do A4 (que valem no PDF por estarem em @media print). */
+#view-executivo.exec-celular { font-size:13px; }
+#view-executivo.exec-celular .exec-cabecalho { padding:12px 14px; border-radius:10px; }
+#view-executivo.exec-celular .exec-cabecalho h1 { font-size:19px; line-height:1.25; }
+#view-executivo.exec-celular .exec-cabecalho p { font-size:12px; line-height:1.45; }
+#view-executivo.exec-celular .exec-marca { font-size:10.5px; }
+#view-executivo.exec-celular .exec-secao { margin:4px 0 8px; padding:8px 12px; }
+#view-executivo.exec-celular .exec-secao h2 { font-size:17px; }
+#view-executivo.exec-celular .exec-item { margin:8px 0 !important; padding:10px 10px !important; border-radius:10px; }
+#view-executivo.exec-celular h2 { font-size:15px; line-height:1.3; margin:0 0 8px; }
+#view-executivo.exec-celular .kpis-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
+#view-executivo.exec-celular .kpi-card { padding:9px 10px; }
+#view-executivo.exec-celular .kpi-card h3 { font-size:11.5px; }
+#view-executivo.exec-celular .kpi-valor { font-size:18px; }
+#view-executivo.exec-celular .kpi-delta { font-size:11px; }
+#view-executivo.exec-celular .exec-grafico { max-height:none; }
+#view-executivo.exec-celular table { font-size:12px; }
+#view-executivo.exec-celular th, #view-executivo.exec-celular td { padding:5px 5px; }
+#view-executivo.exec-celular th { white-space:normal; }
+#view-executivo.exec-celular .nota-secao { font-size:11px; }
+#view-executivo.exec-celular .exec-just-bloco .jg { margin:6px 0; }
+#view-executivo.exec-celular .jg-cols { grid-template-columns:1fr; }
+#view-executivo.exec-celular .jg-tit { font-size:14px; }
+#view-executivo.exec-celular .jg-txt { font-size:13px; line-height:1.5; }
 #view-executivo .exec-just-bloco .jg { margin:4px 0; break-inside:avoid; }
 
 /* Garantia › Top 1000: filtro de categoria (lista com caixas, no estilo do filtro de grupos do cabeçalho) */

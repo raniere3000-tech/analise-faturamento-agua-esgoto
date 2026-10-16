@@ -86,7 +86,20 @@ def test_bibliotecas_do_pdf_no_site():
     for arq in ("lib/jspdf.umd.min.js", "lib/html2canvas.min.js"):
         assert os.path.getsize(os.path.join(raiz, arq)) > 100000, arq
     site = open(os.path.join(raiz, "index.html"), encoding="utf-8").read()
-    assert '"lib/jspdf.umd.min.js", "lib/html2canvas.min.js"' in site and "w.gerarExecutivo(await libsPdf())" in site
+    assert '"lib/jspdf.umd.min.js", "lib/html2canvas.min.js"' in site and "w.gerarExecutivo(await libsPdf(), b.dataset.modo)" in site
+
+
+def test_executivo_tem_versao_para_celular():
+    """O botão Executivo oferece a versão para ler no celular (em pé, colunas principais) e a A4 para imprimir."""
+    import os
+    raiz = os.path.join(os.path.dirname(__file__), "..")
+    site = open(os.path.join(raiz, "index.html"), encoding="utf-8").read()
+    assert 'data-modo="celular"' in site and 'data-modo="a4"' in site
+    js = open(os.path.join(raiz, "faturamento", "assets", "relatorio.js"), encoding="utf-8").read()
+    assert "const celular = modo !== 'a4';" in js and "cont.classList.add('exec-celular')" in js
+    assert "function enxugaTabelaCelular(t)" in js and "function paginaCelular(" in js
+    css = open(os.path.join(raiz, "faturamento", "assets", "relatorio.css"), encoding="utf-8").read()
+    assert "#view-executivo.exec-celular .kpis-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }" in css
 
 
 def test_consumo_minimo_do_publico_e_15():
