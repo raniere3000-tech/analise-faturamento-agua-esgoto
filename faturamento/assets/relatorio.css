@@ -510,3 +510,7 @@ td.pl-vencido { color:#9C0006; font-weight:700; } .pl-vencido-txt { color:#9C000
 .barra-vista h2 { margin:0; }
 .barra-vista .gar-sub { margin-left:0; }
 @media print { .barra-vista { display:none; } }
+
+/* PDF executivo: justificativas com um bloco por grupo (a página quebra entre grupos) */
+#view-executivo .exec-just-bloco { max-width:1800px; margin:0 auto; }
+#view-executivo .exec-just-bloco .jg { margin:4px 0; break-inside:avoid; }

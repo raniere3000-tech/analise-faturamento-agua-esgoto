@@ -190,3 +190,9 @@ def test_analise_so_economias_que_faturam_esgoto(sessao):
     ativa = agua[agua["Situacao Ligacao"].astype(str).str.upper().str.contains("ATIV")]["Economias_Totais"].sum()
     assert so[0] == int(ativa)
     assert ctx.base_final is original                            # a base do resto do relatório não muda
+
+
+def test_pdf_justificativas_um_bloco_por_grupo(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert "const separaGrupos = (c) =>" in html and "flatMap(separaGrupos)" in html
+    assert "if (M + LH - y < LH * 0.3) novaPagina();" in html              # quadro grande começa abaixo do título
