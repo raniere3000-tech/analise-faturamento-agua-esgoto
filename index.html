@@ -235,6 +235,12 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 .fgroup select { border: 0; border-left: 1px solid rgba(255,255,255,.25); border-radius: 0 8px 8px 0; background: transparent; color: #fff; padding: 8px 11px; font-size: 12px; cursor: pointer; }
 .fgroup select option { color: #111; }
 .dropdown { position: relative; display: inline-block; }
+.menu-pdf { position: relative; display: inline-block; }
+.menu-pdf-lista { position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 40; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 22px rgba(17,42,66,.18); padding: 6px 0; min-width: 250px; }
+.menu-pdf-lista[hidden] { display: none; }
+#menuPdf button { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; padding: 9px 14px; cursor: pointer; }
+#menuPdf button:hover, #menuPdf button:focus-visible { background: #f2f8fc; outline: none; }
+.menu-pdf-lista small { display: block; font-weight: 400; font-size: 11.5px; color: #5b6b80; margin-top: 2px; }
 .dropdown > button { border: 0; border-left: 1px solid rgba(255,255,255,.25); border-radius: 0 8px 8px 0; background: transparent; color: #fff; padding: 8px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .dropdown-content { display: none; position: absolute; right: 0; background: #fff; color: var(--ink); min-width: 220px; border: 1px solid var(--line); box-shadow: 0 8px 22px rgba(17,42,66,.18); border-radius: 10px; z-index: 30; padding: 8px 0; max-height: 300px; overflow-y: auto; margin-top: 6px; }
 .dropdown-content label { display: block; padding: 7px 14px; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
@@ -400,7 +406,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v92</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v93</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -419,7 +425,11 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       <a class="btn-top" href="https://raniere3000-tech.github.io/bookcomercial/">🏠 Menu</a>
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
       <button type="button" class="btn-top" id="btnEtapa2" hidden title="Reler a pasta e abrir a conferência dos clientes em análise (etapa 2), mesmo sem arquivo novo">✎ Etapa 2</button>
-      <button type="button" class="btn-top" id="btnPdf" hidden title="PDF executivo conforme os filtros da tela">📄 Executivo</button>
+      <span class="menu-pdf" id="menuPdfWrap"><button type="button" class="btn-top" id="btnPdf" hidden aria-haspopup="true" aria-expanded="false" aria-controls="menuPdf" title="PDF executivo conforme os filtros da tela">📄 Executivo ▾</button>
+        <span class="menu-pdf-lista" id="menuPdf" role="menu" hidden>
+          <button type="button" role="menuitem" data-modo="celular">📱 Para ler no celular<small>Folha em pé, letra grande, colunas principais</small></button>
+          <button type="button" role="menuitem" data-modo="a4">🖨 A4 para imprimir<small>Folhas deitadas, com todas as colunas</small></button>
+        </span></span>
       <button type="button" class="btn-top" id="btnOnePage" hidden title="One page (acompanhamento do faturamento em uma página, conforme os filtros da tela)">📊 One page</button>
       <button type="button" class="btn-top" id="btnAcomp" hidden title="Baixar as tabelas da planilha de Acompanhamento Mensal (Excel, uma aba por tabela) da Superintendência escolhida">📥 Acompanhamento</button>
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
@@ -545,7 +555,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v92-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v93-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -945,7 +955,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   function fechaRelatorio() {
     $("etapaTop20").hidden = true;
     $("quadroRelatorio").hidden = true;
-    $("btnPdf").hidden = true; $("btnOnePage").hidden = true;
+    $("btnPdf").hidden = true; $("menuPdf").hidden = true; $("btnOnePage").hidden = true;
     $("vazioWrap").hidden = false;
     document.body.classList.remove("relatorio-aberto", "top20-aberto");
     document.title = "Análise de Faturamento — Água e Esgoto";
@@ -1557,11 +1567,21 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     try { return { codigo: await codigoLibsPdf }; } catch (e) { codigoLibsPdf = null; console.warn(e); return null; }
   }
   window.libsPdfSite = libsPdf;                                    // o PDF da aba One page usa as mesmas bibliotecas
-  $("btnPdf").addEventListener("click", async () => {
+  // Executivo: o botão abre a escolha entre a versão para ler no celular (padrão) e a A4 para imprimir
+  const menuPdf = $("menuPdf");
+  const fechaMenuPdf = () => { menuPdf.hidden = true; $("btnPdf").setAttribute("aria-expanded", "false"); };
+  $("btnPdf").addEventListener("click", (e) => {
+    e.stopPropagation();
+    menuPdf.hidden = !menuPdf.hidden; $("btnPdf").setAttribute("aria-expanded", String(!menuPdf.hidden));
+  });
+  document.addEventListener("click", (e) => { if (!menuPdf.hidden && !e.target.closest("#menuPdfWrap")) fechaMenuPdf(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menuPdf.hidden) fechaMenuPdf(); });
+  menuPdf.querySelectorAll("button[data-modo]").forEach((b) => b.addEventListener("click", async () => {
+    fechaMenuPdf();
     const w = janela(); w.focus();
     if (!w.gerarExecutivo) { w.print(); return; }                 // relatório antigo (sem executivo): imprime a tela
-    w.gerarExecutivo(await libsPdf());                             // sem as bibliotecas, o relatório tenta o CDN e depois a impressão
-  });
+    w.gerarExecutivo(await libsPdf(), b.dataset.modo);            // sem as bibliotecas, o relatório tenta o CDN e depois a impressão
+  }));
   $("btnOnePage").addEventListener("click", async () => {
     const w = janela(); w.focus();
     if (!w.gerarOnePage) { alert("Este relatório foi gerado por uma versão anterior do painel: atualize a análise para ter o One page."); return; }
