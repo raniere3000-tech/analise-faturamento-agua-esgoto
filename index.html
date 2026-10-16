@@ -400,7 +400,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v84</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v85</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -542,7 +542,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v84-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v85-20261016"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1464,12 +1464,17 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     $("btnGrupo").textContent = "Todos ▾"; $("btnGrupo").disabled = false;
     $("btnPdf").hidden = false;
     filtrosEstado.view = "resumo";
+    // padrão ao abrir: SUP Interior (se houver) — a última SUP salva na pasta vem por cima, em avisaRelatorio()
+    if (Array.from($("selSupTop").options).some((o) => o.value === "INTERIOR")) { filtrosEstado.sup = "INTERIOR"; $("selSupTop").value = "INTERIOR"; }
     aplicaFiltros();
+    try { const w = janela(); if (w.aplicarGruposPadrao) w.aplicarGruposPadrao(); } catch (e) {}   // grupos Liberados e Em Análise
+    sincronizaGrupos();
     avisaRelatorio();                 // aplica as configurações salvas no JSON (ex.: "Comparar") por cima das padrões
   }
 
   function aplicaGrupos() {
     const w = janela(), todos = Array.from(document.querySelectorAll(".chk-grupo-top"));
+    w.gruposAuto = false;                         // a pessoa escolheu os grupos: não volta mais ao padrão nesta abertura
     const marcados = new Set(todos.filter((c) => c.checked).map((c) => c.value));
     w.document.querySelectorAll(".chk-grupo").forEach((c) => { c.checked = marcados.has(c.value); });
     if (w.filtrarPorGrupo) w.filtrarPorGrupo();
@@ -1490,7 +1495,19 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     const marcados = caixas.filter((c) => c.checked).length;
     $("btnGrupo").textContent = (marcados === caixas.length ? "Todos" : `${marcados} de ${caixas.length}`) + " ▾";
   }
-  $("selSupTop").addEventListener("change", (e) => { filtrosEstado.sup = e.target.value; aplicaFiltros(); sincronizaGrupos(); });
+  $("selSupTop").addEventListener("change", (e) => {
+    filtrosEstado.sup = e.target.value; aplicaFiltros(); sincronizaGrupos();
+    try { const w = janela(); if (w && w.configAlterada) w.configAlterada(); } catch (er) {}   // a SUP vai para o JSON (vale para todos)
+  });
+  // o relatório lê/aplica a Superintendência compartilhada (seção config do JSON) por aqui
+  window.supCompartilhada = {
+    obter: () => filtrosEstado.sup || "TODAS",
+    definir(sup) {
+      if (!Array.from($("selSupTop").options).some((o) => o.value === sup)) return;
+      $("selSupTop").value = sup; filtrosEstado.sup = sup; aplicaFiltros(); sincronizaGrupos();
+    },
+  };
+  window.sincronizaGruposTopo = () => sincronizaGrupos();
   const mudouRef = () => {
     const escolhidas = [$("selRef1Top").value, $("selRef2Top").value].filter((v, i, a) => v && a.indexOf(v) === i);
     filtrosEstado.ref = escolhidas.join("|"); aplicaFiltros();
