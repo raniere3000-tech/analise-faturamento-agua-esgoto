@@ -219,7 +219,7 @@ def test_analise_de_garantia_ordenavel(sessao):
 def test_aba_one_page(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     for trecho in ('id="view-onepage"', 'id="btn-onepage"', 'id="opEditor"', 'id="opFolha"', "var syncOnePage = criaSync('onepage'",
-                   "function gerarOnePage(libs)", 'onclick="gerarOnePage()"'):
+                   "function gerarOnePage(libs)", 'onclick="gerarOnePage()"', 'id="opDatasLeitura"'):
         assert trecho in html, trecho
     raiz = os.path.join(os.path.dirname(__file__), "..")
     worker = open(os.path.join(raiz, "analisador.worker.js"), encoding="utf-8").read()

@@ -2486,7 +2486,8 @@ function opProjecao(sup) {
 
 function opDados() {
     const sup = ESTADO.sup, ed = opEditor();
-    const mes = ESTADO.mes || (ed ? ed.dataset.ref : ''), ref = opRefOrcado(), k = opChaveMes(mes);
+    const fontes = Array.from(new Set(Array.from(document.querySelectorAll('#view-dre th[data-tipo="orc"]')).map((th) => th.dataset.src)));
+    const mes = ESTADO.mes || (ed ? ed.dataset.ref : ''), ref = fontes.find((f) => /SUP/i.test(f)) || opRefOrcado(), k = opChaveMes(mes);
     const meses = Array.from(new Set(Array.from(document.querySelectorAll(`#view-dre .sup-bloco[data-sup="${sup}"]`)).map((b) => b.dataset.mes)))
         .filter((m) => opChaveMes(m) != null && opChaveMes(m) <= k).sort((a, b) => opChaveMes(a) - opChaveMes(b)).slice(-12);
     const serie = meses.map((m) => ({ mes: m, d: opDre(sup, m, ref) })).filter((x) => x.d);
@@ -2533,44 +2534,81 @@ function opBlocoCards(D) {
     return `<div class="op-cards">${quadros.join('')}</div>`;
 }
 
-// ---- Acompanhamento por grupo (ciclo): orçado por ciclo × realizado; sem orçado, contra o mês anterior ----
+// ---- Acompanhamento por semana: grupos lidos em cada semana do mês, contra o orçado SUP e o mês anterior ----
+// Semana = semana do calendário (segunda a domingo) da primeira data de leitura do grupo no cronograma do mês vigente.
+let opSemanasAbertas = null;                    // semanas abertas na tela (null = abre só a última com grupos)
 function opGrupos(D) {
     const blocos = Array.from(document.querySelectorAll('#view-tabelas .orc-ciclo-bloco'));
-    const bloco = blocos.find((b) => b.dataset.orcCiclo === D.ref) || blocos[0];
-    const tabelas = bloco ? Array.from(bloco.querySelectorAll('table.tabela-comparativo'))
-        : ['tabela-agua', 'tabela-esgoto'].map((id) => document.getElementById(id)).filter(Boolean);
+    const bloco = blocos.find((b) => b.dataset.orcCiclo === D.ref) || blocos.find((b) => /SUP/i.test(b.dataset.orcCiclo)) || null;
     const mapa = new Map();
-    tabelas.forEach((t) => t.querySelectorAll('tbody tr[data-grupo]').forEach((tr) => {
+    const pega = (g) => { const k = normGrupo(g); if (!mapa.has(k)) mapa.set(k, { grupo: g, r: 0, a: 0, o: null, sit: '' }); return mapa.get(k); };
+    ['tabela-agua', 'tabela-esgoto'].map((id) => document.getElementById(id)).filter(Boolean).forEach((t) => t.querySelectorAll('tbody tr[data-grupo]').forEach((tr) => {
         if (tr.style.display === 'none' || !tr.dataset.grupo) return;
-        const cel = (f) => opNum((tr.querySelector(`td[data-field="${f}"]`) || {}).textContent);
-        const g = mapa.get(tr.dataset.grupo) || { grupo: tr.dataset.grupo, r: 0, o: 0, sit: '' };
-        g.r += cel('fat-atual') || 0; g.o += cel('fat-anterior') || 0;
+        const g = pega(tr.dataset.grupo);
+        g.r += parseFloat(tr.dataset.fatAtual) || 0; g.a += parseFloat(tr.dataset.fatAnterior) || 0;
         const s = tr.querySelector('.sit-grupo'); if (s && !g.sit) g.sit = s.textContent.trim();
-        mapa.set(g.grupo, g);
     }));
-    return { comOrcado: !!bloco, fonte: bloco ? bloco.dataset.orcCiclo : '', grupos: Array.from(mapa.values()) };
+    if (bloco) bloco.querySelectorAll('table.tabela-comparativo tbody tr[data-grupo]').forEach((tr) => {
+        const g = mapa.get(normGrupo(tr.dataset.grupo)); if (!g) return;      // só os grupos marcados
+        g.o = (g.o || 0) + (parseFloat(tr.dataset.fatAnterior) || 0);
+    });
+    let datas = {}; try { datas = JSON.parse((document.getElementById('opDatasLeitura') || {}).textContent || '{}') || {}; } catch (e) { datas = {}; }
+    const semanaDe = (iso) => {                 // {n, ini, fim} da semana (segunda a domingo) dentro do mês
+        const d = new Date(iso + 'T12:00:00'), p = new Date(d.getFullYear(), d.getMonth(), 1, 12);
+        const desl = (p.getDay() + 6) % 7;      // dias do dia 1 até a segunda anterior
+        const n = Math.floor((d.getDate() + desl - 1) / 7) + 1;
+        const ult = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        const ini = Math.max(1, (n - 1) * 7 - desl + 1), fim = Math.min(ult, n * 7 - desl);
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        return { n, rot: `${String(ini).padStart(2, '0')} a ${String(fim).padStart(2, '0')}/${mm}` };
+    };
+    const semanas = new Map();
+    Array.from(mapa.values()).forEach((g) => {
+        const iso = datas[normGrupo(g.grupo)];
+        const s = iso ? semanaDe(iso) : { n: 99, rot: 'sem data no cronograma' };
+        g.data = iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+        if (!semanas.has(s.n)) semanas.set(s.n, { n: s.n, rot: s.rot, grupos: [] });
+        semanas.get(s.n).grupos.push(g);
+    });
+    const lista = Array.from(semanas.values()).sort((a, b) => a.n - b.n);
+    lista.forEach((s) => {
+        s.grupos.sort((x, y) => (x.data || '99').localeCompare(y.data || '99') || x.grupo.localeCompare(y.grupo, 'pt-BR', { numeric: true }));
+        s.r = s.grupos.reduce((t, g) => t + g.r, 0); s.a = s.grupos.reduce((t, g) => t + g.a, 0);
+        s.o = s.grupos.some((g) => g.o != null) ? s.grupos.reduce((t, g) => t + (g.o || 0), 0) : null;
+    });
+    return { fonte: bloco ? bloco.dataset.orcCiclo : '', semanas: lista, grupos: lista.flatMap((s) => s.grupos) };
 }
 function opBlocoGrupos(D, G) {
     if (!G.grupos.length) return '<p class="op-vazio">Nenhum grupo marcado.</p>';
-    const ref = G.comOrcado ? G.fonte : D.rotAnt;
-    const linha = (g, tot) => {
-        const v = opVar(g.r, g.o);
-        return `<tr${tot ? ' class="op-tot"' : ''}><td>${tot ? 'Total' : 'Grupo ' + garEsc(g.grupo)}${!tot && g.sit ? ` <small>${garEsc(g.sit)}</small>` : ''}</td>`
-            + `<td class="num op-apagado">${opMoeda(g.o, 2)}</td><td class="num op-forte">${opMoeda(g.r, 2)}</td><td class="num">${opSeta(v, '')}</td></tr>`;
-    };
-    const tot = G.grupos.reduce((t, g) => ({ grupo: '', r: t.r + g.r, o: t.o + g.o }), { r: 0, o: 0 });
-    return `<table class="op-tab op-tab-grupos"><thead><tr><th>Grupo</th><th class="num">${G.comOrcado ? 'Orçado ' : ''}${garEsc(ref)}</th><th class="num">Realizado</th><th class="num">Δ</th></tr></thead>`
-        + `<tbody>${linha(tot, true)}${G.grupos.map((g) => linha(g)).join('')}</tbody></table>`;
+    if (opSemanasAbertas === null) { const ult = G.semanas.filter((s) => s.n !== 99).pop(); opSemanasAbertas = new Set(ult ? [ult.n] : []); }
+    const v = (x) => opMoeda(x, 2);
+    const cols = (o) => `<td class="num op-forte">${v(o.r)}</td>`
+        + `<td class="num op-col-val op-apagado">${o.o != null ? v(o.o) : '–'}</td><td class="num">${o.o != null ? opSeta(opVar(o.r, o.o), '') : '–'}</td>`
+        + `<td class="num op-col-val op-apagado">${v(o.a)}</td><td class="num">${opSeta(opVar(o.r, o.a), '')}</td>`;
+    const corpo = G.semanas.map((s) => {
+        const aberta = opSemanasAbertas.has(s.n);
+        const nome = s.n === 99 ? 'Sem semana' : `Semana ${s.n}`;
+        return `<tr class="op-sem${aberta ? ' op-aberta' : ''}" data-semana="${s.n}" title="Clique para ${aberta ? 'fechar' : 'abrir'} os grupos desta semana">`
+            + `<td><span class="op-seta-sem">${aberta ? '▾' : '▸'}</span> ${nome} <small>${garEsc(s.rot)} · ${s.grupos.length} grupo(s)</small></td>${cols(s)}</tr>`
+            + (aberta ? s.grupos.map((g) => `<tr class="op-grp"><td>Grupo ${garEsc(g.grupo)} <small>${g.data ? 'leitura ' + garEsc(g.data) : ''}${g.sit ? ' · ' + garEsc(g.sit) : ''}</small></td>${cols(g)}</tr>`).join('') : '');
+    }).join('');
+    const tot = { r: G.grupos.reduce((t, g) => t + g.r, 0), a: G.grupos.reduce((t, g) => t + g.a, 0),
+                  o: G.grupos.some((g) => g.o != null) ? G.grupos.reduce((t, g) => t + (g.o || 0), 0) : null };
+    return `<table class="op-tab op-tab-grupos"><thead><tr><th>Semana / grupo</th><th class="num">Realizado</th>`
+        + `<th class="num op-col-val">${garEsc(G.fonte ? 'Orçado ' + G.fonte : 'Orçado')}</th><th class="num">Δ orçado</th>`
+        + `<th class="num op-col-val">${garEsc(D.rotAnt)}</th><th class="num">Δ ${garEsc(D.rotAnt)}</th></tr></thead>`
+        + `<tbody>${corpo}</tbody><tfoot><tr class="op-tot"><td>Total (diretas)</td>${cols(tot)}</tr></tfoot></table>`;
 }
 function opGraficoGrupos(D, G, alvo) {
     if (!G.grupos.length || typeof Chart === 'undefined') return;
     const area = document.createElement('div'); area.className = 'op-grafico'; const cv = document.createElement('canvas'); area.appendChild(cv); alvo.appendChild(area);
-    const gs = G.grupos, ref = G.comOrcado ? 'Orçado ' + G.fonte : D.rotAnt;
+    const gs = G.grupos, temOrc = gs.some((g) => g.o != null);
+    const base = (g) => (temOrc ? g.o : g.a), rotBase = temOrc ? 'Orçado ' + G.fonte : D.rotAnt;
     const mil = (v) => fmtBR(v / 1e3, Math.abs(v) >= 1e5 ? 0 : 1);
     opGraficos.push(new Chart(cv, {
         data: { labels: gs.map((g) => g.grupo), datasets: [
-            { type: 'line', label: 'Realizado', data: gs.map((g) => g.r), borderColor: '#1534C8', backgroundColor: '#1534C8', borderWidth: 2.5, pointRadius: 3.5, tension: 0.15, order: 0 },
-            { type: 'bar', label: ref, data: gs.map((g) => g.o), backgroundColor: '#B9C3EC', borderRadius: 2, maxBarThickness: 46, order: 1 }] },
+            { type: 'line', label: 'Realizado', data: gs.map((g) => g.r), borderColor: '#1A2740', backgroundColor: '#1A2740', borderWidth: 2.5, pointRadius: 3.5, tension: 0.15, order: 0 },
+            { type: 'bar', label: rotBase, data: gs.map(base), backgroundColor: '#C9D6E3', borderRadius: 2, maxBarThickness: 46, order: 1 }] },
         options: { animation: false, responsive: true, maintainAspectRatio: false, devicePixelRatio: 2,
             layout: { padding: { top: 34 } },
             plugins: { legend: { position: 'bottom', labels: { boxWidth: 18, boxHeight: 6, font: { size: 11 } } }, tooltip: { enabled: false } },
@@ -2579,27 +2617,33 @@ function opGraficoGrupos(D, G, alvo) {
             const g = c.ctx, linha = c.getDatasetMeta(0).data, barras = c.getDatasetMeta(1).data, topo = c.chartArea.top - 26;
             g.save(); g.textAlign = 'center';
             gs.forEach((x, i) => {
-                const d = x.r - x.o;
-                g.font = "600 9.5px 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif"; g.textBaseline = 'top';
-                g.fillStyle = Math.abs(opVar(x.r, x.o) || 0) < OP_RELEVANTE ? '#64748b' : d > 0 ? '#15803d' : '#C00000';
-                if (x.o) g.fillText((d > 0 ? '+' : '') + mil(d), linha[i].x, topo);
-                g.fillStyle = '#1534C8'; g.font = "500 11px 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif"; g.textBaseline = 'bottom';
+                const b = base(x), d = x.r - (b || 0);
+                if (b) {
+                    g.font = "600 9.5px 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif"; g.textBaseline = 'top';
+                    g.fillStyle = Math.abs(opVar(x.r, b) || 0) < OP_RELEVANTE ? '#64748b' : d > 0 ? '#1f8a70' : '#C2560C';
+                    g.fillText((d > 0 ? '+' : '') + mil(d), linha[i].x, topo);
+                }
+                g.fillStyle = '#1A2740'; g.font = "600 11px 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif"; g.textBaseline = 'bottom';
                 g.fillText(mil(x.r), linha[i].x, linha[i].y - 6);
-                if (x.o && barras[i]) { g.fillStyle = '#334155'; g.font = "400 9px 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif"; g.fillText(mil(x.o), barras[i].x, c.chartArea.bottom - 3); }
+                if (b && barras[i]) { g.fillStyle = '#475569'; g.font = "400 9px 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif"; g.fillText(mil(b), barras[i].x, c.chartArea.bottom - 3); }
             });
             g.restore(); } }],
     }));
-    const p = document.createElement('p'); p.className = 'op-nota'; p.textContent = 'Valores em R$ mil. No alto, a diferença realizado − ' + (G.comOrcado ? 'orçado' : 'mês anterior') + ' de cada grupo.';
+    const p = document.createElement('p'); p.className = 'op-nota';
+    p.textContent = `Diretas (água + esgoto) por grupo, na ordem da leitura. Valores em R$ mil; no alto, a diferença realizado − ${temOrc ? 'orçado' : 'mês anterior'}.`;
     alvo.appendChild(p);
 }
 
-// ---- Faixa do mês contra o anterior (Resumo, grupos marcados) ----
+// ---- KPIs do mês contra o anterior: os mesmos quadros do Resumo (seguem os grupos marcados) ----
 function opBlocoVolumes(D) {
-    const R = D.resumo;
-    if (!R) return '<p class="op-vazio">Comparação com o mês anterior: só no mês vigente.</p>';
-    const ant = D.rotAnt, n0 = (x) => fmtBR(x, 0), r2 = (x) => 'R$ ' + fmtBR(x, 2);
-    const k = (rot, o, f) => `<div class="op-vol"><span class="op-rot">${rot}</span><b>${f(o.r)}</b><small>${garEsc(ant)}: ${f(o.a)}</small>${opSeta(opVar(o.r, o.a), 'vs ' + ant)}</div>`;
-    return `<div class="op-vols">${k('Faturamento', R.fat, (x) => opMoeda(x, 2))}${k('Economias', R.eco, n0)}${k('Volume (m³)', R.vol, n0)}${k('Ticket médio', R.ticket, r2)}</div>`;
+    const cards = Array.from(document.querySelectorAll('#view-resumo .kpis-grid .kpi-card'));
+    if (!cards.length) return '<p class="op-vazio">Sem indicadores.</p>';
+    return '<div class="op-vols">' + cards.map((c) => {
+        const tit = (c.querySelector('h3') || {}).textContent || '', val = (c.querySelector('.kpi-valor') || {}).textContent || '–';
+        const dEl = c.querySelector('.kpi-delta'), dTxt = dEl ? dEl.textContent.replace(/vs mês anterior/i, 'vs ' + D.rotAnt) : '';
+        const m = /([▲▼])\s*(-?[\d.,]+)%/.exec(dTxt), pct = m ? parseFloat(m[2].replace(',', '.')) / 100 * (m[1] === '▼' ? -1 : 1) : null;
+        return `<div class="op-vol"><span class="op-rot">${garEsc(tit)}</span><b>${garEsc(val)}</b>${pct != null ? opSeta(pct, 'vs ' + D.rotAnt) : `<small>${garEsc(dTxt)}</small>`}</div>`;
+    }).join('') + '</div>';
 }
 
 // ---- Top 5: maiores quedas e aumentos de faturamento (água) entre os clientes do Top 100 ----
@@ -2619,8 +2663,8 @@ function opBlocoTop(D) {
         + (itens.length ? itens.map((x, i) => `<div class="op-top-lin"><span>${i + 1}. ${garEsc(x.nome)}${x.grupo ? ` · grupo ${garEsc(x.grupo)}` : ''}</span><b>${opMoeda(x.v, 2)}</b></div>`).join('')
             : '<p class="op-vazio">Sem clientes.</p>') + '</div>';
     const m = opMesCurto((opEditor() || { dataset: {} }).dataset.ref || '');
-    return `<div class="op-tops">${lista('Maiores quedas de faturamento — ' + garEsc(m), 'op-top-neg', opTop5(D, 'queda'))}`
-        + `${lista('Maiores aumentos de faturamento — ' + garEsc(m), 'op-top-pos', opTop5(D, 'aumento'))}</div>`;
+    return `<div class="op-tops">${lista('Maiores aumentos de faturamento — ' + garEsc(m), 'op-top-pos', opTop5(D, 'aumento'))}`
+        + `${lista('Maiores quedas de faturamento — ' + garEsc(m), 'op-top-neg', opTop5(D, 'queda'))}</div>`;
 }
 
 // ---- Bloco 5: análise crítica (texto livre por mês e superintendência) ----
@@ -2661,18 +2705,18 @@ function opDesenhar() {
     const nomeSup = D.sup === 'TODAS' ? 'Todas as superintendências' : D.sup;
     folha.innerHTML = '';
     const cab = document.createElement('header'); cab.className = 'op-cab';
-    cab.innerHTML = `<h2>${garEsc(nomeSup)}: Acompanhamento do Faturamento — ${garEsc(corte.slice(0, 6) + corte.slice(8))}</h2>`;
+    cab.innerHTML = `<span class="op-cab-sub">Águas do Rio · One page</span><h2>${garEsc(nomeSup)}: Acompanhamento do Faturamento — ${garEsc(corte.slice(0, 6) + corte.slice(8))}</h2>`;
     folha.appendChild(cab);
     const dest = opBlocoDestaque(D);
     const s1 = opSecao('➤ Faturamento', typeof dest === 'object' && dest.ant ? `<small class="op-h-dir">${dest.ant}</small>` : '');
     s1.insertAdjacentHTML('beforeend', `<div class="op-painel">${typeof dest === 'object' ? dest.html : dest}</div>${opBlocoCards(D)}`);
     folha.appendChild(s1);
     const G = opGrupos(D);
-    const s2 = opSecao(`Acompanhamento por grupo (ciclo) — ${G.comOrcado ? garEsc(G.fonte) : 'mês anterior'} × realizado`,
-        `<small class="op-h-dir">${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} · água + esgoto</small>`);
+    const s2 = opSecao(`Acompanhamento semanal por grupo — realizado × ${G.fonte ? garEsc('orçado ' + G.fonte) : 'orçado'} e ${garEsc(D.rotAnt)}`,
+        `<small class="op-h-dir">${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} · diretas (água + esgoto) · clique na semana para abrir</small>`);
     s2.insertAdjacentHTML('beforeend', opBlocoGrupos(D, G)); folha.appendChild(s2); opGraficoGrupos(D, G, s2);
     const s3 = opSecao(''); s3.classList.add('op-secao-faixa');
-    s3.insertAdjacentHTML('beforeend', `<div class="op-faixa">Faturamento do mês — ${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} vs ${garEsc(D.rotAnt)}</div>${opBlocoVolumes(D)}`);
+    s3.insertAdjacentHTML('beforeend', `<div class="op-faixa">Indicadores do mês — ${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} vs ${garEsc(D.rotAnt)}</div>${opBlocoVolumes(D)}`);
     folha.appendChild(s3);
     const s4 = opSecao('Top 5 clientes'); s4.insertAdjacentHTML('beforeend', opBlocoTop(D)); folha.appendChild(s4);
     const s5 = opSecao('Análise do mês'); s5.insertAdjacentHTML('beforeend', opBlocoAnalise(D)); folha.appendChild(s5);
@@ -2718,6 +2762,12 @@ document.addEventListener('paste', (e) => {
 document.addEventListener('click', (e) => {
     const t = e.target;
     if (t.id === 'opPdf') { gerarOnePage(); return; }
+    const sem = t.closest && t.closest('#opFolha tr.op-sem');
+    if (sem) {
+        const n = +sem.dataset.semana; if (!opSemanasAbertas) opSemanasAbertas = new Set();
+        if (opSemanasAbertas.has(n)) opSemanasAbertas.delete(n); else opSemanasAbertas.add(n);
+        opDesenhar(); return;
+    }
     if (t.classList && t.classList.contains('op-proj-add')) { const ps = opProjetos(); ps.push(['', '', '', '']); opSalvarProjetos(ps); opDesenhar(); return; }
     if (t.classList && t.classList.contains('op-proj-del')) {
         const ps = opProjetos(), i = +t.dataset.l;
