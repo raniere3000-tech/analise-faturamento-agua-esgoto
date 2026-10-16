@@ -1299,8 +1299,15 @@ function gerarExecutivo(libs) {
         ['Plano de Ação', [q('#plano-card.tem-dados')]],
         ['Análise de Ciclo', [q('#card-justificativa')]],         // título só no PDF, em cima das justificativas
     ];
+    // justificativas: cada grupo vira um bloco próprio no PDF — a quebra de página cai entre grupos, sem cortar o texto
+    const separaGrupos = (c) => {
+        const blocos = c.querySelectorAll ? Array.from(c.querySelectorAll('.jg')) : [];
+        if (!blocos.length) return [c];
+        blocos.forEach((b) => b.remove());
+        return [c].concat(blocos.map((b) => { const w = document.createElement('div'); w.className = 'exec-just-bloco'; w.appendChild(b); return w; }));
+    };
     secoes.forEach(([nome, els]) => {
-        const copias = els.map(clona).filter(Boolean);
+        const copias = els.map(clona).filter(Boolean).flatMap(separaGrupos);
         if (!copias.length) return;
         if (nome) {
             const t = document.createElement('div'); t.className = 'exec-secao';
@@ -1404,13 +1411,16 @@ async function gerarPdfDireto(cont, libs, nome) {
                 pdf.addImage(recorte(topo, altPx), 'JPEG', M, y, LW, alt);
                 y += alt + 3;
             } else {                                                  // quadro mais alto que a página: fatias de uma página
-                if (y > M) novaPagina();
-                const fatiaPx = Math.floor(LH / mmPorPx);
-                for (let d = 0; d < altPx; d += fatiaPx) {
-                    const h = Math.min(fatiaPx, altPx - d);
-                    if (d > 0) novaPagina();
+                // começa logo abaixo do que já está na página (ex.: o título da seção) — antes pulava para a página
+                // seguinte e deixava o título sozinho numa página em branco
+                if (M + LH - y < LH * 0.3) novaPagina();
+                let d = 0;
+                while (d < altPx) {
+                    const h = Math.min(Math.floor((M + LH - y) / mmPorPx), altPx - d);
+                    if (h < 20) { novaPagina(); continue; }               // sem espaço nesta página: segue na próxima
                     pdf.addImage(recorte(topo + d, h), 'JPEG', M, y, LW, h * mmPorPx);
-                    y += h * mmPorPx + 3;
+                    y += h * mmPorPx + 3; d += h;
+                    if (d < altPx) novaPagina();
                 }
             }
             primeira = false;
