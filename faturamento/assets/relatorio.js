@@ -1583,7 +1583,7 @@ function marcaNuvem(nome, r) {
 // clique na nuvem: grava tudo o que está na tela e relê a pasta; devolve true se tudo foi salvo
 window.sincronizarTudo = async function () {
     if (!compartilhado()) return false;
-    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncConfig.empurrar(), await syncGarantia.empurrar(), await syncPlano.empurrar(), await salvarJustificativas()];
+    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncGarantia.empurrar(), await syncPlano.empurrar(), await salvarJustificativas()];
     puxarAjustesCompartilhados(); lerJustificativasDaPasta();
     return r.every(Boolean);
 };
@@ -1647,7 +1647,6 @@ var syncSituacao = criaSync('situacao', 'Situação do grupo',
     () => !!document.querySelector('select.sit-escolha'));
 function puxarAjustesCompartilhados() {
     syncForecast.puxar(); syncSituacao.puxar();
-    if (typeof syncConfig !== 'undefined') syncConfig.puxar();
     if (typeof syncGarantia !== 'undefined') syncGarantia.puxar();
     if (typeof syncPlano !== 'undefined') syncPlano.puxar();
 }
@@ -1657,32 +1656,26 @@ puxarAjustesCompartilhados();
 setInterval(puxarAjustesCompartilhados, 60000);
 
 
-// ===== Configurações do relatório compartilhadas (seção "config" do JSON) =====
-// Ocultar forecast (Forecast e Indiretas), Comparar (orçado de referência), Superintendência, Orçado por ciclo, visão
-// Analítica/Sintética e Mostrar todas as colunas: quem abrir a pasta vê o relatório como foi deixado por último. O Mês abre
-// sempre no vigente e os Grupos abrem marcados nos que estão Liberados ou Em Análise (ver gruposPadrao).
+// ===== Preferências de visualização (de cada pessoa, neste navegador) =====
+// Ocultar forecast (Forecast e Indiretas), Orçado por ciclo, visão Analítica/Sintética e Mostrar todas as colunas ficam
+// salvos só aqui, na última escolha de cada um — mudar não altera a tela de mais ninguém. Superintendência, Comparar, Mês e
+// Grupos são guardados pelo site (index.html), também por pessoa. O que é DADO (forecast editado, situação dos grupos,
+// justificativas, garantia, plano de ação) continua no ajustes_relatorio.json da pasta, para todos.
+const CONFIG_LS = 'faturamento_config_local';
 let aplicandoConfig = false;
-function configAlterada() { if (!aplicandoConfig && typeof syncConfig !== 'undefined') syncConfig.agendar(); }
-function refDoSite() {
-    try { const p = window.parent; if (p && p !== window && p.referenciaCompartilhada) return p.referenciaCompartilhada; } catch (e) {}
-    return null;
-}
-function supDoSite() {
-    try { const p = window.parent; if (p && p !== window && p.supCompartilhada) return p.supCompartilhada; } catch (e) {}
-    return null;
-}
 function lerConfig() {
     const sel = document.getElementById('selOrcCiclo'), vt = document.getElementById('view-tabelas');
     const sint = document.querySelector('.sitl-visao button[data-visao="sintetica"].ativo');
-    const site = refDoSite(), siteSup = supDoSite();
     return {
         ocultaForecast: !!prevOculta, ocultaIndiretas: !!prevOcultaInd,
-        referencia: (site ? site.obter() : ESTADO.ref) || '',
-        superintendencia: (siteSup ? siteSup.obter() : ESTADO.sup) || 'TODAS',
         orcadoCiclo: sel ? sel.value : '',
         visaoSituacao: sint ? 'sintetica' : 'analitica',
         todasColunas: vt ? !vt.classList.contains('compacto') : false,
     };
+}
+function configAlterada() {
+    if (aplicandoConfig) return;
+    try { localStorage.setItem(CONFIG_LS, JSON.stringify(lerConfig())); } catch (e) { /* sem armazenamento */ }
 }
 function aplicarConfig(c) {
     aplicandoConfig = true;
@@ -1697,19 +1690,12 @@ function aplicarConfig(c) {
         if (c.visaoSituacao) sitlVisao(c.visaoSituacao);
         const vt = document.getElementById('view-tabelas');
         if ('todasColunas' in c && vt && vt.classList.contains('compacto') === !!c.todasColunas) alternarColunas();
-        if (c.superintendencia && c.superintendencia !== lerConfig().superintendencia) {
-            const siteSup = supDoSite();
-            if (siteSup) siteSup.definir(c.superintendencia); else definirFiltros({ sup: c.superintendencia });
-        }
-        if (c.referencia !== undefined && c.referencia !== lerConfig().referencia) {
-            const site = refDoSite();
-            if (site) site.definir(c.referencia); else definirFiltros({ ref: c.referencia });
-        }
     } finally { aplicandoConfig = false; }
 }
-var syncConfig = criaSync('config', 'Configurações do relatório', lerConfig, aplicarConfig, () => {});
-window.configAlterada = configAlterada;               // o site avisa quando a "Comparar" muda no cabeçalho
-syncConfig.puxar();
+document.addEventListener('DOMContentLoaded', () => {
+    let c = null; try { c = JSON.parse(localStorage.getItem(CONFIG_LS) || 'null'); } catch (e) { c = null; }
+    if (c) aplicarConfig(c);
+});
 
 // ===== Aba Garantia: Top 1000 · Análise de Garantia · Resumo de Ganhos =====
 // Dados (script#garantia-dados, JSON em gzip): uma linha por matrícula, já no ranking da média do faturado (R$) dos
