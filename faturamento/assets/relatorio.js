@@ -2381,17 +2381,16 @@ document.addEventListener('click', (e) => { const b = e.target.closest && e.targ
 document.addEventListener('DOMContentLoaded', () => { let v = null; try { v = localStorage.getItem('faturamento_analise_vista'); } catch (e) {} analiseAplicarVista(v); });
 
 
-// ===== Aba One page: painel executivo de faturamento numa folha 16:9 =====
+// ===== Aba One page: acompanhamento do faturamento numa folha vertical (lê bem no celular; PDF de uma página) =====
 // Responde: quanto faturamos, se estamos atingindo o orçamento, o que impactou o resultado e quais ações estão em curso.
 // Números: DRE da superintendência (realizado e orçado de cada mês — o primeiro orçado escolhido em Comparar) e Resumo
 // (grupos marcados). Faturamento total = direto + indireto; água/esgoto é outra visão do mesmo total (sem dupla contagem).
 // Tarifa média = faturamento direto ÷ volume faturado de água; ticket médio = faturamento direto ÷ economias de água
 // faturadas (as mesmas definições dos KPIs do Resumo). O que é editado na folha fica em opMapa — seção "onepage" do
-// ajustes_relatorio.json, o mesmo para todos: "titulo", "analise|<inc|desv|aten>|<mês>|<SUP>" e "projetos|<SUP>".
+// ajustes_relatorio.json, o mesmo para todos: "analise|<inc|desv|aten>|<mês>|<SUP>" e "projetos|<SUP>".
 const OP_LS = 'faturamento_onepage';
-const OP_W = 1280, OP_H = 720;                          // 16:9 (13,33 × 7,5 pol., o tamanho de um slide)
+const OP_W = 900;                                       // largura da folha no PDF (no celular ela se ajusta à tela)
 const OP_RELEVANTE = 0.03;                              // variação a partir da qual o desvio ganha cor
-const OP_TITULO = 'Faturamento — One Page Executivo';
 const OP_ANALISE = [
     ['inc', 'Incrementos', 'Principais fatores que contribuíram positivamente (com o impacto em R$)…'],
     ['desv', 'Desvios', 'Principais impactos negativos frente ao orçamento ou ao mês anterior (com o impacto em R$)…'],
@@ -2402,7 +2401,7 @@ const OP_PROJETOS_PADRAO = [['Incremento de esgoto', '', '', ''], ['Regularizaç
 const OP_MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 let opMapa = {};
 try { opMapa = JSON.parse(localStorage.getItem(OP_LS) || '{}') || {}; } catch (e) { /* sem armazenamento */ }
-let opGraficos = [], opTimerAjuste = null;
+let opGraficos = [];
 
 function opSalvar() {
     try { localStorage.setItem(OP_LS, JSON.stringify(opMapa)); } catch (e) { /* ignora */ }
@@ -2498,126 +2497,130 @@ function opDados() {
              projecao: vigente ? opProjecao(sup) : null, rotAnt: k != null ? opMesCurto(opMesDeChave(k - 1)) : 'mês anterior' };
 }
 
-// ---- Bloco 1: indicadores executivos ----
-function opCard(rot, valor, linhas, destaque) {
-    return `<div class="op-kpi${destaque ? ' ' + destaque : ''}"><span class="op-kpi-rot">${garEsc(rot)}</span><b class="op-kpi-val">${valor}</b>`
-        + linhas.filter(Boolean).map((l) => `<span class="op-kpi-lin">${l}</span>`).join('') + '</div>';
+// ---- Destaque: realizado do mês contra o orçado e a tendência de fechamento ----
+const opBarra = (rot, dir, frac, cls) => `<div class="op-barra-lin"><span>${rot}</span><span>${dir}</span></div>`
+    + `<div class="op-barra${cls ? ' ' + cls : ''}"><i style="width:${Math.max(0, Math.min(1, frac || 0)) * 100}%"></i></div>`;
+function opBlocoDestaque(D) {
+    const A = D.atual, P = D.ant, ed = opEditor();
+    if (!A) return '<p class="op-vazio">Sem DRE para o mês e a superintendência escolhidos.</p>';
+    const corte = ed ? ed.dataset.corte.slice(0, 5) : '';
+    const rot = D.vigente ? `Realizado até ${corte}` : `Realizado em ${opMesCurto(D.mes)}`;
+    const dv = opVar(A.bruto.r, A.bruto.o);
+    const cls = dv == null || Math.abs(dv) < OP_RELEVANTE ? '' : dv > 0 ? ' op-pos' : ' op-neg';
+    const ant = P ? `${garEsc(opMesCurto(opMesDeChave(opChaveMes(D.mes) - 1)))}: ${opMoeda(P.bruto.r, 2)}`
+        + (P.bruto.o ? ` (${opPct(opVar(P.bruto.r, P.bruto.o), true)} vs ${garEsc(D.ref)})` : '') : '';
+    let h = `<div class="op-hero"><div class="op-hero-esq"><span class="op-rot">${garEsc(rot)}</span><b class="op-hero-val">${opMoeda(A.bruto.r, 2)}</b></div>`
+        + `<div class="op-hero-dir"><b class="op-hero-pct${cls}">${dv == null ? '–' : (dv > 0 ? '▲ ' : dv < 0 ? '▼ ' : '') + opPct(Math.abs(dv))}</b>`
+        + `<span>${A.bruto.o != null ? `vs ${garEsc(D.ref)} no mês: ${opMoeda(A.bruto.r - A.bruto.o, 2)} (orçado ${opMoeda(A.bruto.o, 2)})` : 'mês sem orçado'}</span></div></div>`;
+    if (A.bruto.o) h += opBarra(`Realizado × orçado do mês (${garEsc(D.ref)})`, `${opMoeda(A.bruto.r, 2)} de ${opMoeda(A.bruto.o, 2)} · ${opPct(A.bruto.r / A.bruto.o)}`, A.bruto.r / A.bruto.o);
+    if (D.projecao != null && A.bruto.o) h += opBarra('Tendência de fechamento (realizado + forecast)', `${opMoeda(D.projecao, 2)} de ${opMoeda(A.bruto.o, 2)} · ${opPct(D.projecao / A.bruto.o)}`, D.projecao / A.bruto.o, 'op-barra-clara');
+    return { html: h, ant };
 }
-function opBlocoKpis(D) {
-    const A = D.atual, P = D.ant, Y = D.anoAnt, R = D.resumo, rot = 'vs ' + D.rotAnt;
-    const v = (o) => (o ? o.r : null);
-    const orcLinha = (o, fmt) => (o && o.o != null ? `Orç. ${fmt(o.o)} ${opSeta(opVar(o.r, o.o), '')}` : '');
-    const m3 = (x) => (x == null ? '–' : fmtBR(x, 0) + ' m³'), n0 = (x) => (x == null ? '–' : fmtBR(x, 0)), r2 = (x) => (x == null ? '–' : 'R$ ' + fmtBR(x, 2));
-    if (!A) {                                    // sem DRE (sem orçado na pasta): só o que o Resumo tem, para o mês vigente
-        if (!R) return '<p class="op-vazio">Sem dados para o mês e a superintendência escolhidos.</p>';
-        const c = (rt, o, f) => opCard(rt, f(o.r), [opSeta(opVar(o.r, o.a), rot)]);
-        return [c('Faturamento Total', R.fat, opMoeda), opCard('Atingimento Orçamentário', '–', ['sem orçado na pasta']),
-            c('Faturamento Direto', R.fat, opMoeda), opCard('Faturamento Indireto', '–', ['sem DRE na pasta']),
-            c('Volume Faturado', R.vol, m3), c('Tarifa Média (R$/m³)', R.tarifa, r2), c('Ticket Médio', R.ticket, r2),
-            c('Economias Faturadas', R.eco, n0)].join('');
-    }
-    const ating = A.bruto.o ? A.bruto.r / A.bruto.o : null;
-    const proj = D.projecao != null && A.bruto.o ? D.projecao / A.bruto.o : null;
-    const destAting = ating == null ? '' : ating >= 1 ? 'op-bom' : ating < 1 - OP_RELEVANTE ? 'op-ruim' : '';
-    const anual = Y && Y.bruto.r ? opSeta(opVar(A.bruto.r, Y.bruto.r), 'vs ano anterior') : '';
-    return [
-        opCard('Faturamento Total', opMoeda(A.bruto.r), [opSeta(opVar(A.bruto.r, v(P && P.bruto)), rot), anual]),
-        opCard('Atingimento Orçamentário', opPct(ating), [A.bruto.o != null ? `Realizado ÷ orçado ${garEsc(D.ref || '')}: ${opMoeda(A.bruto.r)} de ${opMoeda(A.bruto.o)}` : 'sem orçado para o mês',
-            proj != null ? `<span class="op-proj">Projeção de fechamento: ${opPct(proj)} (${opMoeda(D.projecao)})</span>` : ''], destAting),
-        opCard('Faturamento Direto', opMoeda(A.diretas && A.diretas.r), [opSeta(opVar(v(A.diretas), v(P && P.diretas)), rot), orcLinha(A.diretas, opMoeda)]),
-        opCard('Faturamento Indireto', opMoeda(A.ind.r), [opSeta(opVar(A.ind.r, P && P.ind.r), rot), orcLinha(A.ind, opMoeda)]),
-        opCard('Volume Faturado', m3(v(A.vol)), [opSeta(opVar(v(A.vol), v(P && P.vol)), rot), orcLinha(A.vol, m3)]),
-        opCard('Tarifa Média (R$/m³)', r2(A.tarifa.r), [opSeta(opVar(A.tarifa.r, P && P.tarifa.r), rot), orcLinha(A.tarifa, r2)]),
-        opCard('Ticket Médio (R$/economia)', r2(A.ticket.r), [opSeta(opVar(A.ticket.r, P && P.ticket.r), rot), orcLinha(A.ticket, r2)]),
-        opCard('Economias Faturadas', n0(v(A.eco)), [opSeta(opVar(v(A.eco), v(P && P.eco)), rot), orcLinha(A.eco, n0)]),
-    ].join('');
+// Quatro quadros: cada orçado do mês (realizado contra ele) e a tendência de fechamento
+function opBlocoCards(D) {
+    const A = D.atual; if (!A) return '';
+    const base = D.projecao != null ? D.projecao : A.bruto.r;
+    const quadros = D.refs.slice(0, 3).map((ref) => {
+        const d = ref === D.ref ? A : opDre(D.sup, D.mes, ref), o = d && d.bruto.o;
+        return `<div class="op-card"><span class="op-rot">${garEsc(ref)} — ${garEsc(opMesCurto(D.mes))}</span><b>${opMoeda(o, 2)}</b>`
+            + (o ? opSeta(opVar(A.bruto.r, o), 'realizado vs orçado') : '<span class="op-var">sem orçado</span>') + '</div>';
+    });
+    if (D.projecao != null) quadros.push(`<div class="op-card op-card-tend"><span class="op-rot">Tendência — ${garEsc(opMesCurto(D.mes))}</span><b>${opMoeda(D.projecao, 2)}</b>`
+        + (A.bruto.o ? opSeta(opVar(D.projecao, A.bruto.o), 'vs ' + D.ref) : '') + '</div>');
+    else if (D.ant) quadros.push(`<div class="op-card op-card-tend"><span class="op-rot">Mês anterior — ${garEsc(D.rotAnt)}</span><b>${opMoeda(D.ant.bruto.r, 2)}</b>`
+        + opSeta(opVar(A.bruto.r, D.ant.bruto.r), 'realizado vs ' + D.rotAnt) + '</div>');
+    void base;
+    return `<div class="op-cards">${quadros.join('')}</div>`;
 }
 
-// ---- Bloco 2: evolução do faturamento (realizado × orçado, últimos 12 meses) ----
-function opBlocoEvolucao(D, sec) {
-    const s = D.serie;
-    if (!s.length || typeof Chart === 'undefined') { sec.insertAdjacentHTML('beforeend', '<p class="op-vazio">Sem DRE na pasta para montar a evolução.</p>'); return; }
-    const A = D.atual, k = opChaveMes(D.mes);
-    const dm = A && A.bruto.o != null ? `Desvio no mês: <b>${opMoeda(A.bruto.r - A.bruto.o)}</b> (${opPct(opVar(A.bruto.r, A.bruto.o), true)})` : 'Mês sem orçado';
-    const ano = s.filter((x) => Math.floor(opChaveMes(x.mes) / 12) === Math.floor(k / 12) && x.d.bruto.o != null);
-    const ar = ano.reduce((t, x) => t + (x.d.bruto.r || 0), 0), ao = ano.reduce((t, x) => t + x.d.bruto.o, 0);
-    const acum = ano.length ? ` · Acumulado ${Math.floor(k / 12)}: <b>${opMoeda(ar - ao)}</b> (${opPct(opVar(ar, ao), true)})` : '';
-    sec.insertAdjacentHTML('beforeend', `<p class="op-nota">${dm}${acum}${D.vigente && D.projecao != null ? ' · mês vigente com realizado até D-1' : ''}</p>`);
-    const area = document.createElement('div'); area.className = 'op-grafico'; const cv = document.createElement('canvas'); area.appendChild(cv); sec.appendChild(area);
-    const desvios = s.map((x) => opVar(x.d.bruto.r, x.d.bruto.o));
-    const compacto = (v) => (Math.abs(v) >= 1e6 ? fmtBR(v / 1e6, 1) + ' mi' : Math.abs(v) >= 1e3 ? fmtBR(v / 1e3, 0) + ' mil' : fmtBR(v, 0));
+// ---- Acompanhamento por grupo (ciclo): orçado por ciclo × realizado; sem orçado, contra o mês anterior ----
+function opGrupos(D) {
+    const blocos = Array.from(document.querySelectorAll('#view-tabelas .orc-ciclo-bloco'));
+    const bloco = blocos.find((b) => b.dataset.orcCiclo === D.ref) || blocos[0];
+    const tabelas = bloco ? Array.from(bloco.querySelectorAll('table.tabela-comparativo'))
+        : ['tabela-agua', 'tabela-esgoto'].map((id) => document.getElementById(id)).filter(Boolean);
+    const mapa = new Map();
+    tabelas.forEach((t) => t.querySelectorAll('tbody tr[data-grupo]').forEach((tr) => {
+        if (tr.style.display === 'none' || !tr.dataset.grupo) return;
+        const cel = (f) => opNum((tr.querySelector(`td[data-field="${f}"]`) || {}).textContent);
+        const g = mapa.get(tr.dataset.grupo) || { grupo: tr.dataset.grupo, r: 0, o: 0, sit: '' };
+        g.r += cel('fat-atual') || 0; g.o += cel('fat-anterior') || 0;
+        const s = tr.querySelector('.sit-grupo'); if (s && !g.sit) g.sit = s.textContent.trim();
+        mapa.set(g.grupo, g);
+    }));
+    return { comOrcado: !!bloco, fonte: bloco ? bloco.dataset.orcCiclo : '', grupos: Array.from(mapa.values()) };
+}
+function opBlocoGrupos(D, G) {
+    if (!G.grupos.length) return '<p class="op-vazio">Nenhum grupo marcado.</p>';
+    const ref = G.comOrcado ? G.fonte : D.rotAnt;
+    const linha = (g, tot) => {
+        const v = opVar(g.r, g.o);
+        return `<tr${tot ? ' class="op-tot"' : ''}><td>${tot ? 'Total' : 'Grupo ' + garEsc(g.grupo)}${!tot && g.sit ? ` <small>${garEsc(g.sit)}</small>` : ''}</td>`
+            + `<td class="num op-apagado">${opMoeda(g.o, 2)}</td><td class="num op-forte">${opMoeda(g.r, 2)}</td><td class="num">${opSeta(v, '')}</td></tr>`;
+    };
+    const tot = G.grupos.reduce((t, g) => ({ grupo: '', r: t.r + g.r, o: t.o + g.o }), { r: 0, o: 0 });
+    return `<table class="op-tab op-tab-grupos"><thead><tr><th>Grupo</th><th class="num">${G.comOrcado ? 'Orçado ' : ''}${garEsc(ref)}</th><th class="num">Realizado</th><th class="num">Δ</th></tr></thead>`
+        + `<tbody>${linha(tot, true)}${G.grupos.map((g) => linha(g)).join('')}</tbody></table>`;
+}
+function opGraficoGrupos(D, G, alvo) {
+    if (!G.grupos.length || typeof Chart === 'undefined') return;
+    const area = document.createElement('div'); area.className = 'op-grafico'; const cv = document.createElement('canvas'); area.appendChild(cv); alvo.appendChild(area);
+    const gs = G.grupos, ref = G.comOrcado ? 'Orçado ' + G.fonte : D.rotAnt;
+    const mil = (v) => fmtBR(v / 1e3, Math.abs(v) >= 1e5 ? 0 : 1);
     opGraficos.push(new Chart(cv, {
-        data: { labels: s.map((x) => opMesCurto(x.mes)), datasets: [
-            { type: 'line', label: 'Orçado ' + (D.ref || ''), data: s.map((x) => x.d.bruto.o), borderColor: '#E8710A', backgroundColor: '#E8710A',
-              borderWidth: 2, borderDash: [5, 3], pointRadius: 2.5, tension: 0, spanGaps: true, order: 0 },
-            { type: 'bar', label: 'Realizado', data: s.map((x) => x.d.bruto.r), backgroundColor: s.map((x) => (x.mes === D.mes ? '#176b9c' : '#1A2740')),
-              borderRadius: 3, maxBarThickness: 34, order: 1 }] },
+        data: { labels: gs.map((g) => g.grupo), datasets: [
+            { type: 'line', label: 'Realizado', data: gs.map((g) => g.r), borderColor: '#1534C8', backgroundColor: '#1534C8', borderWidth: 2.5, pointRadius: 3.5, tension: 0.15, order: 0 },
+            { type: 'bar', label: ref, data: gs.map((g) => g.o), backgroundColor: '#B9C3EC', borderRadius: 2, maxBarThickness: 46, order: 1 }] },
         options: { animation: false, responsive: true, maintainAspectRatio: false, devicePixelRatio: 2,
-            layout: { padding: { top: 16 } },
-            plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 10, boxHeight: 8, font: { size: 9.5 } } }, tooltip: { enabled: false } },
-            scales: { x: { grid: { display: false }, ticks: { font: { size: 9 } } },
-                      y: { beginAtZero: true, ticks: { font: { size: 8.5 }, maxTicksLimit: 5, callback: compacto }, grid: { color: '#EEF2F6' } } } },
-        plugins: [{ id: 'opDesvios', afterDatasetsDraw(c) {            // desvio % sobre cada barra; cor só se relevante
-            const g = c.ctx, meta = c.getDatasetMeta(1); g.save();
-            g.font = "600 8.5px 'IBM Plex Sans Condensed', 'Segoe UI', Arial, sans-serif"; g.textAlign = 'center'; g.textBaseline = 'bottom';
-            meta.data.forEach((bar, i) => {
-                const d = desvios[i]; if (d == null) return;
-                g.fillStyle = Math.abs(d) < OP_RELEVANTE ? '#64748b' : d > 0 ? '#15803d' : '#C2560C';
-                g.fillText(opPct(d, true), bar.x, Math.min(bar.y, c.scales.y.getPixelForValue(s[i].d.bruto.o || 0)) - 3);
+            layout: { padding: { top: 34 } },
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 18, boxHeight: 6, font: { size: 11 } } }, tooltip: { enabled: false } },
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { display: false, beginAtZero: true } } },
+        plugins: [{ id: 'opRotulos', afterDatasetsDraw(c) {
+            const g = c.ctx, linha = c.getDatasetMeta(0).data, barras = c.getDatasetMeta(1).data, topo = c.chartArea.top - 26;
+            g.save(); g.textAlign = 'center';
+            gs.forEach((x, i) => {
+                const d = x.r - x.o;
+                g.font = "600 9.5px 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif"; g.textBaseline = 'top';
+                g.fillStyle = Math.abs(opVar(x.r, x.o) || 0) < OP_RELEVANTE ? '#64748b' : d > 0 ? '#15803d' : '#C00000';
+                if (x.o) g.fillText((d > 0 ? '+' : '') + mil(d), linha[i].x, topo);
+                g.fillStyle = '#1534C8'; g.font = "500 11px 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif"; g.textBaseline = 'bottom';
+                g.fillText(mil(x.r), linha[i].x, linha[i].y - 6);
+                if (x.o && barras[i]) { g.fillStyle = '#334155'; g.font = "400 9px 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif"; g.fillText(mil(x.o), barras[i].x, c.chartArea.bottom - 3); }
             });
             g.restore(); } }],
     }));
+    const p = document.createElement('p'); p.className = 'op-nota'; p.textContent = 'Valores em R$ mil. No alto, a diferença realizado − ' + (G.comOrcado ? 'orçado' : 'mês anterior') + ' de cada grupo.';
+    alvo.appendChild(p);
 }
 
-// ---- Bloco 3: composição (natureza e serviço — cada visão soma o total; não se somam entre si) ----
-function opBlocoComposicao(D) {
-    const A = D.atual, P = D.ant;
-    if (!A) return '<p class="op-vazio">Sem DRE na pasta para o mês e a superintendência escolhidos.</p>';
-    const visao = (titulo, itens, cores) => {
-        const tot = itens.reduce((t, [, o]) => t + (o.r || 0), 0);
-        const barra = itens.map(([, o], i) => `<span style="width:${tot ? Math.max(0, (o.r || 0) / tot * 100) : 0}%; background:${cores[i]}"></span>`).join('');
-        return `<div class="op-comp"><div class="op-comp-tit">${titulo}</div><div class="op-comp-barra">${barra}</div><table class="op-mini"><tbody>`
-            + itens.map(([nome, o, ant], i) => `<tr><td><i style="background:${cores[i]}"></i>${nome}</td><td class="num">${opMoeda(o.r)}</td>`
-                + `<td class="num">${tot ? opPct((o.r || 0) / tot) : '–'}</td><td class="num">${opSeta(opVar(o.r, ant), '')}</td></tr>`).join('')
-            + '</tbody></table></div>';
-    };
-    const ant = (k) => (P && P[k] ? P[k].r : null);
-    return visao('Por natureza', [['Direto', A.diretas || {}, ant('diretas')], ['Indireto', A.ind, ant('ind')]], ['#1A2740', '#16a5b8'])
-        + visao('Por serviço', [['Água', A.agua, ant('agua')], ['Esgoto', A.esg, ant('esg')]], ['#176b9c', '#8a6a12'])
-        + `<p class="op-nota">Participação no faturamento total e variação vs ${garEsc(D.rotAnt)}. Água e esgoto incluem as indiretas de cada serviço.</p>`;
+// ---- Faixa do mês contra o anterior (Resumo, grupos marcados) ----
+function opBlocoVolumes(D) {
+    const R = D.resumo;
+    if (!R) return '<p class="op-vazio">Comparação com o mês anterior: só no mês vigente.</p>';
+    const ant = D.rotAnt, n0 = (x) => fmtBR(x, 0), r2 = (x) => 'R$ ' + fmtBR(x, 2);
+    const k = (rot, o, f) => `<div class="op-vol"><span class="op-rot">${rot}</span><b>${f(o.r)}</b><small>${garEsc(ant)}: ${f(o.a)}</small>${opSeta(opVar(o.r, o.a), 'vs ' + ant)}</div>`;
+    return `<div class="op-vols">${k('Faturamento', R.fat, (x) => opMoeda(x, 2))}${k('Economias', R.eco, n0)}${k('Volume (m³)', R.vol, n0)}${k('Ticket médio', R.ticket, r2)}</div>`;
 }
 
-// ---- Bloco 4: indicadores operacionais (com a evolução dos últimos meses) ----
-function opSpark(vals) {
-    const v = vals.map((x) => (x == null || !isFinite(x) ? null : x)), ok = v.filter((x) => x != null);
-    if (ok.length < 2) return '';
-    const mn = Math.min(...ok), mx = Math.max(...ok), W = 70, H = 18, n = v.length;
-    const pts = v.map((x, i) => (x == null ? null : `${(i / (n - 1) * W).toFixed(1)},${(H - 2 - (mx === mn ? 0.5 : (x - mn) / (mx - mn)) * (H - 4)).toFixed(1)}`)).filter(Boolean);
-    return `<svg class="op-spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${pts.join(' ')}" fill="none" stroke="#176b9c" stroke-width="1.5"/>`
-        + `<circle cx="${pts[pts.length - 1].split(',')[0]}" cy="${pts[pts.length - 1].split(',')[1]}" r="2" fill="#176b9c"/></svg>`;
+// ---- Top 5: maiores quedas e aumentos de faturamento (água) entre os clientes do Top 100 ----
+function opTop5(D, tipo) {
+    const t = document.querySelector(`#view-analise .sup-top-bloco[data-sup="${D.sup}"] table[data-top="${tipo}-agua"]`)
+        || document.querySelector(`.sup-top-bloco[data-sup="${D.sup}"] table[data-top="${tipo}-agua"]`)
+        || document.querySelector(`table[data-top="${tipo}-agua"]`);
+    if (!t) return [];
+    const cab = Array.from(t.tHead.rows[0].cells).map((c) => planoNorm(c.textContent));
+    const iNome = cab.findIndex((c) => /NOME/.test(c)), iGrupo = cab.findIndex((c) => /^GRUPO/.test(c)), iVal = cab.length - 1;
+    return Array.from(t.tBodies[0].rows).filter((tr) => tr.style.display !== 'none' && tr.cells.length === cab.length)
+        .map((tr) => ({ nome: tr.cells[iNome].textContent.trim(), grupo: iGrupo >= 0 ? tr.cells[iGrupo].textContent.trim() : '', v: Math.abs(opNum(tr.cells[iVal].textContent) || 0) }))
+        .sort((a, b) => b.v - a.v).slice(0, 5);
 }
-function opBlocoOperacionais(D) {
-    const A = D.atual, P = D.ant, R = D.resumo, s = D.serie;
-    const linhas = [];
-    const lin = (nome, val, ant, fmt, serie) => linhas.push(`<tr><td>${nome}</td><td class="num"><b>${fmt(val)}</b></td><td class="num">${opSeta(opVar(val, ant), '')}</td><td>${serie ? opSpark(serie) : ''}</td></tr>`);
-    const n0 = (x) => (x == null ? '–' : fmtBR(x, 0)), m3 = (x) => (x == null ? '–' : fmtBR(x, 0) + ' m³'), r2 = (x) => (x == null ? '–' : 'R$ ' + fmtBR(x, 2));
-    const g = (o) => (o ? o.r : null), ser = (f) => s.map((x) => f(x.d));
-    if (A) {
-        lin('Economias faturadas', g(A.eco), g(P && P.eco), n0, ser((d) => g(d.eco)));
-        lin('Volume faturado', g(A.vol), g(P && P.vol), m3, ser((d) => g(d.vol)));
-    } else if (R) {
-        lin('Economias faturadas', R.eco.r, R.eco.a, n0); lin('Volume faturado', R.vol.r, R.vol.a, m3);
-    }
-    if (R && R.temAcima) lin('Economias acima do mínimo', R.acima.r, R.acima.a, n0);
-    if (A) {
-        lin('Tarifa média (R$/m³)', A.tarifa.r, P && P.tarifa.r, r2, ser((d) => d.tarifa.r));
-        lin('Ticket médio (R$/economia)', A.ticket.r, P && P.ticket.r, r2, ser((d) => d.ticket.r));
-    } else if (R) {
-        lin('Tarifa média (R$/m³)', R.tarifa.r, R.tarifa.a, r2); lin('Ticket médio (R$/economia)', R.ticket.r, R.ticket.a, r2);
-    }
-    if (!linhas.length) return '<p class="op-vazio">Sem dados operacionais para os filtros.</p>';
-    return `<table class="op-mini op-oper"><thead><tr><th></th><th class="num">${garEsc(opMesCurto(D.mes))}</th><th class="num">vs ${garEsc(D.rotAnt)}</th><th>Evolução</th></tr></thead><tbody>${linhas.join('')}</tbody></table>`
-        + (!D.vigente ? '<p class="op-nota">Economias acima do mínimo: só no mês vigente.</p>' : '');
+function opBlocoTop(D) {
+    const lista = (tit, cls, itens) => `<div class="op-top ${cls}"><div class="op-top-tit">${tit}</div>`
+        + (itens.length ? itens.map((x, i) => `<div class="op-top-lin"><span>${i + 1}. ${garEsc(x.nome)}${x.grupo ? ` · grupo ${garEsc(x.grupo)}` : ''}</span><b>${opMoeda(x.v, 2)}</b></div>`).join('')
+            : '<p class="op-vazio">Sem clientes.</p>') + '</div>';
+    const m = opMesCurto((opEditor() || { dataset: {} }).dataset.ref || '');
+    return `<div class="op-tops">${lista('Maiores quedas de faturamento — ' + garEsc(m), 'op-top-neg', opTop5(D, 'queda'))}`
+        + `${lista('Maiores aumentos de faturamento — ' + garEsc(m), 'op-top-pos', opTop5(D, 'aumento'))}</div>`;
 }
 
 // ---- Bloco 5: análise crítica (texto livre por mês e superintendência) ----
@@ -2643,61 +2646,46 @@ function opBlocoProjetos() {
         + `<tfoot><tr><td>Potencial total (oportunidade projetada — não está no realizado)</td><td class="num">${tot ? opMoeda(tot) : '–'}</td><td colspan="3"></td></tr></tfoot></table>`;
 }
 
-function opSecao(cls, titulo, extra) {
-    const s = document.createElement('section'); s.className = 'op-bloco ' + cls;
-    s.innerHTML = `<h3>${titulo}${extra || ''}</h3>`;
+function opSecao(titulo, extra) {
+    const s = document.createElement('section'); s.className = 'op-secao';
+    if (titulo) s.innerHTML = `<h3>${titulo}${extra || ''}</h3>`;
     return s;
 }
 function opDesenhar() {
     const folha = document.getElementById('opFolha'); if (!folha) return;
-    const tit = document.getElementById('opTitulo');
-    if (tit && document.activeElement !== tit) tit.value = typeof opMapa.titulo === 'string' ? opMapa.titulo : OP_TITULO;
     if (!opAtiva()) return;
     if (folha.contains(document.activeElement) && document.activeElement.isContentEditable) return;   // não atrapalha quem escreve
     opGraficos.forEach((g) => { try { g.destroy(); } catch (e) { /* já destruído */ } }); opGraficos = [];
-    const D = opDados(), ed = opEditor();
-    const marcados = document.querySelectorAll('.chk-grupo:checked').length, grupos = document.querySelectorAll('.chk-grupo').length;
+    const D = opDados(), ed = opEditor(), corte = ed ? ed.dataset.corte : '';
+    D.refs = Array.from(new Set(Array.from(document.querySelectorAll('#view-dre th[data-tipo="orc"]')).map((th) => th.dataset.src)));
+    const nomeSup = D.sup === 'TODAS' ? 'Todas as superintendências' : D.sup;
     folha.innerHTML = '';
     const cab = document.createElement('header'); cab.className = 'op-cab';
-    cab.innerHTML = `<div><div class="op-marca">Águas do Rio · Faturamento</div><h2></h2></div><p></p>`;
-    cab.querySelector('h2').textContent = (typeof opMapa.titulo === 'string' && opMapa.titulo) || OP_TITULO;
-    cab.querySelector('p').innerHTML = `Competência <b>${garEsc(opMesCurto(D.mes))}</b> · Superintendência <b>${garEsc(D.sup === 'TODAS' ? 'Todas' : D.sup)}</b>`
-        + ` · Orçado <b>${garEsc(D.ref || '—')}</b> · Grupos ${marcados === grupos ? 'todos' : marcados + ' de ' + grupos}`
-        + `<br>Dados até ${garEsc(ed ? ed.dataset.corte : '')} (D-1) · gerado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`;
+    cab.innerHTML = `<h2>${garEsc(nomeSup)}: Acompanhamento do Faturamento — ${garEsc(corte.slice(0, 6) + corte.slice(8))}</h2>`;
     folha.appendChild(cab);
-    const k = opSecao('op-b-kpis', 'Quanto faturamos e o atingimento do orçamento'); k.insertAdjacentHTML('beforeend', `<div class="op-kpis">${opBlocoKpis(D)}</div>`); folha.appendChild(k);
-    const ev = opSecao('op-b-evol', 'Evolução do faturamento — realizado × orçado'); folha.appendChild(ev); opBlocoEvolucao(D, ev);
-    const co = opSecao('op-b-comp', 'Composição do faturamento'); co.insertAdjacentHTML('beforeend', opBlocoComposicao(D)); folha.appendChild(co);
-    const op = opSecao('op-b-oper', 'Indicadores operacionais'); op.insertAdjacentHTML('beforeend', opBlocoOperacionais(D)); folha.appendChild(op);
-    const an = opSecao('op-b-anal', 'Análise crítica do resultado'); an.insertAdjacentHTML('beforeend', opBlocoAnalise(D)); folha.appendChild(an);
-    const pj = opSecao('op-b-proj', 'Projetos e oportunidades', ' <button type="button" class="op-so-tela op-proj-add" title="Acrescentar um projeto">+ projeto</button>');
-    pj.insertAdjacentHTML('beforeend', opBlocoProjetos()); folha.appendChild(pj);
-    opEncaixar();
+    const dest = opBlocoDestaque(D);
+    const s1 = opSecao('➤ Faturamento', typeof dest === 'object' && dest.ant ? `<small class="op-h-dir">${dest.ant}</small>` : '');
+    s1.insertAdjacentHTML('beforeend', `<div class="op-painel">${typeof dest === 'object' ? dest.html : dest}</div>${opBlocoCards(D)}`);
+    folha.appendChild(s1);
+    const G = opGrupos(D);
+    const s2 = opSecao(`Acompanhamento por grupo (ciclo) — ${G.comOrcado ? garEsc(G.fonte) : 'mês anterior'} × realizado`,
+        `<small class="op-h-dir">${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} · água + esgoto</small>`);
+    s2.insertAdjacentHTML('beforeend', opBlocoGrupos(D, G)); folha.appendChild(s2); opGraficoGrupos(D, G, s2);
+    const s3 = opSecao(''); s3.classList.add('op-secao-faixa');
+    s3.insertAdjacentHTML('beforeend', `<div class="op-faixa">Faturamento do mês — ${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} vs ${garEsc(D.rotAnt)}</div>${opBlocoVolumes(D)}`);
+    folha.appendChild(s3);
+    const s4 = opSecao('Top 5 clientes'); s4.insertAdjacentHTML('beforeend', opBlocoTop(D)); folha.appendChild(s4);
+    const s5 = opSecao('Análise do mês'); s5.insertAdjacentHTML('beforeend', opBlocoAnalise(D)); folha.appendChild(s5);
+    const s6 = opSecao('Projetos e oportunidades', ' <button type="button" class="op-so-tela op-proj-add" title="Acrescentar um projeto">+ projeto</button>');
+    s6.insertAdjacentHTML('beforeend', opBlocoProjetos()); folha.appendChild(s6);
+    const rod = document.createElement('footer'); rod.className = 'op-rodape';
+    rod.innerHTML = `<span>Fonte: painel de faturamento · ${garEsc(nomeSup)} · competência ${garEsc(opMesCurto(D.mes))} · orçado ${garEsc(D.ref || '—')}`
+        + ` · dados até ${garEsc(corte)} (D-1) · gerado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span><b class="op-marca">Águas do Rio</b>`;
+    folha.appendChild(rod);
 }
-// Folha na tela: reduzida para caber na largura; textos e tabela de projetos diminuem a letra até caber no quadro
-function opEncaixar() {
-    const folha = document.getElementById('opFolha'), palco = document.getElementById('opPalco'); if (!folha || !palco) return;
-    folha.querySelectorAll('.op-texto, .op-b-proj table').forEach((el) => {
-        const caixa = el.classList.contains('op-texto') ? el : el.closest('.op-bloco');
-        let f = 11; el.style.fontSize = f + 'px';
-        while (f > 7 && caixa.scrollHeight > caixa.clientHeight + 1) { f -= 0.5; el.style.fontSize = f + 'px'; }
-    });
-    const k = Math.min(1, (palco.clientWidth || OP_W) / OP_W);
-    folha.style.transform = k < 1 ? `scale(${k})` : ''; palco.style.height = Math.ceil(OP_H * k) + 'px';
-    const msg = document.getElementById('opEscala');
-    if (msg) { const cheio = Array.from(folha.querySelectorAll('.op-texto')).some((t) => t.scrollHeight > t.clientHeight + 1);
-        msg.textContent = cheio ? 'Algum texto da análise não cabe no quadro: resuma para aparecer inteiro no PDF.' : ''; }
-}
-window.addEventListener('resize', () => { if (opAtiva()) opEncaixar(); });
-
 function opSalvarProjetos(ps) { opMapa[opChaveProj()] = ps; opSalvar(); }
 document.addEventListener('input', (e) => {
     const t = e.target;
-    if (t.id === 'opTitulo') {
-        opMapa.titulo = t.value; opSalvar();
-        const h = document.querySelector('#opFolha .op-cab h2'); if (h) h.textContent = t.value || OP_TITULO;
-        return;
-    }
     if (!t.closest || !t.closest('#opFolha')) return;
     if (t.classList.contains('op-texto')) {
         const v = t.innerText.replace(/\s+$/, '');
@@ -2707,7 +2695,6 @@ document.addEventListener('input', (e) => {
         const ps = opProjetos(); (ps[+t.dataset.l] = ps[+t.dataset.l] || ['', '', '', ''])[+t.dataset.c] = t.innerText.trim();
         opSalvarProjetos(ps);
     }
-    clearTimeout(opTimerAjuste); opTimerAjuste = setTimeout(opEncaixar, 150);
 });
 document.addEventListener('focusout', (e) => {
     const t = e.target;
@@ -2739,7 +2726,7 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// PDF de uma página 16:9: a folha é copiada (gráfico como imagem, sem botões e dicas de edição) para um documento à
+// PDF de uma página só (da altura da folha): a folha é copiada (gráfico como imagem, sem botões e dicas de edição) para um documento à
 // parte, fotografada (html2canvas) e posta numa página do tamanho de um slide (jsPDF). Sem as bibliotecas, imprime.
 async function gerarOnePage(libs) {
     if (!opAtiva()) mostrarView('onepage'); else opDesenhar();
@@ -2760,7 +2747,7 @@ async function gerarOnePage(libs) {
     document.body.appendChild(aviso);
     const fr = document.createElement('iframe');
     fr.setAttribute('aria-hidden', 'true'); fr.title = 'One page';
-    fr.style.cssText = `position:fixed; left:0; top:0; width:${OP_W}px; height:${OP_H}px; border:0; opacity:0; pointer-events:none; z-index:-1;`;
+    fr.style.cssText = `position:fixed; left:0; top:0; width:${OP_W}px; height:800px; border:0; opacity:0; pointer-events:none; z-index:-1;`;
     document.body.appendChild(fr);
     try {
         const estilos = Array.from(document.querySelectorAll('style')).map((s) => s.textContent).join('\n');
@@ -2775,10 +2762,12 @@ async function gerarOnePage(libs) {
         await Promise.race([injetaLibs(doc, l), new Promise((_, r) => setTimeout(() => r(new Error('bibliotecas do PDF demoraram')), 15000))]);
         const w = fr.contentWindow;
         if (!w.jspdf || !w.html2canvas) throw new Error('bibliotecas do PDF indisponíveis');
-        const foto = await w.html2canvas(doc.body.firstElementChild, { scale: 2, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 3000,
-            windowWidth: OP_W, windowHeight: OP_H, width: OP_W, height: OP_H });
-        const PW = 338.67, PH = 190.5;                                 // mm: 13,33 × 7,5 pol.
-        const pdf = new w.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: [PW, PH], compress: true });
+        const raiz = doc.body.firstElementChild, alt = Math.ceil(raiz.scrollHeight);
+        fr.style.height = alt + 'px'; await new Promise((r) => setTimeout(r, 50));
+        const foto = await w.html2canvas(raiz, { scale: 2, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 3000,
+            windowWidth: OP_W, windowHeight: alt, width: OP_W, height: alt });
+        const PW = 210, PH = PW * alt / OP_W;                          // largura de uma A4; a altura acompanha a folha
+        const pdf = new w.jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: [PW, PH], compress: true });
         pdf.addImage(foto.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, PW, PH);
         const url = URL.createObjectURL(new Blob([pdf.output('blob')], { type: 'application/pdf' }));
         const a = document.createElement('a');
@@ -2796,5 +2785,5 @@ async function gerarOnePage(libs) {
 var syncOnePage = criaSync('onepage', 'One page', () => opMapa,
     (m) => { opMapa = m; try { localStorage.setItem(OP_LS, JSON.stringify(opMapa)); } catch (e) {} },
     () => opDesenhar(),
-    () => !!(document.activeElement && (document.activeElement.isContentEditable && document.activeElement.closest('#opFolha') || document.activeElement.id === 'opTitulo')));
+    () => !!(document.activeElement && document.activeElement.isContentEditable && document.activeElement.closest('#opFolha')));
 document.addEventListener('DOMContentLoaded', () => { opDesenhar(); syncOnePage.puxar(); });
