@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Situação de cada grupo de leitura no mês vigente (coluna "Situação" das tabelas da aba Diretas).
 
-  - LIS: o grupo que está sendo lido hoje (Data da Leitura do cronograma = hoje).
+  - LIS: o grupo que está sendo lido hoje — hoje está entre a primeira e a última Data da Leitura do grupo no cronograma
+    (cada rota tem a sua data; um grupo lido em vários dias fica LIS do primeiro ao último).
   - Aguardando: grupos com leitura depois de hoje (ainda não lidos) ou ainda sem nenhuma linha no mês.
   - Em Análise: ao menos uma matrícula com Situacao Conta = EM ANALISE (fatura de ciclo e/ou consumo do mês).
   - Liberado: nenhuma matrícula em análise (todas LIBERADA).
@@ -39,7 +40,7 @@ def resumo_situacao_conta(df, col_grupo, col_ref, col_sit="Situacao Conta"):
 
 
 def _datas_de_leitura(ctx, ref):
-    """{grupo: data da leitura no mês `ref`} pelo cronograma."""
+    """{chave do grupo: (primeira, última) data de leitura no mês `ref`} pelo cronograma (uma data por rota)."""
     crono = getattr(ctx, "cronograma_leitura", None)
     if crono is None or not len(crono) or "Referencia Cronograma" not in crono.columns:
         return {}
@@ -48,10 +49,13 @@ def _datas_de_leitura(ctx, ref):
     faltam = datas.isna()
     if faltam.any():
         datas[faltam] = pd.to_datetime(c.loc[faltam, "Data da Leitura"], errors="coerce", dayfirst=True)
+    from .leitura import chave_grupo
     out = {}
     for g, d in zip(c["Grupo"], datas):
-        if pd.notna(d):
-            out[str(g)] = min(out.get(str(g), d.date()), d.date())
+        if pd.notna(d) and pd.notna(g):
+            k, d = chave_grupo(g), d.date()            # "504.0" no cronograma = "504" na fatura
+            ini, fim = out.get(k, (d, d))
+            out[k] = (min(ini, d), max(fim, d))
     return out
 
 
@@ -78,9 +82,9 @@ def situacao_dos_grupos(ctx):
     sit = {}
     for g in grupos:
         d, c = datas.get(g), conta.get(g)
-        if d is not None and d == hoje:
+        if d is not None and d[0] <= hoje <= d[1]:
             sit[g] = LIS
-        elif d is not None and d > hoje:
+        elif d is not None and d[0] > hoje:
             sit[g] = AGUARDANDO
         elif not c or not c["n"]:
             sit[g] = AGUARDANDO

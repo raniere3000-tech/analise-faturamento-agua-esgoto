@@ -72,3 +72,20 @@ def test_pdf_sem_contorno_no_selo_manual():
     import os
     css = open(os.path.join(os.path.dirname(__file__), "..", "faturamento", "assets", "relatorio.css"), encoding="utf-8").read()
     assert "#view-executivo .sit-manual { border-color:transparent; }" in css
+
+
+def test_lis_grupo_lido_em_varios_dias_e_grupo_com_ponto_zero():
+    """Grupo com rotas lidas em dias diferentes fica LIS do primeiro ao último dia; "504.0" no cronograma = "504"."""
+    import datetime as dt
+    from types import SimpleNamespace
+    import pandas as pd
+    from faturamento.situacao_grupo import situacao_dos_grupos
+    crono = pd.DataFrame({"Grupo": ["504.0", "504.0", "505", "503"],
+                          "Data da Leitura": ["14/10/2026", "17/10/2026", "20/10/2026", "13/10/2026"],
+                          "Referencia Cronograma": ["10/2026"] * 4})
+    resumo = pd.DataFrame({"g": ["504", "503"], "ref": ["10/2026", "10/2026"], "n": [10, 8],
+                           "em_analise": [True, False], "liberada": [False, True]})
+    ctx = SimpleNamespace(data_corte=dt.date(2026, 10, 15), ref_atual="10/2026", cronograma_leitura=crono,
+                          situacao_conta_resumo=resumo, fatura_total=None, situacao_grupo=None)
+    sit = situacao_dos_grupos(ctx)                             # "hoje" = 16/10/2026
+    assert sit["504"] == "LIS" and sit["505"] == "Aguardando" and sit["503"] == "Liberado"
