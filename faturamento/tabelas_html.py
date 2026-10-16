@@ -809,3 +809,42 @@ def gera_tabela_top100_html(df, titulo, slug, botao_extra="", aumento=False, cha
     </table>
     </div>
     """
+
+
+def tabelas_so_esgoto(ctx, ciclos_html, matriz_html, minimo_html):
+    """Aba Análise: as três tabelas de economias (ativas × cortadas, matriz de migração, acima × abaixo do mínimo) também
+    só com as ligações que faturaram esgoto (linha de esgoto com Consumo Faturado > 0) em cada mês. Devolve o HTML das
+    duas versões; o relatório mostra uma ou outra pela chave "Todas / Só as que faturam esgoto"."""
+    b = ctx.base_final
+    if "__serv" not in b.columns:
+        return ciclos_html, matriz_html, minimo_html
+    b2 = b[b["Referencia de Leitura"].isin([ctx.ref_atual, ctx.ref_anterior])]       # só os dois meses comparados
+    lig = b2["N. Ligação"].astype(str).str.strip()
+    ref = b2["Referencia de Leitura"].astype(str)
+    cons = pd.to_numeric(b2["Consumo Faturado"], errors="coerce").fillna(0)
+    esg = (b2["__serv"] == "E") & (cons > 0)
+    chave = pd.MultiIndex.from_arrays([lig, ref])
+    manter = chave.isin(pd.MultiIndex.from_arrays([lig[esg], ref[esg]]))           # ligação × mês com esgoto faturado
+    guarda = (ctx.base_final, ctx.alerta_minimo_html, dict(ctx.resultados), dict(ctx.categorias_sem_minimo))
+    try:
+        ctx.base_final = b2[manter]
+        c2, _ = monta_quadro_ciclos_situacao(ctx)
+        m2 = gera_matriz_migracao_grupos(ctx)
+        t2, _ = gera_tabela_acima_abaixo_minimo(ctx)
+    finally:                                         # o resto do relatório continua com a base inteira
+        ctx.base_final, ctx.alerta_minimo_html = guarda[0], guarda[1]
+        ctx.resultados.clear(); ctx.resultados.update(guarda[2])
+        ctx.categorias_sem_minimo.clear(); ctx.categorias_sem_minimo.update(guarda[3])
+    duas = lambda todas, so: (f'<div class="vista-serv" data-vista="todas">{todas}</div>'
+                              f'<div class="vista-serv" data-vista="esgoto" hidden>{so}</div>')
+    return duas(ciclos_html, c2), duas(matriz_html, m2), duas(minimo_html, t2)
+
+
+def barra_vista_analise():
+    """Chave da aba Análise: todas as economias × só as que faturam esgoto."""
+    return ('<div class="card card-faixa barra-vista"><h2>Economias</h2>'
+            '<span class="gar-sub" role="group" aria-label="Quais economias mostrar">'
+            '<button type="button" data-vista-btn="todas" class="ativo" aria-pressed="true">Todas</button>'
+            '<button type="button" data-vista-btn="esgoto" aria-pressed="false">Só as que faturam esgoto</button></span>'
+            '<span class="nota-secao" style="margin:0">Vale para ativas × cortadas, matriz de migração e acima × abaixo do mínimo: '
+            'em "só esgoto", entram as ligações que faturaram esgoto em cada mês.</span></div>')

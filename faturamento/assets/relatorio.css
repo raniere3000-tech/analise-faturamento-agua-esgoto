@@ -504,3 +504,9 @@ table.tabela-plano th { text-align:left; }
 td.pl-vencido { color:#9C0006; font-weight:700; } .pl-vencido-txt { color:#9C0006; }
 #view-executivo .pl-status, #view-executivo td.pl-vencido { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 .plano-entrada .gar-espaco { flex:1; }
+
+/* aba Análise: chave Todas / Só as que faturam esgoto */
+.barra-vista { display:flex; align-items:center; gap:10px 16px; flex-wrap:wrap; }
+.barra-vista h2 { margin:0; }
+.barra-vista .gar-sub { margin-left:0; }
+@media print { .barra-vista { display:none; } }
