@@ -196,3 +196,9 @@ def test_pdf_justificativas_um_bloco_por_grupo(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert "const separaGrupos = (c) =>" in html and "flatMap(separaGrupos)" in html
     assert "if (M + LH - y < LH * 0.3) novaPagina();" in html              # quadro grande começa abaixo do título
+
+
+def test_top1000_filtro_de_categoria(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert 'id="garCatBtn"' in html and 'id="garCatLista"' in html
+    assert "(!GAR.cats || GAR.cats.has(garCat(d)))" in html and "function garMontarCategorias()" in html
