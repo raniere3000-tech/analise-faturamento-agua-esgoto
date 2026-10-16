@@ -71,6 +71,15 @@ def distribui(dias, corte, fotos, acumulado, orcado_mes, so_corte):
 
 
 # ---------------------------------------------------------------- dados
+def rf_mais_recente(fontes):
+    """A planilha RF mais nova pelo nome RFnnTaa (ex.: RF02T26 > RF01T26 > RF3T25); sem o padrão, a primeira."""
+    import re
+    def chave(f):
+        m = re.search(r"RF\s*0*(\d+)\s*T\s*(\d{2})", str(f).upper())
+        return (int(m.group(2)), int(m.group(1))) if m else (-1, -1)
+    return max(fontes, key=chave) if fontes else None
+
+
 def _num(s):
     return pd.to_numeric(s, errors="coerce").fillna(0)
 
@@ -117,7 +126,7 @@ def _por_grupo(df, valores, grupo="Grupo"):
 
 def dados_acompanhamento(ctx, sup):
     """Tudo o que o arquivo precisa, para a superintendência `sup` (ou TODAS) no mês vigente."""
-    from .dre import _indiretas_mes, fontes_sup, orcado
+    from .dre import _indiretas_mes, fontes_rf, fontes_sup, orcado
     from .orcado_ciclo import pesos_por_ciclo
     from .previsao import data_corte, eventos_indiretas
     ra, rn = ctx.ref_atual, ctx.ref_anterior
@@ -136,10 +145,12 @@ def dados_acompanhamento(ctx, sup):
     def agrega(mascara, serie):
         return _por_grupo(b[mascara], serie[mascara])
 
-    # orçado SUP por ciclo: orçado do mês da SUP × peso do grupo (participação no valor faturado, só entre os grupos da SUP)
+    # orçado das indiretas = orçado SUP; orçado das diretas por ciclo (aba Faturamento) = RF mais recente (ex.: RF02T26)
     fontes = fontes_sup(ctx)
     fonte = fontes[0] if fontes else None
     orc = orcado(ctx, fonte, sup, ra) if fonte else {}
+    fonte_rf = rf_mais_recente(fontes_rf(ctx))
+    orc_rf = orcado(ctx, fonte_rf, sup, ra) if fonte_rf else {}
     orc_ciclo = {}
     for s, k, rub in (("A", "dA", "AGUA"), ("E", "dE", "ESGOTO")):
         from .leitura import chave_grupo
@@ -148,7 +159,7 @@ def dados_acompanhamento(ctx, sup):
             pesos[chave_grupo(g0)] = pesos.get(chave_grupo(g0), 0.0) + v
         p = {g: pesos.get(g, 0.0) for g in grupos}
         tot = sum(p.values())
-        orc_ciclo[s] = {g: (p[g] / tot) * (orc.get(k) or 0.0) if tot else 0.0 for g in grupos}
+        orc_ciclo[s] = {g: (p[g] / tot) * (orc_rf.get(k) or 0.0) if tot else 0.0 for g in grupos}
 
     fat = {}
     for s in ("A", "E"):
@@ -187,7 +198,7 @@ def dados_acompanhamento(ctx, sup):
             **{f"vol{s}_{i}": f(vol_t[(s, r)]) for s in ("A", "E") for i, r in (("at", ra), ("an", rn))},
         })
     return {"sup": sup, "ref": ra, "ref_anterior": rn, "mes": nome_mes(ra), "corte": data_corte(ctx),
-            "fonte": fonte or "", "linhas": linhas, "indiretas": indiretas}
+            "fonte": fonte or "", "fonte_rf": fonte_rf or "", "linhas": linhas, "indiretas": indiretas}
 
 
 # ---------------------------------------------------------------- Excel
@@ -267,7 +278,7 @@ def gera_xlsx(dados, fotos=None):
     aba("1 Faturamento", f"Faturamento {dados['mes']} — {sup_nome} (por ciclo)", [("", 2), ("Água", 3), ("Esgoto", 3)],
         ["Data leitura", "Ciclo", "Orçado", "Liberado", "Em Análise", "Orçado", "Liberado", "Em Análise"], corpo,
         [DATA, None, MOEDA, MOEDA, MOEDA, MOEDA, MOEDA, MOEDA], tot, [13, 8, 17, 17, 17, 17, 17, 17],
-        f"Orçado por ciclo = orçado {dados['fonte'] or 'SUP'} do mês × participação do ciclo no faturado (média dos últimos meses). "
+        f"Orçado por ciclo = orçado {dados.get('fonte_rf') or 'RF'} do mês × participação do ciclo no faturado (média dos últimos meses). "
         "Liberado / Em Análise = faturado pela Situação Conta.")
     # 2 Cancelamento
     corpo = [[num(l["grupo"]), l["canc"] or None] for l in lin]
@@ -339,7 +350,7 @@ def gera_xlsx(dados, fotos=None):
     # Leia-me
     ws = wb.create_sheet("Leia-me", 0)
     texto = [f"Acompanhamento Mensal — {dados['mes']} — {sup_nome}", "",
-             f"Dados até {corte:%d/%m/%Y} (D-1) · Orçado: {dados['fonte'] or 'SUP'} · Gerado em {dt.datetime.now():%d/%m/%Y %H:%M}", "",
+             f"Dados até {corte:%d/%m/%Y} (D-1) · Orçado — faturamento por ciclo: {dados.get('fonte_rf') or 'RF'}; indiretas: {dados['fonte'] or 'SUP'} · Gerado em {dt.datetime.now():%d/%m/%Y %H:%M}", "",
              "Uma aba por tabela da planilha de acompanhamento, na mesma ordem de colunas: copie e cole como valores.",
              "1 Faturamento · 2 Cancelamento · 3 Economias Água · 4 Volume Água · 5 Economias Esgoto · 6 Volume Esgoto · 7 Indiretas R$ · 8 Indiretas Qtd",
              "", "Indiretas: nos dias que já passaram (cinza), Orçado = Realizado. O realizado de cada semana (entre um export e o seguinte)",
