@@ -1686,7 +1686,7 @@ syncConfig.puxar();
 // Dados (script#garantia-dados, JSON em gzip): uma linha por matrícula, já no ranking da média do faturado (R$) dos
 // meses fechados. A análise manual (média do sistema, motivo, retorno, foto do faturado) fica em garItens e vai para a
 // seção "garantia" do ajustes_relatorio.json — a mesma análise para todos.
-const GAR = { dados: null, porLig: new Map(), ref: '', top: 1000, refs: [], tarifa: null, soAnalise: false, busca: [],
+const GAR = { dados: null, porLig: new Map(), ref: '', top: 1000, refs: [], tarifa: null, soAnalise: false, busca: [], cats: null,
               ordem: { campo: 'rank', desc: false }, carregando: null };
 const GAR_LS = 'faturamento_garantia';
 let garItens = {};
@@ -1740,7 +1740,7 @@ function garValorCol(d, c) {
 }
 function garLinhasTop() {
     const busca = GAR.busca;                             // filtro por matrícula (parte do número; várias separadas por espaço)
-    let ls = GAR.lista.filter((d) => garVisivel(d) && (!GAR.soAnalise || garEmAnalise(d))
+    let ls = GAR.lista.filter((d) => garVisivel(d) && (!GAR.soAnalise || garEmAnalise(d)) && (!GAR.cats || GAR.cats.has(garCat(d)))
         && (!busca.length || busca.some((t) => String(d.lig).includes(t))));
     const { campo, desc } = GAR.ordem;
     const num = GAR_COLS_TOP.find((c) => c[0] === campo)?.[2] !== 't';
@@ -1751,8 +1751,41 @@ function garLinhasTop() {
     });
     return ls;
 }
+// filtro de categoria do Top 1000 (lista com caixas, como o filtro de grupos do cabeçalho); null = todas
+const garCat = (d) => String((d && d.cat) || '').trim() || '(sem categoria)';
+function garMontarCategorias() {
+    const lista = document.getElementById('garCatLista'); if (!lista || lista.dataset.pronta) return;
+    const n = {}; GAR.lista.forEach((d) => { const c = garCat(d); n[c] = (n[c] || 0) + 1; });
+    const cats = Object.keys(n).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    lista.innerHTML = '<label><input type="checkbox" id="garCatTodas" checked> <b>Selecionar todas</b></label><hr>'
+        + cats.map((c) => `<label><input type="checkbox" class="gar-cat" value="${garEsc(c)}" checked> ${garEsc(c)} <small>(${n[c]})</small></label>`).join('');
+    lista.dataset.pronta = '1';
+}
+function garLerCategorias() {
+    const caixas = Array.from(document.querySelectorAll('#garCatLista .gar-cat')), marc = caixas.filter((c) => c.checked);
+    GAR.cats = marc.length === caixas.length ? null : new Set(marc.map((c) => c.value));
+    const todas = document.getElementById('garCatTodas');
+    if (todas) { todas.checked = marc.length === caixas.length; todas.indeterminate = marc.length > 0 && marc.length < caixas.length; }
+    const b = document.getElementById('garCatBtn');
+    if (b) { b.textContent = (!GAR.cats ? 'Todas' : marc.length === 1 ? marc[0].value : `${marc.length} de ${caixas.length}`) + ' ▾'; b.classList.toggle('ativo', !!GAR.cats); }
+    garDesenharTop();
+}
+document.addEventListener('change', (e) => {
+    if (e.target.id === 'garCatTodas') { document.querySelectorAll('#garCatLista .gar-cat').forEach((c) => { c.checked = e.target.checked; }); garLerCategorias(); }
+    else if (e.target.classList && e.target.classList.contains('gar-cat')) garLerCategorias();
+});
+document.addEventListener('click', (e) => {
+    const dd = document.getElementById('garCatDD'); if (!dd) return;
+    if (e.target.id === 'garCatBtn') { const ab = dd.classList.toggle('aberto'); e.target.setAttribute('aria-expanded', ab ? 'true' : 'false'); return; }
+    if (!dd.contains(e.target)) { dd.classList.remove('aberto'); document.getElementById('garCatBtn').setAttribute('aria-expanded', 'false'); }
+});
+document.addEventListener('keydown', (e) => {
+    const dd = document.getElementById('garCatDD');
+    if (e.key === 'Escape' && dd && dd.classList.contains('aberto')) { dd.classList.remove('aberto'); document.getElementById('garCatBtn').focus(); }
+});
 function garDesenharTop() {
     const tab = document.getElementById('garTabelaTop'); if (!tab || !GAR.dados) return;
+    garMontarCategorias();
     garGrupos = gruposFiltro();
     const { campo, desc } = GAR.ordem;
     tab.tHead.innerHTML = '<tr>' + GAR_COLS_TOP.map(([c, t, tipo]) => `<th class="gar-ord ${tipo === 'n' ? 'num' : ''}" data-ord="${c}" tabindex="0" title="Ordenar">${t}${c === campo ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '<th></th></tr>';
@@ -2007,7 +2040,7 @@ function garBaixarTop() {
     const pct = (p) => (p == null ? null : Math.round(p * 1000) / 10);
     const linhas = garLinhasTop().map((d) => [d.rank, d.lig, d.nome, d.cat, d.loc, d.grupo, d.sup, garValorCol(d, 'eco'), d.mMed, d.mCons, d.cons,
         pct(garVar(d.cons, d.mCons)), d.mVal, d.val, pct(garVar(d.val, d.mVal)), d.sit || '']);
-    baixarTexto(csvDe(cols, linhas), `Garantia_Top${GAR.top}_${GAR.ref.replace('/', '-')}${GAR.soAnalise ? '_em_analise' : ''}.csv`);
+    baixarTexto(csvDe(cols, linhas), `Garantia_Top${GAR.top}_${GAR.ref.replace('/', '-')}${GAR.soAnalise ? '_em_analise' : ''}${GAR.cats ? '_categorias_filtradas' : ''}.csv`);
 }
 function garExportarEmail() {
     const itens = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)) && (it.motivo || it.retorno));
