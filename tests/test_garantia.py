@@ -249,3 +249,9 @@ def test_aumentos_e_quedas_e_explicacao_em_dados(sessao):
     lig = g[g["vAnt"].notna()].iloc[0]
     esperado = pd.to_numeric(b.loc[b["N. Ligação"].astype(str).str.strip() == lig["lig"], "Valor (R$)"], errors="coerce").sum()
     assert lig["vAnt"] == pytest.approx(esperado)
+
+
+def test_resumo_somente_grupos_liberados(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert 'id="garSoLiberados"' in html and "function gruposLiberados()" in html
+    assert "if (lib && !(d && lib.has(normGrupo(d.grupo)))) return;" in html
