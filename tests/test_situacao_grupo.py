@@ -89,3 +89,16 @@ def test_lis_grupo_lido_em_varios_dias_e_grupo_com_ponto_zero():
                           situacao_conta_resumo=resumo, fatura_total=None, situacao_grupo=None)
     sit = situacao_dos_grupos(ctx)                             # "hoje" = 16/10/2026
     assert sit["504"] == "LIS" and sit["505"] == "Aguardando" and sit["503"] == "Liberado"
+
+
+def test_datas_do_cronograma_em_excel_entram_na_semana_certa():
+    """Cronograma em Excel traz a data como '2026-10-13 00:00:00': era lida como ano-dia-mês (dia acima de 12 ficava
+    sem data e o grupo caía em "Sem semana" no One page; o dia 05/10 virava 10/05)."""
+    from types import SimpleNamespace
+    from faturamento.situacao_grupo import _datas_de_leitura
+    crono = pd.DataFrame({"Grupo": ["508", "507", "507", "509"],
+                          "Data da Leitura": ["2026-10-05 00:00:00", "2026-10-13 00:00:00", "2026-10-14 00:00:00", "20/10/2026"],
+                          "Referencia Cronograma": ["10/2026"] * 4})
+    datas = _datas_de_leitura(SimpleNamespace(cronograma_leitura=crono), "10/2026")
+    assert datas == {"507": (dt.date(2026, 10, 13), dt.date(2026, 10, 14)), "508": (dt.date(2026, 10, 5),) * 2,
+                     "509": (dt.date(2026, 10, 20),) * 2}
