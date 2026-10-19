@@ -2911,9 +2911,6 @@ function opDesenhar() {
     const sA = opSecao('Faturamento aberto', `<small class="op-h-dir">${garEsc(opMesCurto(D.mes))} · ${dica}</small>`);
     sA.insertAdjacentHTML('beforeend', opTabAberta(D, opAbertoFat(D, L), OP_ABERTO_FAT, 'bruto', 'Faturamento bruto'));
     folha.appendChild(sA);
-    const sI = opSecao('Indiretas por classe', `<small class="op-h-dir">${garEsc(opMesCurto(D.mes))} · serviços avulsos faturados</small>`);
-    sI.insertAdjacentHTML('beforeend', opTabAberta(D, L, OP_ABERTO_IND, 'tot', 'Total indiretas'));
-    folha.appendChild(sI);
     const G = opGrupos(D);
     const s2 = opSecao(`Acompanhamento semanal por grupo — realizado × ${G.fonte ? garEsc('orçado ' + G.fonte) : 'orçado'} e ${garEsc(D.rotAnt)}`,
         `<small class="op-h-dir">${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} · diretas (água + esgoto) · clique na semana para abrir</small>`);
@@ -2922,6 +2919,10 @@ function opDesenhar() {
     s3.insertAdjacentHTML('beforeend', `<div class="op-faixa">Indicadores do mês — ${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} vs ${garEsc(D.rotAnt)}</div>${opBlocoVolumes(D)}`);
     folha.appendChild(s3);
     const s4 = opSecao('Top 5 clientes'); s4.insertAdjacentHTML('beforeend', opBlocoTop(D)); folha.appendChild(s4);
+    // indiretas sempre depois de tudo das diretas (abertura semanal, indicadores e Top 5)
+    const sI = opSecao('Indiretas por classe', `<small class="op-h-dir">${garEsc(opMesCurto(D.mes))} · serviços avulsos faturados</small>`);
+    sI.insertAdjacentHTML('beforeend', opTabAberta(D, L, OP_ABERTO_IND, 'tot', 'Total indiretas'));
+    folha.appendChild(sI);
     const rod = document.createElement('footer'); rod.className = 'op-rodape';
     rod.innerHTML = `<span>Fonte: painel de faturamento · ${garEsc(nomeSup)} · competência ${garEsc(opMesCurto(D.mes))} · orçado ${garEsc(D.ref || '—')}`
         + ` · dados até ${garEsc(corte)} (D-1) · gerado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span><b class="op-marca">Águas do Rio</b>`;
