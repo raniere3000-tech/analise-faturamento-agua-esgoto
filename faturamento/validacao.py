@@ -246,8 +246,8 @@ def _csv_b64(df):
 
 def _botao_base(chave):
     nome = html.escape(NOMES_BASES[chave], quote=True)
-    return (f'<button type="button" class="btn-just btn-baixar-base" data-ref="{chave}" title="Baixar a base: {nome} (CSV)" '
-            f'aria-label="Baixar a base: {nome} (CSV)">&#11015;</button><span class="nome-base">{nome}</span>')
+    return (f'<button type="button" class="btn-just btn-baixar-base" data-ref="{chave}" title="Baixar a base: {nome} (Excel)" '
+            f'aria-label="Baixar a base: {nome} (Excel)">&#11015;</button><span class="nome-base">{nome}</span>')
 
 
 def _secao_bases(ctx):
@@ -262,7 +262,7 @@ def _secao_bases(ctx):
     dados = "".join(f'<script type="application/octet-stream" id="base-dl-{ch}" data-gz="1" data-arquivo="base_{ch}.csv">{_csv_b64(i["df"])}</script>'
                     for ch, i in BASES.items())
     return ('<p class="val-rot">Bases para download</p>'
-            '<p>Arquivos CSV (separador ";" e vírgula decimal — abrem direto no Excel). Cada item abaixo indica qual base usar e o filtro '
+            '<p>Arquivos em Excel (.xlsx). Cada item abaixo indica qual base usar e o filtro '
             'que leva ao resultado da tela. Todos os downloads (bases e tabelas) seguem o filtro <b>Superintendência</b> do cabeçalho: '
             f'com INTERIOR ou LESTE escolhida, só as linhas daquela superintendência vêm no arquivo.</p><ul class="val-bases">{"".join(linhas)}</ul>{dados}')
 
@@ -946,7 +946,7 @@ def _aba_garantia(ctx):
                ["Fatura: <b>N. Ligação</b>, <b>Rubrica</b>, <b>Valor (R$)</b>, <b>Referencia de Leitura</b>, <b>Situacao Conta</b>",
                 "Consumo: <b>Consumo Faturado</b>"],
                var, "garantia_aumentos_quedas", bases=[base_fat],
-               montagem=["Duas tabelas (aumentos e quedas), cada uma com a seta ⬇≡ para o analítico completo (CSV, todas as matrículas)",
+               montagem=["Duas tabelas (aumentos e quedas), cada uma com a seta ⬇≡ para o analítico completo (Excel, todas as matrículas)",
                          "A busca por matrícula procura dentro do Top 100; \"+ Análise\" leva para a Análise de Garantia"]),
         _bloco_texto("Análise de Garantia",
                      "as matrículas em análise no mês, com a média do sistema, o faturado calculado pela estrutura tarifária, a foto do "

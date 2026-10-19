@@ -109,7 +109,7 @@ def gera_aba_dados_html(ctx):
     return ('<div class="card val-card"><h2>Dados e validação dos cálculos</h2>'
             '<p class="nota-secao">Clique em um tópico para abrir. Em 1 a 7, cada tabela e gráfico do relatório, aba por aba: o que mostra, '
             'quais bases e colunas entram, o cálculo passo a passo, como foi montado, uma amostra e botões para baixar a tabela (Excel) '
-            'e a base usada (CSV).</p>'
+            'e a base usada (Excel).</p>'
             + topico(f"Avisos ({len(avisos)})", lista)
             + topico(f"Conferência dos KPIs — {html.escape(ctx.mes_atual)}", _conferencia_kpis(ctx))
             + topico("Bases carregadas", _tabela(["Tipo", "Arquivo", "Linhas", "Meses", "Observação"], linhas))

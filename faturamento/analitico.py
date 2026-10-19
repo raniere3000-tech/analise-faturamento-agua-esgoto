@@ -134,7 +134,7 @@ def gera_analitico_html(ctx):
             f'data-ref-anterior="{e(ctx.ref_anterior)}" data-mes="{e(ctx.mes_atual.replace("/", "-"))}">{_csv_gz_b64(d)}</script>')
 
 
-def seta_detalhe(tipo, sup="TODAS", rotulo="Baixar o analítico por matrícula desta tabela (CSV)"):
+def seta_detalhe(tipo, sup="TODAS", rotulo="Baixar o analítico por matrícula desta tabela (Excel)"):
     """Seta "detalhe" ao lado do título de uma tabela da aba Análise."""
     e = lambda v: html.escape(str(v), quote=True)
     return (f'<button type="button" class="btn-just btn-detalhe" data-detalhe="{e(tipo)}" data-sup="{e(sup)}" '
