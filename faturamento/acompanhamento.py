@@ -102,10 +102,8 @@ def _grupos_da_sup(ctx, sup):
     datas = {}
     if crono is not None and len(crono) and "Referencia Cronograma" in crono.columns:
         c = crono[crono["Referencia Cronograma"] == ctx.ref_atual]
-        dd = pd.to_datetime(c["Data da Leitura"].astype(str).str.strip(), format="%d/%m/%Y", errors="coerce")
-        faltam = dd.isna()
-        if faltam.any():
-            dd[faltam] = pd.to_datetime(c.loc[faltam, "Data da Leitura"], errors="coerce", dayfirst=True)
+        from .leitura import converte_datas
+        dd = converte_datas(c["Data da Leitura"])
         for g, d in zip(c["Grupo"], dd):
             if pd.notna(g) and pd.notna(d):
                 k = chave_grupo(g)

@@ -45,11 +45,8 @@ def _datas_de_leitura(ctx, ref):
     if crono is None or not len(crono) or "Referencia Cronograma" not in crono.columns:
         return {}
     c = crono[crono["Referencia Cronograma"] == ref]
-    datas = pd.to_datetime(c["Data da Leitura"].astype(str).str.strip(), format="%d/%m/%Y", errors="coerce")
-    faltam = datas.isna()
-    if faltam.any():
-        datas[faltam] = pd.to_datetime(c.loc[faltam, "Data da Leitura"], errors="coerce", dayfirst=True)
-    from .leitura import chave_grupo
+    from .leitura import chave_grupo, converte_datas
+    datas = converte_datas(c["Data da Leitura"])
     out = {}
     for g, d in zip(c["Grupo"], datas):
         if pd.notna(d) and pd.notna(g):
