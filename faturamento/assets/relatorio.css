@@ -624,6 +624,10 @@ table.op-tab tfoot td { border-top:2px solid var(--op-azul); }
 .op-top-lin { display:flex; justify-content:space-between; gap:10px; padding:5px 12px; font-size:12px; border-bottom:1px solid #EEF1F6; }
 .op-top-lin:nth-child(odd) { background:#F7F8FC; }
 .op-top-lin span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:uppercase; }
+.op-top-lin .op-top-nome { flex:1 1 auto; }
+.op-top-lin .op-top-grupo { flex:0 0 auto; overflow:visible; color:#475569; font-size:11px; }
+.op-secao-top > h3 .op-top-chave { align-self:center; margin-left:auto; padding:3px 10px; font-size:11.5px; }
+.op-secao-top > h3 .op-h-dir + .op-top-chave { margin-left:0; }
 .op-top-lin b { color:var(--op-azul); white-space:nowrap; }
 .op-pdf table.op-mini { width:100%; border-collapse:collapse; font-family:var(--fonte); font-size:12.5px; line-height:1.3; }
 table.op-mini th { background:none; border:0; color:#64748b; font-size:11px; font-weight:500; text-align:left; padding:3px 6px; border-bottom:1px solid #E2E8F0; text-transform:none; }

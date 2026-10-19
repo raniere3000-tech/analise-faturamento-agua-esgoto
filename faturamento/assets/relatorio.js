@@ -2882,24 +2882,48 @@ function opBlocoVolumes(D) {
 }
 
 // ---- Top 5: maiores quedas e aumentos de faturamento (água) entre os clientes do Top 100 ----
+// chave pessoal (navegador): só matrículas liberadas = Situação Conta do mês diferente de "Em análise" (base da aba Garantia)
+let opSoLiberadas = false;
+try { opSoLiberadas = localStorage.getItem('faturamento_op_top_liberadas') === '1'; } catch (e) { opSoLiberadas = false; }
+const opLig = (v) => String(v == null ? '' : v).trim().replace(/\.0+$/, '');
 function opTop5(D, tipo) {
-    const t = document.querySelector(`#view-analise .sup-top-bloco[data-sup="${D.sup}"] table[data-top="${tipo}-agua"]`)
-        || document.querySelector(`.sup-top-bloco[data-sup="${D.sup}"] table[data-top="${tipo}-agua"]`)
-        || document.querySelector(`table[data-top="${tipo}-agua"]`);
+    const chave = `${tipo}-agua`, d = lerJson('top100-dados');
+    const tirar5 = (itens) => itens.sort((a, b) => b.v - a.v).slice(0, 5);
+    if (d && d[chave]) {
+        // as mesmas linhas da tabela Top 100 da aba Análise (SUP e grupos marcados); com a chave, as em análise saem antes do corte de 100
+        const cols = d[chave].columns, ix = (n) => cols.indexOf(n), iSup = ix('Superintendência'), iG = ix('Grupo'), iL = ix('N. Ligação'),
+            iN = ix('Nome_Cliente'), iV = ix((tipo === 'aumento' ? 'Aumento' : 'Queda') + '_Valor_R$'), grupos = gruposFiltro();
+        const liberada = (l) => !opSoLiberadas || !garEmAnalise(GAR.porLig.get(opLig(l[iL])));
+        const linhas = d[chave].data.filter((l) => (D.sup === 'TODAS' || iSup < 0 || l[iSup] === D.sup) && (!grupos || grupos.has(normGrupo(l[iG]))) && liberada(l))
+            .slice(0, 100);
+        return tirar5(linhas.map((l) => ({ nome: String(l[iN] == null ? '' : l[iN]).trim(), grupo: iG >= 0 ? normGrupo(l[iG]) : '', v: Math.abs(+l[iV] || 0) })));
+    }
+    const t = document.querySelector(`#view-analise .sup-top-bloco[data-sup="${D.sup}"] table[data-top="${chave}"]`)
+        || document.querySelector(`.sup-top-bloco[data-sup="${D.sup}"] table[data-top="${chave}"]`)
+        || document.querySelector(`table[data-top="${chave}"]`);
     if (!t) return [];
     const cab = Array.from(t.tHead.rows[0].cells).map((c) => planoNorm(c.textContent));
-    const iNome = cab.findIndex((c) => /NOME/.test(c)), iGrupo = cab.findIndex((c) => /^GRUPO/.test(c)), iVal = cab.length - 1;
-    return Array.from(t.tBodies[0].rows).filter((tr) => tr.style.display !== 'none' && tr.cells.length === cab.length)
-        .map((tr) => ({ nome: tr.cells[iNome].textContent.trim(), grupo: iGrupo >= 0 ? tr.cells[iGrupo].textContent.trim() : '', v: Math.abs(opNum(tr.cells[iVal].textContent) || 0) }))
-        .sort((a, b) => b.v - a.v).slice(0, 5);
+    const iNome = cab.findIndex((c) => /NOME/.test(c)), iGrupo = cab.findIndex((c) => /^GRUPO/.test(c)), iVal = cab.length - 1,
+        iLig = cab.findIndex((c) => /LIGA/.test(c));
+    return tirar5(Array.from(t.tBodies[0].rows).filter((tr) => tr.style.display !== 'none' && tr.cells.length === cab.length)
+        .filter((tr) => !opSoLiberadas || iLig < 0 || !garEmAnalise(GAR.porLig.get(opLig(tr.cells[iLig].textContent))))
+        .map((tr) => ({ nome: tr.cells[iNome].textContent.trim(), grupo: iGrupo >= 0 ? tr.cells[iGrupo].textContent.trim() : '', v: Math.abs(opNum(tr.cells[iVal].textContent) || 0) })));
 }
 function opBlocoTop(D) {
+    // o nome encurta com "…"; o grupo e o valor ficam sempre inteiros
     const lista = (tit, cls, itens) => `<div class="op-top ${cls}"><div class="op-top-tit">${tit}</div>`
-        + (itens.length ? itens.map((x, i) => `<div class="op-top-lin"><span>${i + 1}. ${garEsc(x.nome)}${x.grupo ? ` · grupo ${garEsc(x.grupo)}` : ''}</span><b>${opMoeda(x.v, 2)}</b></div>`).join('')
-            : '<p class="op-vazio">Sem clientes.</p>') + '</div>';
+        + (itens.length ? itens.map((x, i) => `<div class="op-top-lin"><span class="op-top-nome" title="${garEsc(x.nome)}">${i + 1}. ${garEsc(x.nome)}</span>`
+            + `${x.grupo ? `<span class="op-top-grupo">Grupo ${garEsc(x.grupo)}</span>` : ''}<b>${opMoeda(x.v, 2)}</b></div>`).join('')
+            : `<p class="op-vazio">${opSoLiberadas && !GAR.dados ? 'Carregando as matrículas…' : 'Sem clientes.'}</p>`) + '</div>';
     const m = opMesCurto((opEditor() || { dataset: {} }).dataset.ref || '');
     return `<div class="op-tops">${lista('Maiores aumentos de faturamento — ' + garEsc(m), 'op-top-pos', opTop5(D, 'aumento'))}`
         + `${lista('Maiores quedas de faturamento — ' + garEsc(m), 'op-top-neg', opTop5(D, 'queda'))}</div>`;
+}
+function opCabTop() {
+    const tem = !!document.getElementById('garantia-dados');
+    return (opSoLiberadas ? '<small class="op-h-dir">somente matrículas liberadas (fora de "Em análise")</small>' : '')
+        + (tem ? `<button type="button" class="btn-just gar-filtro op-so-tela op-top-chave${opSoLiberadas ? ' ativo' : ''}" id="opTopLiberadas" aria-pressed="${opSoLiberadas}"`
+            + ` title="Mostra no Top 5 só as matrículas cuja conta do mês não está em análise">Somente liberadas</button>` : '');
 }
 
 function opSecao(titulo, extra) {
@@ -2936,7 +2960,8 @@ function opDesenhar() {
     const s3 = opSecao(''); s3.classList.add('op-secao-faixa');
     s3.insertAdjacentHTML('beforeend', `<div class="op-faixa">Indicadores do mês — ${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} vs ${garEsc(D.rotAnt)}</div>${opBlocoVolumes(D)}`);
     folha.appendChild(s3);
-    const s4 = opSecao('Top 5 clientes'); s4.insertAdjacentHTML('beforeend', opBlocoTop(D)); folha.appendChild(s4);
+    if (opSoLiberadas && !GAR.dados && document.getElementById('garantia-dados')) garCarregar().then(() => { if (opAtiva()) opDesenhar(); });
+    const s4 = opSecao('Top 5 clientes', opCabTop()); s4.classList.add('op-secao-top'); s4.insertAdjacentHTML('beforeend', opBlocoTop(D)); folha.appendChild(s4);
     // indiretas sempre depois de tudo das diretas (abertura semanal, indicadores e Top 5)
     const sI = opSecao('Indiretas por classe', `<small class="op-h-dir">${garEsc(opMesCurto(D.mes))} · serviços avulsos faturados</small>`);
     sI.insertAdjacentHTML('beforeend', opTabAberta(D, L, OP_ABERTO_IND, 'tot', 'Total indiretas'));
@@ -2951,6 +2976,11 @@ document.addEventListener('forecast-recalculado', () => opDesenhar());
 document.addEventListener('click', (e) => {
     const t = e.target;
     if (t.id === 'opPdf') { gerarOnePage(); return; }
+    if (t.id === 'opTopLiberadas') {
+        opSoLiberadas = !opSoLiberadas;
+        try { localStorage.setItem('faturamento_op_top_liberadas', opSoLiberadas ? '1' : '0'); } catch (er) { /* sem armazenamento */ }
+        opDesenhar(); return;
+    }
     const sem = t.closest && t.closest('#opFolha tr.op-sem');
     if (sem) {
         const n = +sem.dataset.semana; if (!opSemanasAbertas) opSemanasAbertas = new Set();
@@ -2962,6 +2992,7 @@ document.addEventListener('click', (e) => {
 // PDF de uma página só (da altura da folha): a folha é copiada (gráfico como imagem, sem botões e dicas de edição) para um documento à
 // parte, fotografada (html2canvas) e posta numa página do tamanho de um slide (jsPDF). Sem as bibliotecas, imprime.
 async function gerarOnePage(libs) {
+    if (opSoLiberadas && document.getElementById('garantia-dados')) await garCarregar();      // o Top 5 precisa da situação das contas
     if (!opAtiva()) mostrarView('onepage'); else opDesenhar();
     const folha = document.getElementById('opFolha');
     const copia = folha.cloneNode(true);
