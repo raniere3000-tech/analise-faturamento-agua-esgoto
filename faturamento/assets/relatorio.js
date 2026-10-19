@@ -1198,7 +1198,10 @@ function prevRecalcular(tab) {
     });
 }
 
-function prevRecalcularTodas() { document.querySelectorAll('table.tabela-previsao').forEach(prevRecalcular); }
+function prevRecalcularTodas() {
+    document.querySelectorAll('table.tabela-previsao').forEach(prevRecalcular);
+    document.dispatchEvent(new Event('forecast-recalculado'));       // o One page refaz a tendência com o forecast novo
+}
 
 document.addEventListener('focusin', e => {
     const cel = e.target.closest && e.target.closest('.prev-edit'); if (!cel) return;
@@ -2570,27 +2573,12 @@ document.addEventListener('DOMContentLoaded', () => { let v = null; try { v = lo
 // Números: DRE da superintendência (realizado e orçado de cada mês — o primeiro orçado escolhido em Comparar) e Resumo
 // (grupos marcados). Faturamento total = direto + indireto; água/esgoto é outra visão do mesmo total (sem dupla contagem).
 // Tarifa média = faturamento direto ÷ volume faturado de água; ticket médio = faturamento direto ÷ economias de água
-// faturadas (as mesmas definições dos KPIs do Resumo). O que é editado na folha fica em opMapa — seção "onepage" do
-// ajustes_relatorio.json, o mesmo para todos: "analise|<inc|desv|aten>|<mês>|<SUP>" e "projetos|<SUP>".
-const OP_LS = 'faturamento_onepage';
+// faturadas (as mesmas definições dos KPIs do Resumo). Tendência e forecast vêm das tabelas de forecast (abas Forecast e
+// Indiretas) e são refeitos a cada edição do forecast. A folha não tem nada editável.
 const OP_W = 900;                                       // largura da folha no PDF (no celular ela se ajusta à tela)
 const OP_RELEVANTE = 0.03;                              // variação a partir da qual o desvio ganha cor
-const OP_ANALISE = [
-    ['inc', 'Incrementos', 'Principais fatores que contribuíram positivamente (com o impacto em R$)…'],
-    ['desv', 'Desvios', 'Principais impactos negativos frente ao orçamento ou ao mês anterior (com o impacto em R$)…'],
-    ['aten', 'Pontos de atenção', 'Riscos que podem comprometer os próximos fechamentos…'],
-];
-const OP_PROJETOS_PADRAO = [['Incremento de esgoto', '', '', ''], ['Regularização cadastral', '', '', ''],
-    ['Recuperação de faturamento', '', '', ''], ['Ações comerciais', '', '', '']];
 const OP_MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-let opMapa = {};
-try { opMapa = JSON.parse(localStorage.getItem(OP_LS) || '{}') || {}; } catch (e) { /* sem armazenamento */ }
 let opGraficos = [];
-
-function opSalvar() {
-    try { localStorage.setItem(OP_LS, JSON.stringify(opMapa)); } catch (e) { /* ignora */ }
-    if (typeof syncOnePage !== 'undefined') syncOnePage.agendar();
-}
 const opAtiva = () => { const v = document.getElementById('view-onepage'); return !!v && v.classList.contains('ativo'); };
 const opEditor = () => document.getElementById('opEditor');
 // "R$ 119.432" · "R$ (3.240)" · "22,64" · "-27,0%" → número (null quando vazio ou "-")
@@ -2716,6 +2704,54 @@ function opBlocoCards(D) {
         + opSeta(opVar(A.bruto.r, D.ant.bruto.r), 'realizado vs ' + D.rotAnt) + '</div>');
     void base;
     return `<div class="op-cards">${quadros.join('')}</div>`;
+}
+
+// ---- Faturamento aberto: linhas das tabelas de forecast (aba Forecast e aba Indiretas), já com as edições do forecast ----
+// {chave: {r: realizado, o: orçado (D.ref), f: forecast, t: realizado + forecast}}; mês fechado: forecast vazio
+function opLinhasPrev(D) {
+    const tabs = [];
+    if (D.vigente) tabs.push(document.querySelector(`#view-forecast .prev-bloco[data-sup="${D.sup}"] table.tabela-previsao`));
+    tabs.push(document.querySelector(`#view-indiretas .sup-bloco[data-sup="${D.sup}"][data-mes="${D.mes}"] table.tabela-previsao`));
+    const L = {};
+    tabs.filter(Boolean).forEach((t) => t.querySelectorAll('tbody tr[data-k]').forEach((tr) => {
+        const k = tr.dataset.k; if (L[k] || /^ev_/.test(k)) return;
+        const txt = (sel) => (tr.querySelector(sel) || {}).textContent;
+        const orc = tr.querySelector(`td[data-tipo="orc"][data-src="${D.ref}"]`);
+        L[k] = { r: opNum(txt('.p-real')), o: orc ? opNum(orc.textContent) : null, f: D.vigente ? opNum(txt('.p-prev')) : null,
+                 t: D.vigente ? opNum(txt('.p-fech')) : null };
+    }));
+    if (!L.tot && (L.iA || L.iE)) {                     // sem a aba Indiretas: total = água + esgoto indireto da aba Forecast
+        const s = (c) => [L.iA, L.iE].some((x) => x && x[c] != null) ? [L.iA, L.iE].reduce((t, x) => t + ((x && x[c]) || 0), 0) : null;
+        L.tot = { r: s('r'), o: s('o'), f: s('f'), t: s('t') };
+    }
+    return L;
+}
+const OP_ABERTO_FAT = [['dA', 'Diretas água'], ['dE', 'Diretas esgoto'], ['tot', 'Indiretas (água + esgoto)']];
+const OP_ABERTO_IND = [['ri_CORTE', 'Cortes / recorte'], ['ri_RELIGAÇÃO', 'Religações'], ['ri_LNA', 'Ligações de água'],
+    ['ri_SANÇÃO', 'Fiscalização'], ['ri_OUTROS', 'Outros (água)'], ['iA', 'Indiretas água', 'op-sub'], ['iE', 'Esgoto indireto (LNE)', 'op-sub']];
+// tabela: realizado, forecast, tendência (realizado + forecast) e orçado; no celular ficam realizado, tendência e o desvio
+function opTabAberta(D, L, linhas, total, rotTotal) {
+    const comFc = D.vigente && Object.values(L).some((x) => x.t != null);
+    const v = (x) => opMoeda(x, 2);
+    const cols = (x) => {
+        const base = comFc && x.t != null ? x.t : x.r;
+        return `<td class="num op-forte">${v(x.r)}</td>`
+            + (comFc ? `<td class="num op-col-val op-apagado">${v(x.f)}</td><td class="num">${v(x.t)}</td>` : '')
+            + `<td class="num op-col-val op-apagado">${x.o != null ? v(x.o) : '–'}</td><td class="num">${x.o ? opSeta(opVar(base, x.o), '') : '–'}</td>`;
+    };
+    const corpo = linhas.filter(([k]) => L[k]).map(([k, rot, cls]) => `<tr${cls ? ` class="${cls}"` : ''}><td>${garEsc(rot)}</td>${cols(L[k])}</tr>`).join('');
+    if (!corpo) return '<p class="op-vazio">Sem dados para o mês e a superintendência escolhidos.</p>';
+    return `<table class="op-tab op-tab-aberta"><thead><tr><th></th><th class="num">Realizado</th>`
+        + (comFc ? '<th class="num op-col-val">Forecast</th><th class="num">Tendência</th>' : '')
+        + `<th class="num op-col-val">${garEsc('Orçado ' + (D.ref || ''))}</th><th class="num">${comFc ? 'Tendência' : 'Realizado'} × orçado</th></tr></thead>`
+        + `<tbody>${corpo}</tbody>` + (total && L[total] ? `<tfoot><tr class="op-tot"><td>${garEsc(rotTotal)}</td>${cols(L[total])}</tr></tfoot>` : '') + '</table>';
+}
+// Mês fechado ou sem a tabela de forecast: as linhas da composição saem da DRE do mês
+function opAbertoFat(D, L) {
+    if (L.dA && L.dE && L.bruto) return L;
+    const A = D.atual; if (!A) return L;
+    const x = (o) => ({ r: o ? o.r : null, o: o ? o.o : null, f: null, t: null });
+    return Object.assign({ dA: x(A.dAgua), dE: x(A.dEsg), bruto: x(A.bruto) }, L, L.tot ? {} : { tot: x(A.ind) });
 }
 
 // ---- Acompanhamento por semana: grupos lidos em cada semana do mês, contra o orçado SUP e o mês anterior ----
@@ -2851,29 +2887,6 @@ function opBlocoTop(D) {
         + `${lista('Maiores quedas de faturamento — ' + garEsc(m), 'op-top-neg', opTop5(D, 'queda'))}</div>`;
 }
 
-// ---- Bloco 5: análise crítica (texto livre por mês e superintendência) ----
-function opBlocoAnalise(D) {
-    return '<div class="op-analise">' + OP_ANALISE.map(([k, nome, dica]) => {
-        const chave = `analise|${k}|${D.mes}|${D.sup}`;
-        return `<div class="op-an op-an-${k}"><div class="op-an-tit">${nome}</div><div class="op-texto" contenteditable="true" spellcheck="true" data-chave="${garEsc(chave)}" data-dica="${garEsc(dica)}">${garEsc(opMapa[chave] || '')}</div></div>`;
-    }).join('') + '</div>';
-}
-
-// ---- Bloco 6: projetos e oportunidades (por superintendência; oportunidade projetada, fora do realizado) ----
-const opChaveProj = () => `projetos|${ESTADO.sup}`;
-const opProjetos = () => (Array.isArray(opMapa[opChaveProj()]) ? opMapa[opChaveProj()] : copiaJson(OP_PROJETOS_PADRAO));
-function opBlocoProjetos() {
-    const ps = opProjetos();
-    const tot = ps.reduce((t, p) => t + (opNum(p[1]) || 0), 0);
-    const corpo = ps.map((p, i) => '<tr>' + [0, 1, 2, 3].map((c) => {
-        const v = garEsc(p[c] || ''), st = c === 2 && p[2] ? planoClasseStatus(p[2]) : '';
-        return `<td class="${c === 1 ? 'num' : ''}"><div class="op-cel${st ? ' pl-status ' + st : ''}" contenteditable="true" data-l="${i}" data-c="${c}">${v}</div></td>`;
-    }).join('') + `<td class="op-so-tela"><button type="button" class="op-proj-del" data-l="${i}" title="Tirar este projeto">×</button></td></tr>`).join('');
-    return `<table class="op-mini op-proj-tab"><thead><tr><th>Projeto / iniciativa</th><th class="num">Potencial financeiro (R$)</th><th>Status</th><th>Prazo</th><th class="op-so-tela"></th></tr></thead>`
-        + `<tbody>${corpo || '<tr><td colspan="4" class="op-vazio">Nenhum projeto: use “+ projeto” ou cole da planilha.</td></tr>'}</tbody>`
-        + `<tfoot><tr><td>Potencial total (oportunidade projetada — não está no realizado)</td><td class="num">${tot ? opMoeda(tot) : '–'}</td><td colspan="3"></td></tr></tfoot></table>`;
-}
-
 function opSecao(titulo, extra) {
     const s = document.createElement('section'); s.className = 'op-secao';
     if (titulo) s.innerHTML = `<h3>${titulo}${extra || ''}</h3>`;
@@ -2882,7 +2895,6 @@ function opSecao(titulo, extra) {
 function opDesenhar() {
     const folha = document.getElementById('opFolha'); if (!folha) return;
     if (!opAtiva()) return;
-    if (folha.contains(document.activeElement) && document.activeElement.isContentEditable) return;   // não atrapalha quem escreve
     opGraficos.forEach((g) => { try { g.destroy(); } catch (e) { /* já destruído */ } }); opGraficos = [];
     const D = opDados(), ed = opEditor(), corte = ed ? ed.dataset.corte : '';
     D.refs = Array.from(new Set(Array.from(document.querySelectorAll('#view-dre th[data-tipo="orc"]')).map((th) => th.dataset.src)));
@@ -2895,6 +2907,13 @@ function opDesenhar() {
     const s1 = opSecao('➤ Faturamento', typeof dest === 'object' && dest.ant ? `<small class="op-h-dir">${dest.ant}</small>` : '');
     s1.insertAdjacentHTML('beforeend', `<div class="op-painel">${typeof dest === 'object' ? dest.html : dest}</div>${opBlocoCards(D)}`);
     folha.appendChild(s1);
+    const L = opLinhasPrev(D), dica = D.vigente ? 'tendência = realizado + forecast da aba Forecast' : 'mês fechado';
+    const sA = opSecao('Faturamento aberto', `<small class="op-h-dir">${garEsc(opMesCurto(D.mes))} · ${dica}</small>`);
+    sA.insertAdjacentHTML('beforeend', opTabAberta(D, opAbertoFat(D, L), OP_ABERTO_FAT, 'bruto', 'Faturamento bruto'));
+    folha.appendChild(sA);
+    const sI = opSecao('Indiretas por classe', `<small class="op-h-dir">${garEsc(opMesCurto(D.mes))} · serviços avulsos faturados</small>`);
+    sI.insertAdjacentHTML('beforeend', opTabAberta(D, L, OP_ABERTO_IND, 'tot', 'Total indiretas'));
+    folha.appendChild(sI);
     const G = opGrupos(D);
     const s2 = opSecao(`Acompanhamento semanal por grupo — realizado × ${G.fonte ? garEsc('orçado ' + G.fonte) : 'orçado'} e ${garEsc(D.rotAnt)}`,
         `<small class="op-h-dir">${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} · diretas (água + esgoto) · clique na semana para abrir</small>`);
@@ -2903,46 +2922,13 @@ function opDesenhar() {
     s3.insertAdjacentHTML('beforeend', `<div class="op-faixa">Indicadores do mês — ${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} vs ${garEsc(D.rotAnt)}</div>${opBlocoVolumes(D)}`);
     folha.appendChild(s3);
     const s4 = opSecao('Top 5 clientes'); s4.insertAdjacentHTML('beforeend', opBlocoTop(D)); folha.appendChild(s4);
-    const s5 = opSecao('Análise do mês'); s5.insertAdjacentHTML('beforeend', opBlocoAnalise(D)); folha.appendChild(s5);
-    const s6 = opSecao('Projetos e oportunidades', ' <button type="button" class="op-so-tela op-proj-add" title="Acrescentar um projeto">+ projeto</button>');
-    s6.insertAdjacentHTML('beforeend', opBlocoProjetos()); folha.appendChild(s6);
     const rod = document.createElement('footer'); rod.className = 'op-rodape';
     rod.innerHTML = `<span>Fonte: painel de faturamento · ${garEsc(nomeSup)} · competência ${garEsc(opMesCurto(D.mes))} · orçado ${garEsc(D.ref || '—')}`
         + ` · dados até ${garEsc(corte)} (D-1) · gerado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span><b class="op-marca">Águas do Rio</b>`;
     folha.appendChild(rod);
 }
-function opSalvarProjetos(ps) { opMapa[opChaveProj()] = ps; opSalvar(); }
-document.addEventListener('input', (e) => {
-    const t = e.target;
-    if (!t.closest || !t.closest('#opFolha')) return;
-    if (t.classList.contains('op-texto')) {
-        const v = t.innerText.replace(/\s+$/, '');
-        if (v) opMapa[t.dataset.chave] = v; else delete opMapa[t.dataset.chave];
-        opSalvar();
-    } else if (t.classList.contains('op-cel')) {
-        const ps = opProjetos(); (ps[+t.dataset.l] = ps[+t.dataset.l] || ['', '', '', ''])[+t.dataset.c] = t.innerText.trim();
-        opSalvarProjetos(ps);
-    }
-});
-document.addEventListener('focusout', (e) => {
-    const t = e.target;
-    if (!t.closest || !t.closest('#opFolha') || !t.isContentEditable) return;
-    if (!t.innerText.trim()) t.innerHTML = '';                                  // volta a dica do quadro vazio
-    if (t.classList.contains('op-cel')) setTimeout(() => { if (!document.querySelector('#opFolha [contenteditable]:focus')) opDesenhar(); }, 0);   // status e total refeitos
-});
-document.addEventListener('paste', (e) => {
-    const t = e.target.closest ? e.target.closest('#opFolha [contenteditable]') : null; if (!t) return;
-    const texto = (e.clipboardData || window.clipboardData).getData('text');
-    e.preventDefault();
-    if (t.classList.contains('op-cel') && /\t|\n./.test(texto.trim())) {      // várias células da planilha: viram linhas de projeto
-        let ls = garLerTSV(texto).map((l) => l.map((c) => String(c == null ? '' : c).trim())).filter((l) => l.some(Boolean));
-        if (ls.length && /PROJETO|INICIATIVA/.test(planoNorm(ls[0][0]))) ls = ls.slice(1);
-        if (!ls.length) return;
-        if (!confirm(`Substituir os projetos de ${ESTADO.sup === 'TODAS' ? 'Todas' : ESTADO.sup} por ${ls.length} linha(s) coladas (Projeto, Potencial, Status, Prazo)?`)) return;
-        opSalvarProjetos(ls.map((l) => [l[0] || '', l[1] || '', l[2] || '', l[3] || ''])); t.blur(); opDesenhar(); return;
-    }
-    document.execCommand('insertText', false, texto);                          // só o texto, sem a formatação copiada
-});
+// tendência e forecast acompanham as edições do forecast (aba Forecast ou Indiretas, ou vindas da pasta)
+document.addEventListener('forecast-recalculado', () => opDesenhar());
 document.addEventListener('click', (e) => {
     const t = e.target;
     if (t.id === 'opPdf') { gerarOnePage(); return; }
@@ -2950,13 +2936,7 @@ document.addEventListener('click', (e) => {
     if (sem) {
         const n = +sem.dataset.semana; if (!opSemanasAbertas) opSemanasAbertas = new Set();
         if (opSemanasAbertas.has(n)) opSemanasAbertas.delete(n); else opSemanasAbertas.add(n);
-        opDesenhar(); return;
-    }
-    if (t.classList && t.classList.contains('op-proj-add')) { const ps = opProjetos(); ps.push(['', '', '', '']); opSalvarProjetos(ps); opDesenhar(); return; }
-    if (t.classList && t.classList.contains('op-proj-del')) {
-        const ps = opProjetos(), i = +t.dataset.l;
-        if ((ps[i] || []).some(Boolean) && !confirm(`Tirar o projeto "${ps[i][0] || 'sem nome'}"?`)) return;
-        ps.splice(i, 1); opSalvarProjetos(ps); opDesenhar();
+        opDesenhar();
     }
 });
 
@@ -3016,8 +2996,4 @@ async function gerarOnePage(libs) {
         fr.remove(); aviso.remove();
     }
 }
-var syncOnePage = criaSync('onepage', 'One page', () => opMapa,
-    (m) => { opMapa = m; try { localStorage.setItem(OP_LS, JSON.stringify(opMapa)); } catch (e) {} },
-    () => opDesenhar(),
-    () => !!(document.activeElement && document.activeElement.isContentEditable && document.activeElement.closest('#opFolha')));
-document.addEventListener('DOMContentLoaded', () => { opDesenhar(); syncOnePage.puxar(); });
+document.addEventListener('DOMContentLoaded', () => opDesenhar());

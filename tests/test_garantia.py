@@ -218,9 +218,11 @@ def test_analise_de_garantia_ordenavel(sessao):
 
 def test_aba_one_page(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
-    for trecho in ('id="view-onepage"', 'id="btn-onepage"', 'id="opEditor"', 'id="opFolha"', "var syncOnePage = criaSync('onepage'",
+    for trecho in ('id="view-onepage"', 'id="btn-onepage"', 'id="opEditor"', 'id="opFolha"', "function opLinhasPrev(D)",
+                   "document.addEventListener('forecast-recalculado', () => opDesenhar());", "'Indiretas por classe'",
                    "function gerarOnePage(libs)", 'onclick="gerarOnePage()"', 'id="opDatasLeitura"'):
         assert trecho in html, trecho
+    assert "opBlocoAnalise" not in html and "opBlocoProjetos" not in html          # análise do mês e projetos saíram da folha
     raiz = os.path.join(os.path.dirname(__file__), "..")
     worker = open(os.path.join(raiz, "analisador.worker.js"), encoding="utf-8").read()
     assert '"faturamento/one_page.py"' in worker
