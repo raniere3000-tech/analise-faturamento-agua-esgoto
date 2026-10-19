@@ -226,3 +226,8 @@ def test_aba_one_page(sessao):
     assert '"faturamento/one_page.py"' in worker
     site = open(os.path.join(raiz, "index.html"), encoding="utf-8").read()
     assert 'id="btnOnePage"' in site and "w.gerarOnePage(await libsPdf())" in site and 'data-view="onepage"' in site
+
+
+def test_pdf_celular_folha_curta_nao_troca_largura(sessao):
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert "const orient = (ph) => (ph >= PW ? 'portrait' : 'landscape');" in html and "pdf.addPage([PW, PH], orient(PH));" in html
