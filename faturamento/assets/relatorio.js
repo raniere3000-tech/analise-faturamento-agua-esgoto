@@ -3052,6 +3052,7 @@ document.addEventListener('DOMContentLoaded', () => opDesenhar());
 // 'dre' = tabela do Forecast (Realizado + Forecast, sem a coluna Forecast); 'garantia' = quadros do Resumo de Ganhos;
 // 'indiretas' = indiretas (R$) e, logo abaixo, o plano de ação do mês (se houver). Segue os filtros da tela.
 // A folha é montada à parte numa largura fixa (letra do tamanho da tela) e fotografada em escala 3: colada no slide, fica nítida.
+const PRINT_SLIDE = 2.05;      // área livre de um slide 16:9 abaixo do título (largura ÷ altura)
 const PRINT_TIPOS = { dre: ['DRE', 1000], garantia: ['Analise_Garantia', 1300], indiretas: ['Indiretas_Plano', 1300] };
 function printAviso(texto, ms) {
     let a = document.getElementById('printAviso');
@@ -3090,7 +3091,7 @@ async function gerarPrint(tipo, libs) {
     if (!libs) { try { const p = window.parent; if (p && p !== window && p.libsPdfSite) libs = await p.libsPdfSite(); } catch (e) { libs = null; } }
     const l = await obterLibsPdf(libs);
     printAviso('Gerando o print…');
-    const folha = document.createElement('div'); folha.className = 'print-folha';
+    const folha = document.createElement('div'); folha.className = 'print-folha print-' + tipo;
     itens.forEach((el) => { const b = document.createElement('div'); b.className = 'print-bloco'; b.appendChild(el); folha.appendChild(b); });
     const fr = document.createElement('iframe');
     fr.setAttribute('aria-hidden', 'true'); fr.title = 'Print';
@@ -3112,9 +3113,20 @@ async function gerarPrint(tipo, libs) {
         let largura = W;
         raiz.querySelectorAll('table').forEach((t) => { largura = Math.max(largura, Math.ceil(t.scrollWidth) + 34); });
         fr.style.width = largura + 'px'; await new Promise((r) => setTimeout(r, 50));
+        if (tipo === 'indiretas') {
+            // indiretas + plano vão sozinhos num slide: testa larguras e fica com a que, encaixada na área do slide
+            // (PRINT_SLIDE, largura ÷ altura), deixa a letra maior — textos longos do plano quebram menos e a imagem fica baixa e larga
+            let melhor = null;
+            for (let L = largura; L <= 3400; L += 100) {
+                fr.style.width = L + 'px'; await new Promise((r) => requestAnimationFrame(() => r()));
+                const H = Math.ceil(raiz.scrollHeight), nota = Math.min(1 / L, 1 / (PRINT_SLIDE * H));
+                if (!melhor || nota > melhor.nota) melhor = { L, nota };
+            }
+            largura = melhor.L; fr.style.width = largura + 'px'; await new Promise((r) => setTimeout(r, 50));
+        }
         const alt = Math.ceil(raiz.scrollHeight);
         fr.style.width = largura + 'px'; fr.style.height = alt + 'px'; await new Promise((r) => setTimeout(r, 50));
-        const foto = await w.html2canvas(raiz, { scale: 3, backgroundColor: '#FFFFFF', logging: false,
+        const foto = await w.html2canvas(raiz, { scale: Math.min(3, 6600 / largura), backgroundColor: '#FFFFFF', logging: false,
             windowWidth: largura, windowHeight: alt, width: largura, height: alt });
         const blob = await new Promise((ok) => foto.toBlob(ok, 'image/png'));
         const url = URL.createObjectURL(blob), a = document.createElement('a');
