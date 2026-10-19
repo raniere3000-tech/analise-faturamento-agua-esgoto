@@ -29,7 +29,8 @@ def gera_aba_onepage_html(ctx):
   </div>
   <p class="nota-secao">Segue os filtros do cabeçalho: <b>superintendência</b>, <b>mês</b> e <b>grupos</b>; o realizado é comparado com o <b>orçado SUP</b>. No acompanhamento por semana, clique
   na semana para abrir ou fechar os grupos lidos nela. A <b>tendência</b> é o realizado + o <b>forecast</b>: ajuste o forecast nas abas
-  Forecast ou Indiretas e a folha se atualiza.</p>
+  Forecast ou Indiretas e a folha se atualiza. No Top 5 clientes, a chave <b>Somente liberadas</b> deixa só as matrículas cuja conta do mês
+  não está <b>Em análise</b> (fica salva no seu navegador e vale também para o PDF).</p>
 </div>
 <script type="application/json" id="opDatasLeitura">{datas_json}</script>
 <div class="op-folha" id="opFolha"></div>
