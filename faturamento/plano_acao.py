@@ -15,7 +15,7 @@ def gera_aba_plano_html(ctx):
   <div class="gar-topo">
     <h2>Plano de ação — colar da planilha</h2>
     <span class="gar-espaco"></span>
-    <button type="button" class="btn-just" id="planoBaixar" title="Baixar o plano na tela (CSV)" aria-label="Baixar o plano na tela (CSV)">&#11015;</button>
+    <button type="button" class="btn-just" id="planoBaixar" title="Baixar o plano na tela (Excel)" aria-label="Baixar o plano na tela (Excel)">&#11015;</button>
     <button type="button" class="btn-just" id="planoLimpar" style="color:#C2560C;" title="Apagar o plano de ação deste mês">Limpar</button>
   </div>
   <p class="nota-secao">Na planilha, selecione as linhas do plano <b>com o cabeçalho</b>, copie (Ctrl+C) e cole no campo abaixo (Ctrl+V).

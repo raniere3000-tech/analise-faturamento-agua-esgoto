@@ -159,7 +159,7 @@ def gera_aba_garantia_html(ctx):
       <span class="gar-busca"><label for="garBuscaLig">Matrícula</label><input type="text" id="garBuscaLig" inputmode="numeric" autocomplete="off" placeholder="Filtrar por matrícula (uma ou várias)"><button type="button" class="btn-just" id="garLimparBusca" title="Limpar o filtro de matrícula" aria-label="Limpar o filtro de matrícula">✕</button></span>
       <span class="gar-dd" id="garCatDD"><span class="gar-dd-rot">Categoria</span><button type="button" class="gar-dd-btn" id="garCatBtn" aria-haspopup="true" aria-expanded="false" aria-controls="garCatLista" title="Filtrar por categoria (marque quantas quiser)">Todas ▾</button><div class="gar-dd-lista" id="garCatLista" role="group" aria-label="Categorias"></div></span>
       <button type="button" class="btn-just gar-filtro" id="garSoAnalise" aria-pressed="false">Somente em análise</button>
-      <button type="button" class="btn-just btn-baixar-gar" id="garBaixarTop" title="Baixar a lista na tela (CSV)" aria-label="Baixar a lista na tela (CSV)">&#11015;</button>
+      <button type="button" class="btn-just btn-baixar-gar" id="garBaixarTop" title="Baixar a lista na tela (Excel)" aria-label="Baixar a lista na tela (Excel)">&#11015;</button>
     </div>
     <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaTop"><thead></thead><tbody></tbody></table></div>
   </div>
@@ -177,10 +177,10 @@ def gera_aba_garantia_html(ctx):
     o filtro de matrícula só procura dentro do Top 100. A seta <b>⬇≡</b> baixa o analítico completo (todas as matrículas com aumento ou queda).</p>
   </div>
   <div class="card"><div class="gar-topo"><h2>Top 100 aumentos — {e(ctx.mes_atual)} × mês anterior</h2>
-    <button type="button" class="btn-just" data-var-baixar="aumento" title="Baixar o analítico dos aumentos (CSV, todas as matrículas com aumento, com os filtros)" aria-label="Baixar o analítico dos aumentos">&#11015;&#8801;</button></div>
+    <button type="button" class="btn-just" data-var-baixar="aumento" title="Baixar o analítico dos aumentos (Excel, todas as matrículas com aumento, com os filtros)" aria-label="Baixar o analítico dos aumentos">&#11015;&#8801;</button></div>
     <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaAumento"><thead></thead><tbody></tbody></table></div></div>
   <div class="card"><div class="gar-topo"><h2>Top 100 quedas — {e(ctx.mes_atual)} × mês anterior</h2>
-    <button type="button" class="btn-just" data-var-baixar="queda" title="Baixar o analítico das quedas (CSV, todas as matrículas com queda, com os filtros)" aria-label="Baixar o analítico das quedas">&#11015;&#8801;</button></div>
+    <button type="button" class="btn-just" data-var-baixar="queda" title="Baixar o analítico das quedas (Excel, todas as matrículas com queda, com os filtros)" aria-label="Baixar o analítico das quedas">&#11015;&#8801;</button></div>
     <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaQueda"><thead></thead><tbody></tbody></table></div></div>
 </div>
 <div class="gar-painel" data-gar="analise" hidden>

@@ -192,7 +192,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     """
     return f"""
     <div class="card"{card_attrs}>
-    <h2{' style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"' if detalhe else ""}>{titulo}{(" " + seta_detalhe(detalhe, rotulo="Baixar o analítico por matrícula desta tabela (CSV): de quais matrículas vieram as variações de economias, volume e faturamento")) if detalhe else ""}</h2>
+    <h2{' style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"' if detalhe else ""}>{titulo}{(" " + seta_detalhe(detalhe, rotulo="Baixar o analítico por matrícula desta tabela (Excel): de quais matrículas vieram as variações de economias, volume e faturamento")) if detalhe else ""}</h2>
     <table class="tabela-comparativo" id="tabela-{slug}">
         <thead>{cabecalho}</thead>
         <tbody>{linhas_html}</tbody>

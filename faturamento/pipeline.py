@@ -119,7 +119,7 @@ class Sessao:
             sl = "".join(c for c in sup.lower() if c.isalnum())
             ds = html.escape(sup, quote=True)
             # ⬇≡ = ranking completo (todas as ligações com queda/aumento), com o analítico de cada uma
-            det = lambda k: seta_detalhe("top-" + k, sup, "Baixar o ranking completo com o analítico por matrícula (CSV)")
+            det = lambda k: seta_detalhe("top-" + k, sup, "Baixar o ranking completo com o analítico por matrícula (Excel)")
             blocos_queda.append(f'<div class="sup-top-bloco" data-sup="{ds}">'
                                 + gera_tabela_top100_html(qa, "Água" + suf, "agua-" + sl, det("queda-agua"), chave="queda-agua")
                                 + gera_tabela_top100_html(qe, "Esgoto" + suf, "esgoto-" + sl, det("queda-esgoto"), chave="queda-esgoto")

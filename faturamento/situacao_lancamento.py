@@ -175,7 +175,7 @@ def _seta(linha, sup, sintetico=False):
     from .analitico import seta_detalhe
     attr = "data-gsit" if sintetico else "data-sit"
     s = html.escape(str(linha["Situação"]), quote=True)
-    return " " + seta_detalhe("situacao", sup, f"Baixar o analítico por matrícula de {linha['Situação']} (CSV)").replace(
+    return " " + seta_detalhe("situacao", sup, f"Baixar o analítico por matrícula de {linha['Situação']} (Excel)").replace(
         "<button ", f'<button {attr}="{s}" ', 1)
 
 

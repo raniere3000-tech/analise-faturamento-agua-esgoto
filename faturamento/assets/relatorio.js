@@ -809,6 +809,154 @@ function baixarTexto(texto, nome) {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+// ===== Excel (.xlsx) gerado aqui no navegador, sem biblioteca: um ZIP com os XML da planilha (uma aba, cabeçalho em
+// negrito e congelado, filtro). Números viram números de verdade (somam no Excel); códigos (matrícula, ligação, CPF…) e
+// valores com zero à esquerda ficam como texto. O ZIP sai comprimido (CompressionStream) onde o navegador permite.
+const XLSX_MAX_LINHAS = 1048575;                   // limite de linhas de uma aba do Excel (fora o cabeçalho)
+const XLSX_COL_TEXTO = /liga[cç][aã]o|matr[ií]cula|^lig$|c[oó]d|cpf|cnpj|inscri|telefone|celular|^cep|documento|hidr[oô]metro|^rota$|o\.?\s?s\.?$|^n[º°.]?\s*(da\s+)?o\.?s/i;
+const XLSX_CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function xlsxCrc(crc, b) { let c = crc ^ 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = XLSX_CRC[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+const xlsxEsc = (t) => String(t).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function xlsxColuna(i) { let s = ''; i++; while (i > 0) { const r = (i - 1) % 26; s = String.fromCharCode(65 + r) + s; i = Math.floor((i - 1) / 26); } return s; }
+// texto "1234,56" / "1.234,56" / "-12" (como nas bases e no analítico) → número; o resto continua texto
+function xlsxNumero(v) {
+    const t = String(v).trim();
+    if (!/^-?(\d{1,15}|\d{1,3}(\.\d{3})+)(,\d+)?$/.test(t)) return null;
+    if (/^-?0\d/.test(t)) return null;                                      // zero à esquerda (código): texto
+    const n = parseFloat(t.replace(/\./g, '').replace(',', '.'));
+    return isFinite(n) ? n : null;
+}
+async function xlsxZipEntrada(nome, partes) {
+    const enc = new TextEncoder();
+    let crc = 0, tam = 0, cs = null;
+    try { cs = typeof CompressionStream !== 'undefined' ? new CompressionStream('deflate-raw') : null; } catch (e) { cs = null; }
+    const cru = [], w = cs ? cs.writable.getWriter() : null, saida = cs ? new Response(cs.readable).arrayBuffer() : null;
+    for (const p of partes) {
+        const b = enc.encode(p); crc = xlsxCrc(crc, b); tam += b.length;
+        if (w) await w.write(b); else cru.push(b);
+    }
+    let dados;
+    if (w) { await w.close(); dados = new Uint8Array(await saida); }
+    else { dados = new Uint8Array(tam); let o = 0; cru.forEach((b) => { dados.set(b, o); o += b.length; }); }
+    return { nome: enc.encode(nome), crc, tam, dados, metodo: w ? 8 : 0 };
+}
+function xlsxZip(entradas) {
+    const partes = [], central = []; let pos = 0;
+    entradas.forEach((e) => {
+        const h = new DataView(new ArrayBuffer(30));
+        h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, e.metodo, true);
+        h.setUint16(10, 0, true); h.setUint16(12, 0x21, true);           // hora/data fixas (01/01/1980)
+        h.setUint32(14, e.crc, true); h.setUint32(18, e.dados.length, true); h.setUint32(22, e.tam, true);
+        h.setUint16(26, e.nome.length, true); h.setUint16(28, 0, true);
+        const c = new DataView(new ArrayBuffer(46));
+        c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, e.metodo, true);
+        c.setUint16(12, 0, true); c.setUint16(14, 0x21, true); c.setUint32(16, e.crc, true); c.setUint32(20, e.dados.length, true); c.setUint32(24, e.tam, true);
+        c.setUint16(28, e.nome.length, true); c.setUint32(42, pos, true);
+        partes.push(new Uint8Array(h.buffer), e.nome, e.dados); central.push(new Uint8Array(c.buffer), e.nome);
+        pos += 30 + e.nome.length + e.dados.length;
+    });
+    const tamCentral = central.reduce((t, b) => t + b.length, 0), fim = new DataView(new ArrayBuffer(22));
+    fim.setUint32(0, 0x06054b50, true); fim.setUint16(8, entradas.length, true); fim.setUint16(10, entradas.length, true);
+    fim.setUint32(12, tamCentral, true); fim.setUint32(16, pos, true);
+    return new Blob([...partes, ...central, new Uint8Array(fim.buffer)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+async function xlsxDe(colunas, linhas, aba) {
+    const nc = colunas.length, letras = colunas.map((c, i) => xlsxColuna(i));
+    const texto = colunas.map((c) => XLSX_COL_TEXTO.test(String(c).trim()));
+    // largura de cada coluna: o maior entre o cabeçalho e as 300 primeiras linhas (limitada)
+    const larg = colunas.map((c) => String(c).length + 2);
+    linhas.slice(0, 300).forEach((l) => l.forEach((v, i) => { if (i < nc && v != null) larg[i] = Math.max(larg[i], String(v).length + 1); }));
+    const cel = (v, ref, i) => {
+        if (v === null || v === undefined || v === '') return '';
+        let n = typeof v === 'number' ? v : (typeof v === 'boolean' || texto[i] ? null : xlsxNumero(v));
+        if (n !== null && isFinite(n)) return `<c r="${ref}"${Number.isInteger(n) ? '' : ' s="2"'}><v>${n}</v></c>`;
+        return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xlsxEsc(v)}</t></is></c>`;
+    };
+    const ultima = `${letras[nc - 1] || 'A'}${linhas.length + 1}`;
+    function* folha() {
+        yield '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            + '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+            + '<cols>' + larg.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${Math.min(60, Math.max(6, w))}" customWidth="1"/>`).join('') + '</cols><sheetData>'
+            + '<row r="1">' + colunas.map((c, i) => `<c r="${letras[i]}1" t="inlineStr" s="1"><is><t xml:space="preserve">${xlsxEsc(c)}</t></is></c>`).join('') + '</row>';
+        for (let a = 0; a < linhas.length; a += 2000) {
+            let bloco = '';
+            for (let r = a; r < Math.min(a + 2000, linhas.length); r++) {
+                const l = linhas[r], n = r + 2; let x = `<row r="${n}">`;
+                for (let i = 0; i < nc; i++) x += cel(l[i], letras[i] + n, i);
+                bloco += x + '</row>';
+            }
+            yield bloco;
+        }
+        yield `</sheetData><autoFilter ref="A1:${ultima}"/></worksheet>`;
+    }
+    const nomeAba = xlsxEsc(String(aba || 'Dados').replace(/[\\\/?*\[\]:]/g, ' ').slice(0, 31) || 'Dados');
+    const xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    const entradas = await Promise.all([
+        xlsxZipEntrada('[Content_Types].xml', [xml + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+            + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+            + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>']),
+        xlsxZipEntrada('_rels/.rels', [xml + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>']),
+        xlsxZipEntrada('xl/workbook.xml', [xml + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            + `<sheets><sheet name="${nomeAba}" sheetId="1" r:id="rId1"/></sheets>`
+            + `<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${nomeAba.replace(/'/g, "''")}'!$A$1:$${letras[nc - 1] || 'A'}$${linhas.length + 1}</definedName></definedNames></workbook>`]),
+        xlsxZipEntrada('xl/_rels/workbook.xml.rels', [xml + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+            + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>']),
+        xlsxZipEntrada('xl/styles.xml', [xml + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            + '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>'
+            + '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
+            + '<fill><patternFill patternType="solid"><fgColor rgb="FF1A2740"/><bgColor indexed="64"/></patternFill></fill></fills>'
+            + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+            + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+            + '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+            + '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'
+            + '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>'
+            + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>']),
+        xlsxZipEntrada('xl/worksheets/sheet1.xml', folha()),
+    ]);
+    return xlsxZip(entradas);
+}
+// Baixa a tabela em Excel (.xlsx); se não der (navegador antigo, mais linhas que o Excel aceita), baixa em CSV
+async function baixarPlanilha(colunas, linhas, nome) {
+    const base = nome.replace(/\.(csv|xlsx)$/i, '');
+    try {
+        if (linhas.length > XLSX_MAX_LINHAS) throw new Error('mais linhas que o Excel aceita');
+        const blob = await xlsxDe(colunas, linhas, base.slice(0, 31));
+        const url = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = url; a.download = base + '.xlsx'; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (erro) {
+        console.warn('Excel indisponível, baixando em CSV:', erro);
+        baixarTexto(csvDe(colunas, linhas), base + '.csv');
+    }
+}
+// CSV ";" (bases e analítico embutidos) → { cab, linhas }; quebra de linha dentro de aspas não separa registros
+function lerCsvTexto(texto) {
+    const registros = [];
+    let ini = 0, aspas = false, t = texto.charCodeAt(0) === 0xFEFF ? texto.slice(1) : texto;
+    for (let i = 0; i < t.length; i++) {
+        const c = t.charCodeAt(i);
+        if (c === 34) aspas = !aspas;
+        else if (c === 10 && !aspas) { registros.push(t.slice(ini, i)); ini = i + 1; }
+    }
+    if (ini < t.length) registros.push(t.slice(ini));
+    const campos = (r) => {
+        const out = []; let atual = '', q = false;
+        for (let i = 0; i < r.length; i++) {
+            const c = r[i];
+            if (c === '"') { if (q && r[i + 1] === '"') { atual += '"'; i++; } else q = !q; }
+            else if (c === ';' && !q) { out.push(atual); atual = ''; }
+            else if (c !== '\r' || q) atual += c;
+        }
+        out.push(atual);
+        return out;
+    };
+    return { cab: registros.length ? campos(registros[0]) : [], linhas: registros.slice(1).filter(Boolean).map(campos) };
+}
+
 // Top 100: as linhas de uma lista para a SUP e os grupos marcados (a ordem já é a do ranking geral)
 function topLinhas(chave, sup) {
     const d = lerJson('top100-dados');
@@ -912,28 +1060,7 @@ async function lerAnalitico() {
     if (analiticoCache) return analiticoCache;
     const el = document.getElementById('analitico-dados');
     if (!el) return null;
-    const texto = new TextDecoder('utf-8').decode(await bytesEmbutidos(el));
-    const registros = [];
-    let ini = 0, aspas = false, t = texto.charCodeAt(0) === 0xFEFF ? texto.slice(1) : texto;
-    for (let i = 0; i < t.length; i++) {
-        const c = t.charCodeAt(i);
-        if (c === 34) aspas = !aspas;
-        else if (c === 10 && !aspas) { registros.push(t.slice(ini, i)); ini = i + 1; }
-    }
-    if (ini < t.length) registros.push(t.slice(ini));
-    const campos = (r) => {
-        const out = []; let atual = '', q = false;
-        for (let i = 0; i < r.length; i++) {
-            const c = r[i];
-            if (c === '"') { if (q && r[i + 1] === '"') { atual += '"'; i++; } else q = !q; }
-            else if (c === ';' && !q) { out.push(atual); atual = ''; }
-            else if (c !== '\r' || q) atual += c;
-        }
-        out.push(atual);
-        return out;
-    };
-    const cab = campos(registros[0]);
-    const linhas = registros.slice(1).filter(Boolean).map(campos);
+    const { cab, linhas } = lerCsvTexto(new TextDecoder('utf-8').decode(await bytesEmbutidos(el)));
     analiticoCache = { cab, linhas, ra: el.dataset.refAtual, rn: el.dataset.refAnterior, mes: el.dataset.mes };
     return analiticoCache;
 }
@@ -1050,7 +1177,7 @@ document.addEventListener('click', async function (e) {
         const sitNome = (b.dataset.sit || b.dataset.gsit || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
         const nome = `${def.nome}${soEsg ? '_so_esgoto' : ''}${sitNome ? '_' + sitNome : ''}_${a.mes}${sup !== 'TODAS' ? '_' + sup.replace(/[^A-Za-z0-9]/g, '') : ''}${grupos ? '_grupos_filtrados' : ''}.csv`;
-        baixarTexto(csvDe(def.cols, linhas), nome);
+        await baixarPlanilha(def.cols, linhas, nome);
     } catch (erro) {
         alert('Não foi possível baixar o analítico neste navegador (' + erro.message + ').');
     }
@@ -1082,7 +1209,7 @@ async function bytesEmbutidos(el) {
     return new Uint8Array(await new Response(fluxo).arrayBuffer());
 }
 
-// Botões "Base: ... (CSV)": a base vem embutida uma vez (script#base-dl-<chave>, comprimida) e vários botões a usam
+// Botões "Base: ... (Excel)": a base vem embutida uma vez (script#base-dl-<chave>, comprimida) e vários botões a usam
 document.addEventListener('click', async function (e) {
     const b = e.target.closest && e.target.closest('.btn-baixar-base');
     if (!b) return;
@@ -1106,6 +1233,10 @@ document.addEventListener('click', async function (e) {
         }
         conteudo = texto;
     }
+    // em Excel (.xlsx): números como números; base maior que o limite do Excel continua em CSV
+    const texto = typeof conteudo === 'string' ? conteudo : new TextDecoder('utf-8').decode(conteudo);
+    const { cab, linhas } = lerCsvTexto(texto);
+    if (cab.length && linhas.length <= XLSX_MAX_LINHAS) { await baixarPlanilha(cab, linhas, nome); return; }
     const url = URL.createObjectURL(new Blob([conteudo], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
     a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
@@ -2017,7 +2148,7 @@ function garBaixarVar(tipo) {
     const linhas = lista.map((d, i) => [i + 1, d.lig, d.nome, d.cat, d.loc, d.grupo, d.rota, d.sup, d.res, d.com, d.ind, d.pub, garValorCol(d, 'eco'),
         d.esg ? 'Sim' : 'Não', d.sit || '', d.lanc || '', d.cAnt, d.cons, r2(d.cons != null && d.cAnt != null ? d.cons - d.cAnt : null), pct(d.cons, d.cAnt),
         d.vAnt, d.val, r2(garDifVal(d)), pct(d.val, d.vAnt), d.mVal, d.rank && d.rank <= GAR.top ? d.rank : '']);
-    baixarTexto(csvDe(cols, linhas), `Garantia_${P}s_${GAR.ref.replace('/', '-')}${GAR_VAR.soAnalise ? '_em_analise' : ''}${GAR_CAT_VAR.cats ? '_categorias_filtradas' : ''}.csv`);
+    baixarPlanilha(cols, linhas, `Garantia_${P}s_${GAR.ref.replace('/', '-')}${GAR_VAR.soAnalise ? '_em_analise' : ''}${GAR_CAT_VAR.cats ? '_categorias_filtradas' : ''}.csv`);
 }
 document.addEventListener('click', (e) => {
     if (e.target.id === 'garVarSoAnalise') { GAR_VAR.soAnalise = !GAR_VAR.soAnalise; garDesenharVar(); return; }
@@ -2300,7 +2431,7 @@ function garBaixarTop() {
     const pct = (p) => (p == null ? null : Math.round(p * 1000) / 10);
     const linhas = garLinhasTop().map((d) => [d.rank, d.lig, d.nome, d.cat, d.loc, d.grupo, d.sup, garValorCol(d, 'eco'), d.mMed, d.mCons, d.cons,
         pct(garVar(d.cons, d.mCons)), d.mVal, d.val, pct(garVar(d.val, d.mVal)), d.sit || '']);
-    baixarTexto(csvDe(cols, linhas), `Garantia_Top${GAR.top}_${GAR.ref.replace('/', '-')}${GAR.soAnalise ? '_em_analise' : ''}${GAR_CAT_TOP.cats ? '_categorias_filtradas' : ''}.csv`);
+    baixarPlanilha(cols, linhas, `Garantia_Top${GAR.top}_${GAR.ref.replace('/', '-')}${GAR.soAnalise ? '_em_analise' : ''}${GAR_CAT_TOP.cats ? '_categorias_filtradas' : ''}.csv`);
 }
 function garExportarEmail() {
     const itens = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)) && (it.motivo || it.retorno));
@@ -2560,7 +2691,7 @@ document.addEventListener('click', (e) => {
         const [ref, plano] = planoAtual(); if (!plano) return;
         const t = document.getElementById('planoTabela');
         const linhas = Array.from(t.tBodies[0].rows).filter((r) => !r.querySelector('.gar-vazio')).map((r) => Array.from(r.cells).map((c) => c.innerText));
-        baixarTexto(csvDe(plano.colunas, linhas), `Plano_de_acao_${String(ref).replace('/', '-')}.csv`);
+        baixarPlanilha(plano.colunas, linhas, `Plano_de_acao_${String(ref).replace('/', '-')}.csv`);
     }
 });
 var syncPlano = criaSync('plano', 'Plano de ação', () => planoMapa,
