@@ -975,7 +975,7 @@ def _aba_garantia(ctx):
                       "Aumento de consumo: garantia = Fat. ajustado − Fat. calculado (valor original = anterior; ajustado = calculado)",
                       "Liberadas = Situação Conta diferente de EM ANALISE",
                       "Motivo em branco: fora da soma (continua no controle de O.S.)",
-                      "Antes do painel = importadas do Excel (selo Histórico); pelo painel = as demais"],
+                      "Consolidado geral: as importadas do Excel (selo Histórico) e as feitas no painel entram juntas"],
                      ["Análise de Garantia do mês (motivo, faturados)"],
                      ["Segue os filtros de Superintendência e Grupo do cabeçalho"]),
         _bloco_texto("Controle de O.S.",

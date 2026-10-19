@@ -2380,8 +2380,7 @@ document.addEventListener('click', (e) => {
 
 // --- Resumo de Ganhos ---
 function garTotais() {
-    const t = { AUMENTO: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 }, QUEDA: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 },
-                hist: { n: 0, gar: 0 }, painel: { n: 0, gar: 0 } }, porGrupo = {};
+    const t = { AUMENTO: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 }, QUEDA: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 } }, porGrupo = {};
     garItensDoMes().forEach((it) => {
         if (!t[it.motivo]) return;
         const { d, calc, atual } = garCalcItem(it);
@@ -2391,7 +2390,6 @@ function garTotais() {
         const gar = it.motivo === 'AUMENTO' ? (calc == null ? 0 : at - calc) : at - ant;
         x.n++; if (d && !garEmAnalise(d)) x.lib++;
         x.orig += ant; x.ajust += ajust; x.gar += gar;
-        const o = it.historico ? t.hist : t.painel; o.n++; o.gar += gar;
         const g = (d && d.grupo) || '—', pg = porGrupo[g] = porGrupo[g] || { n: 0, QUEDA: 0, AUMENTO: 0 };
         pg.n++; pg[it.motivo] += gar;
     });
@@ -2407,9 +2405,7 @@ function garDesenharResumo() {
     el.innerHTML = '<div class="gar-kpis">'
         + `<div class="gar-kpi"><span>Garantia total</span><b>${garR(tot.gar)}</b><small>${tot.n} matrícula(s) · ${tot.lib} liberada(s)</small></div>`
         + `<div class="gar-kpi"><span>Queda de consumo</span><b>${garR(t.QUEDA.gar)}</b><small>${t.QUEDA.n} matrícula(s)</small></div>`
-        + `<div class="gar-kpi"><span>Aumento de consumo</span><b>${garR(t.AUMENTO.gar)}</b><small>${t.AUMENTO.n} matrícula(s)</small></div>`
-        + (t.hist.n ? `<div class="gar-kpi"><span>Antes do painel (planilha)</span><b>${garR(t.hist.gar)}</b><small>${t.hist.n} matrícula(s)</small></div>`
-            + `<div class="gar-kpi"><span>Pelo painel</span><b>${garR(t.painel.gar)}</b><small>${t.painel.n} matrícula(s)</small></div>` : '') + '</div>'
+        + `<div class="gar-kpi"><span>Aumento de consumo</span><b>${garR(t.AUMENTO.gar)}</b><small>${t.AUMENTO.n} matrícula(s)</small></div>` + '</div>'
         + '<div class="tabela-wrap"><table class="tabela-garantia gar-resumo"><thead><tr><th>Resumo</th><th class="num">Ligações</th><th class="num">Liberadas</th>'
         + '<th class="num">Valor original</th><th class="num">Valor ajustado / média</th><th class="num">Garantia</th></tr></thead><tbody>'
         + lin('Aumento de consumo', t.AUMENTO) + lin('Queda de consumo', t.QUEDA) + lin('<b>Total</b>', tot, 'linha-media') + '</tbody></table></div>'
