@@ -206,7 +206,8 @@ def gera_aba_garantia_html(ctx):
 <div class="gar-painel" data-gar="resumo" hidden>
   <div class="card gar-aviso-os" id="garAvisoOS" hidden></div>
   <div class="card" id="garantia-resumo-card">
-    <h2>Resumo de ganhos — garantia — {e(ctx.mes_atual)}</h2>
+    <div class="gar-topo"><h2>Resumo de ganhos — garantia — {e(ctx.mes_atual)}</h2>
+    <button type="button" class="btn-just gar-filtro" id="garSoLiberados" aria-pressed="false" title="Considerar só os grupos com situação Liberado (manual ou automática), sem mexer no filtro de grupos das outras abas">Somente grupos liberados</button></div>
     <p class="nota-secao"><b>Queda de consumo:</b> garantia = faturado ajustado (atual) − faturado anterior (foto).
     <b>Aumento de consumo:</b> garantia = faturado ajustado (atual) − valor pela média (estrutura tarifária), o que deixou de ser
     perdido com o desconto pela média. Liberadas = Situação Conta diferente de EM ANALISE.</p>

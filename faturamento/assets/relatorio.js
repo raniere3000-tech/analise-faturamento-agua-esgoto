@@ -1605,6 +1605,7 @@ let sitManuais = {};
 try { sitManuais = JSON.parse(localStorage.getItem(SIT_LS) || '{}') || {}; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
 function sitSalvar() {
     try { localStorage.setItem(SIT_LS, JSON.stringify(sitManuais)); } catch (e) { /* ignora */ }
+    if (typeof garDesenharResumo === 'function') setTimeout(garDesenharResumo, 0);     // "Somente grupos liberados" acompanha
     if (typeof syncSituacao !== 'undefined') syncSituacao.agendar();
 }
 function sitAplicar(el) {
@@ -1631,6 +1632,15 @@ function gruposPadrao() {
         vistos.add(g); if (v === 'Liberado' || v === 'Em Análise') ok.add(g);
     });
     return vistos.size && ok.size ? ok : null;                     // sem situação nos dados: todos marcados
+}
+// grupos com situação Liberado (manual, se houver, senão a automática) — chave "Somente grupos liberados" do Resumo de Ganhos
+function gruposLiberados() {
+    const ok = new Set();
+    document.querySelectorAll('.sit-grupo[data-sit-grupo]').forEach((el) => {
+        const g = el.dataset.sitGrupo, man = (sitManuais[el.dataset.sitRef] || {})[g];
+        if ((man || el.dataset.sitAuto) === 'Liberado') ok.add(g);
+    });
+    return ok;
 }
 window.aplicarGruposPadrao = function () {
     const ok = gruposPadrao();
@@ -2381,10 +2391,12 @@ document.addEventListener('click', (e) => {
 // --- Resumo de Ganhos ---
 function garTotais() {
     const t = { AUMENTO: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 }, QUEDA: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 } }, porGrupo = {};
+    const lib = GAR.soLiberados ? gruposLiberados() : null;
     garItensDoMes().forEach((it) => {
         if (!t[it.motivo]) return;
         const { d, calc, atual } = garCalcItem(it);
         if (!garVisivel(d)) return;
+        if (lib && !(d && lib.has(normGrupo(d.grupo)))) return;            // só grupos com situação Liberado
         const x = t[it.motivo], ant = it.anterior || 0, at = atual || 0;
         const ajust = it.motivo === 'AUMENTO' ? (calc || 0) : at;
         const gar = it.motivo === 'AUMENTO' ? (calc == null ? 0 : at - calc) : at - ant;
@@ -2402,8 +2414,14 @@ function garDesenharResumo() {
     const lin = (nome, x, cls) => `<tr class="${cls || ''}"><td>${nome}</td><td class="num">${x.n}</td><td class="num">${x.lib}</td><td class="num">${garR(x.orig)}</td>`
         + `<td class="num">${garR(x.ajust)}</td><td class="num ${x.gar < 0 ? 'gar-neg' : 'gar-ganho'}"><b>${garR(x.gar)}</b></td></tr>`;
     const grupos = Object.keys(porGrupo).sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+    const b = document.getElementById('garSoLiberados');
+    if (b) {
+        const ng = GAR.soLiberados ? gruposLiberados().size : 0;
+        b.classList.toggle('ativo', !!GAR.soLiberados); b.setAttribute('aria-pressed', GAR.soLiberados ? 'true' : 'false');
+        b.textContent = GAR.soLiberados ? `Só grupos liberados (${ng}) — ver todos` : 'Somente grupos liberados';
+    }
     el.innerHTML = '<div class="gar-kpis">'
-        + `<div class="gar-kpi"><span>Garantia total</span><b>${garR(tot.gar)}</b><small>${tot.n} matrícula(s) · ${tot.lib} liberada(s)</small></div>`
+        + `<div class="gar-kpi"><span>Garantia total${GAR.soLiberados ? ' — grupos liberados' : ''}</span><b>${garR(tot.gar)}</b><small>${tot.n} matrícula(s) · ${tot.lib} liberada(s)</small></div>`
         + `<div class="gar-kpi"><span>Queda de consumo</span><b>${garR(t.QUEDA.gar)}</b><small>${t.QUEDA.n} matrícula(s)</small></div>`
         + `<div class="gar-kpi"><span>Aumento de consumo</span><b>${garR(t.AUMENTO.gar)}</b><small>${t.AUMENTO.n} matrícula(s)</small></div>` + '</div>'
         + '<div class="tabela-wrap"><table class="tabela-garantia gar-resumo"><thead><tr><th>Resumo</th><th class="num">Ligações</th><th class="num">Liberadas</th>'
@@ -2995,3 +3013,12 @@ async function gerarOnePage(libs) {
     }
 }
 document.addEventListener('DOMContentLoaded', () => opDesenhar());
+
+// chave "Somente grupos liberados" do Resumo de Ganhos: preferência de cada pessoa (lembrada neste navegador)
+try { GAR.soLiberados = localStorage.getItem('faturamento_gar_so_liberados') === '1'; } catch (e) { GAR.soLiberados = false; }
+document.addEventListener('click', (e) => {
+    if (e.target.id !== 'garSoLiberados') return;
+    GAR.soLiberados = !GAR.soLiberados;
+    try { localStorage.setItem('faturamento_gar_so_liberados', GAR.soLiberados ? '1' : '0'); } catch (er) { /* sem armazenamento */ }
+    garDesenharResumo();
+});
