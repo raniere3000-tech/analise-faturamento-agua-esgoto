@@ -2690,8 +2690,8 @@ const opBarra = (rot, dir, frac, cls) => `<div class="op-barra-lin"><span>${rot}
 function opBlocoDestaque(D) {
     const A = D.atual, P = D.ant, ed = opEditor();
     if (!A) return '<p class="op-vazio">Sem DRE para o mês e a superintendência escolhidos.</p>';
-    const corte = ed ? ed.dataset.corte.slice(0, 5) : '';
-    const rot = D.vigente ? `Realizado até ${corte}` : `Realizado em ${opMesCurto(D.mes)}`;
+    const corte = D.ultimo ? D.ultimo.data : ed ? ed.dataset.corte.slice(0, 5) : '';
+    const rot = D.vigente ? `Realizado até ${corte}` + (D.ultimo ? ` · último grupo lido: ${D.ultimo.grupo}` : '') : `Realizado em ${opMesCurto(D.mes)}`;
     const dv = opVar(A.bruto.r, A.bruto.o);
     const cls = dv == null || Math.abs(dv) < OP_RELEVANTE ? '' : dv > 0 ? ' op-pos' : ' op-neg';
     const ant = P ? `${garEsc(opMesCurto(opMesDeChave(opChaveMes(D.mes) - 1)))}: ${opMoeda(P.bruto.r, 2)}`
@@ -2801,7 +2801,7 @@ function opGrupos(D) {
     Array.from(mapa.values()).forEach((g) => {
         const iso = datas[normGrupo(g.grupo)];
         const s = iso ? semanaDe(iso) : { n: 99, rot: 'sem data no cronograma' };
-        g.data = iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+        g.iso = iso || ''; g.data = iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
         if (!semanas.has(s.n)) semanas.set(s.n, { n: s.n, rot: s.rot, grupos: [] });
         semanas.get(s.n).grupos.push(g);
     });
@@ -2914,9 +2914,13 @@ function opDesenhar() {
     const D = opDados(), ed = opEditor(), corte = ed ? ed.dataset.corte : '';
     D.refs = Array.from(new Set(Array.from(document.querySelectorAll('#view-dre th[data-tipo="orc"]')).map((th) => th.dataset.src)));
     const nomeSup = D.sup === 'TODAS' ? 'Todas as superintendências' : D.sup;
+    // data da folha: leitura do último grupo lido (o de data mais recente no cronograma entre os que já têm faturamento)
+    const G = opGrupos(D);
+    const lido = G.grupos.filter((g) => g.iso && g.r > 0).sort((a, b) => a.iso.localeCompare(b.iso)).pop();
+    D.ultimo = D.vigente && lido ? { grupo: lido.grupo, data: lido.data, dataAno: lido.data + '/' + lido.iso.slice(2, 4), completa: lido.data + '/' + lido.iso.slice(0, 4) } : null;
     folha.innerHTML = '';
     const cab = document.createElement('header'); cab.className = 'op-cab';
-    cab.innerHTML = `<span class="op-cab-sub">Águas do Rio · One page</span><h2>${garEsc(nomeSup)}: Acompanhamento do Faturamento — ${garEsc(corte.slice(0, 6) + corte.slice(8))}</h2>`;
+    cab.innerHTML = `<span class="op-cab-sub">Águas do Rio · One page</span><h2>${garEsc(nomeSup)}: Acompanhamento do Faturamento — ${garEsc(D.ultimo ? D.ultimo.dataAno : corte.slice(0, 6) + corte.slice(8))}</h2>`;
     folha.appendChild(cab);
     const dest = opBlocoDestaque(D);
     const s1 = opSecao('➤ Faturamento', typeof dest === 'object' && dest.ant ? `<small class="op-h-dir">${dest.ant}</small>` : '');
@@ -2926,7 +2930,6 @@ function opDesenhar() {
     const sA = opSecao('Faturamento aberto', `<small class="op-h-dir">${garEsc(opMesCurto(D.mes))} · ${dica}</small>`);
     sA.insertAdjacentHTML('beforeend', opTabAberta(D, opAbertoFat(D, L), OP_ABERTO_FAT, 'bruto', 'Faturamento bruto'));
     folha.appendChild(sA);
-    const G = opGrupos(D);
     const s2 = opSecao(`Acompanhamento semanal por grupo — realizado × ${G.fonte ? garEsc('orçado ' + G.fonte) : 'orçado'} e ${garEsc(D.rotAnt)}`,
         `<small class="op-h-dir">${garEsc(opMesCurto(ed ? ed.dataset.ref : ''))} · diretas (água + esgoto) · clique na semana para abrir</small>`);
     s2.insertAdjacentHTML('beforeend', opBlocoGrupos(D, G)); folha.appendChild(s2); opGraficoGrupos(D, G, s2);
@@ -2940,7 +2943,7 @@ function opDesenhar() {
     folha.appendChild(sI);
     const rod = document.createElement('footer'); rod.className = 'op-rodape';
     rod.innerHTML = `<span>Fonte: painel de faturamento · ${garEsc(nomeSup)} · competência ${garEsc(opMesCurto(D.mes))} · orçado ${garEsc(D.ref || '—')}`
-        + ` · dados até ${garEsc(corte)} (D-1) · gerado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span><b class="op-marca">Águas do Rio</b>`;
+        + (D.ultimo ? ` · último grupo lido: ${garEsc(D.ultimo.grupo)} (leitura ${garEsc(D.ultimo.completa)})` : ` · dados até ${garEsc(corte)} (D-1)`) + ` · gerado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span><b class="op-marca">Águas do Rio</b>`;
     folha.appendChild(rod);
 }
 // tendência e forecast acompanham as edições do forecast (aba Forecast ou Indiretas, ou vindas da pasta)
