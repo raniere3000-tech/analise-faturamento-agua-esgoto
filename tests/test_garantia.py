@@ -201,7 +201,7 @@ def test_pdf_justificativas_um_bloco_por_grupo(sessao):
 def test_top1000_filtro_de_categoria(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert 'id="garCatBtn"' in html and 'id="garCatLista"' in html
-    assert "(!GAR.cats || GAR.cats.has(garCat(d)))" in html and "function garMontarCategorias()" in html
+    assert "(!GAR_CAT_TOP.cats || GAR_CAT_TOP.cats.has(garCat(d)))" in html and "function garFiltroCategoria(p, fonte, aoMudar)" in html
 
 
 def test_filtros_padrao_e_pessoais(sessao):
@@ -231,3 +231,19 @@ def test_aba_one_page(sessao):
 def test_pdf_celular_folha_curta_nao_troca_largura(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert "const orient = (ph) => (ph >= PW ? 'portrait' : 'landscape');" in html and "pdf.addPage([PW, PH], orient(PH));" in html
+
+
+def test_aumentos_e_quedas_e_explicacao_em_dados(sessao):
+    ctx = sessao.ctx
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    for trecho in ('data-gar-aba="variacao"', 'id="garTabelaAumento"', 'id="garTabelaQueda"', 'id="garVarSoAnalise"', 'id="garVcatBtn"',
+                   'id="garVarBusca"', 'data-var-baixar="aumento"', "function garVarLista(tipo)", "<summary>7. Garantia</summary>"):
+        assert trecho in html, trecho
+    g = ctx.resultados["garantia"]
+    assert {"vAnt", "cAnt"} <= set(g.columns)
+    # faturado do mês anterior = água + esgoto da matrícula no mês anterior
+    b = ctx.base_completa
+    b = b[(b["Referencia de Leitura"] == ctx.ref_anterior) & b["__serv"].isin(["A", "E"])]
+    lig = g[g["vAnt"].notna()].iloc[0]
+    esperado = pd.to_numeric(b.loc[b["N. Ligação"].astype(str).str.strip() == lig["lig"], "Valor (R$)"], errors="coerce").sum()
+    assert lig["vAnt"] == pytest.approx(esperado)

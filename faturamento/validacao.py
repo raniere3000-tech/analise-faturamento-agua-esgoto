@@ -881,6 +881,107 @@ def gera_validacao_html(ctx):
     passo(97, "Criando aba Dados: memória de cálculo do Forecast")
     forecast = _aba("5. Forecast", [_bloco_forecast(ctx)])
 
+    garantia = _aba_garantia(ctx)
+
     # cada tópico é recolhível (fechado ao abrir a aba); quem monta o cartão da aba Dados é dados.py
     return (_aba("Bases para download", [f'<div class="val-bloco">{_secao_bases(ctx)}</div>'])
-            + resumo + _aba("2. Diretas", dir_blocos) + _aba("3. Análise", analise_blocos) + indiretas + forecast + dre)
+            + resumo + _aba("2. Diretas", dir_blocos) + _aba("3. Análise", analise_blocos) + indiretas + forecast + dre + garantia)
+
+
+# ---------------------------------------------------------------- 7. Garantia
+def _bloco_texto(titulo, descricao, formulas, colunas, montagem=()):
+    """Item da validação calculado no navegador (análise manual, resumo, O.S.): só a explicação, sem amostra."""
+    secao_montagem = f'<p class="val-rot">Como a tabela é montada</p>{_lista(montagem)}' if montagem else ""
+    return (f'<div class="val-bloco"><h4>{html.escape(titulo)}</h4><p><b>O que mostra:</b> {descricao}</p>'
+            f'<p class="val-rot">Colunas utilizadas</p>{_lista(colunas)}<p class="val-rot">Cálculo passo a passo</p>{_lista(formulas)}'
+            f'{secao_montagem}</div>')
+
+
+def _garantia_dfs(ctx):
+    """Top 1000 e Top 100 aumentos / quedas (água + esgoto, mês atual × anterior) para amostra e Excel."""
+    d = ctx.resultados.get("garantia")
+    if d is None or not len(d):
+        return {}, {}
+    nomes = {"rank": "Ranking", "lig": "Matrícula", "nome": "Cliente", "cat": "Categoria", "loc": "Localidade", "grupo": "Grupo",
+             "sup": "SUP", "mMed": "Média cons. medido (m³)", "mCons": "Média cons. faturado (m³)", "cons": "Cons. faturado atual (m³)",
+             "mVal": "Média faturado (R$)", "val": "Faturado atual (R$)", "sit": "Situação conta", "n": "Meses na média",
+             "cAnt": "Cons. faturado mês anterior (m³)", "vAnt": "Faturado mês anterior (R$)"}
+    top = d[d["rank"].notna() & (d["rank"] <= 1000)][[c for c in nomes if c not in ("cAnt", "vAnt")]].rename(columns=nomes)
+    v = d[d["val"].notna() & d["vAnt"].notna()].copy() if "vAnt" in d.columns else d.iloc[0:0]
+    v["Δ R$"] = v["val"] - v["vAnt"]
+    cols = ["lig", "nome", "cat", "grupo", "sup", "cAnt", "cons", "vAnt", "val", "Δ R$", "sit"]
+    aum = v[v["Δ R$"] > 0].sort_values("Δ R$", ascending=False).head(100)[cols].rename(columns=nomes)
+    que = v[v["Δ R$"] < 0].sort_values("Δ R$").head(100)[cols].rename(columns=nomes)
+    return {"Top 1000": top}, {"Top 100 aumentos": aum, "Top 100 quedas": que}
+
+
+def _aba_garantia(ctx):
+    top, var = _garantia_dfs(ctx)
+    mes = html.escape(ctx.mes_atual)
+    base_fat = ("fatura", "Rubrica de água e de esgoto; some Valor (R$) por matrícula e mês")
+    return _aba("7. Garantia", [
+        _bloco(f"Top 1000 ({mes})",
+               "as 1000 matrículas com maior média de faturado (água + esgoto) nos meses fechados, com o mês atual ao lado.",
+               ["Para cada matrícula e mês: faturado = soma do Valor (R$) das linhas de água e de esgoto",
+                "Meses fechados = todos os meses da pasta anteriores ao mês vigente; a lista se refaz quando um mês fecha",
+                "Média faturado (R$) = média do faturado nos meses fechados em que a matrícula aparece",
+                "Média consumo medido / faturado (m³) = média, nos mesmos meses, da linha de água",
+                "Δ % consumo = (consumo faturado atual − média) ÷ média; Δ % R$ = (faturado atual − média faturado) ÷ média faturado",
+                "Ranking = ordem decrescente da média faturado; entram as 1000 primeiras",
+                "Negrito: Δ % de consumo ou de R$ acima de 30% (para cima ou para baixo)",
+                "Situação conta = a da fatura do mês vigente (vazio = ainda sem fatura no mês)"],
+               ["Fatura: <b>N. Ligação</b>, <b>Rubrica</b>, <b>Valor (R$)</b>, <b>Referencia de Leitura</b>, <b>Situacao Conta</b>, "
+                "<b>Categoria</b>, <b>Grupo</b>, <b>Rota</b>, economias por tipo",
+                "Consumo: <b>Consumo Medido</b>, <b>Consumo Faturado</b>"],
+               top, "garantia_top1000", bases=[base_fat],
+               montagem=["Filtros: Superintendência e Grupo do cabeçalho, matrícula, categoria e \"Somente em análise\"",
+                         "Botão \"+ Análise\" leva a matrícula para a Análise de Garantia"]),
+        _bloco(f"Aumentos e quedas — Top 100 ({mes} × mês anterior)",
+               "as matrículas com maior aumento e maior queda do faturado de água + esgoto em relação ao mês anterior.",
+               ["Entram só as matrículas que faturaram nos dois meses (grupo ainda não lido no mês não aparece como queda)",
+                "Δ R$ = faturado atual − faturado do mês anterior (água + esgoto); Δ % = Δ R$ ÷ faturado do mês anterior",
+                "Δ consumo = consumo faturado de água atual − do mês anterior",
+                "Top 100 aumentos = maiores Δ R$ positivos; Top 100 quedas = maiores Δ R$ negativos",
+                "Com filtros (SUP, Grupo, Categoria, Somente em análise) o ranking é refeito só com as matrículas filtradas"],
+               ["Fatura: <b>N. Ligação</b>, <b>Rubrica</b>, <b>Valor (R$)</b>, <b>Referencia de Leitura</b>, <b>Situacao Conta</b>",
+                "Consumo: <b>Consumo Faturado</b>"],
+               var, "garantia_aumentos_quedas", bases=[base_fat],
+               montagem=["Duas tabelas (aumentos e quedas), cada uma com a seta ⬇≡ para o analítico completo (CSV, todas as matrículas)",
+                         "A busca por matrícula procura dentro do Top 100; \"+ Análise\" leva para a Análise de Garantia"]),
+        _bloco_texto("Análise de Garantia",
+                     "as matrículas em análise no mês, com a média do sistema, o faturado calculado pela estrutura tarifária, a foto do "
+                     "faturado (anterior) e o faturado atual (ajustado). Fica no ajustes_relatorio.json da pasta, para todos.",
+                     ["Média volume fat. (m³) = média do sistema, digitada",
+                      "Fat. calculado (R$) = valor da média pela estrutura tarifária (abaixo)",
+                      "Fat. anterior (R$) = foto do faturado (água + esgoto) no momento em que a matrícula entrou na análise; "
+                      "nas importadas do Excel, o valor da planilha",
+                      "Fat. ajustado (R$) = faturado atual do mês (água + esgoto) — muda quando a fatura é liberada e o relatório é gerado de novo",
+                      "Dif. (R$) = Fat. ajustado − Fat. anterior"],
+                     ["Dados do Top 1000 / base da garantia (cliente, categoria, economias, grupo, rota, situação, faturado atual)",
+                      "Digitado: média, motivo, retorno, O.S. e nº da O.S."],
+                     ["Todas as colunas ordenáveis; Exportar para e-mail (tabela formatada e rascunho .eml)"]),
+        _bloco_texto("Estrutura tarifária (Fat. calculado)",
+                     "o valor (R$) de um consumo (m³) para a ligação, a mesma regra da fórmula da planilha da Análise de Garantia.",
+                     ["Mínimo da ligação = mínimo por economia da categoria × economias de cada tipo (residencial/social, comercial/peq. "
+                      "comércio, industrial, pública)",
+                      "O que a média passa da soma dos mínimos é repartido igualmente entre as economias",
+                      "Cada tipo é cobrado pelas faixas da sua categoria (limite da faixa × nº de economias): tarifa progressiva quando "
+                      "o consumo do tipo passa do mínimo, normal quando não passa",
+                      "Com esgoto, o valor dobra (água + esgoto)"],
+                     ["Planilha de estrutura tarifária da pasta (tblTarifas e tblMinimo) ou, sem ela, a padrão do regras.json"]),
+        _bloco_texto("Resumo de Ganhos",
+                     "o ganho de garantia das matrículas com motivo preenchido no mês, por motivo, por grupo e antes × pelo painel.",
+                     ["Queda de consumo: garantia = Fat. ajustado − Fat. anterior (valor original = anterior; ajustado = ajustado)",
+                      "Aumento de consumo: garantia = Fat. ajustado − Fat. calculado (valor original = anterior; ajustado = calculado)",
+                      "Liberadas = Situação Conta diferente de EM ANALISE",
+                      "Motivo em branco: fora da soma (continua no controle de O.S.)",
+                      "Antes do painel = importadas do Excel (selo Histórico); pelo painel = as demais"],
+                     ["Análise de Garantia do mês (motivo, faturados)"],
+                     ["Segue os filtros de Superintendência e Grupo do cabeçalho"]),
+        _bloco_texto("Controle de O.S.",
+                     "as matrículas com \"Abrir O.S.\" cujo prazo de 10 dias venceu e que ainda não foram marcadas como realizadas.",
+                     ["Data da análise = dia em que \"Abrir O.S.\" foi escolhido (ou a data informada na planilha importada)",
+                      "Prazo = data da análise + 10 dias; aparece no aviso a partir do prazo, com os dias de atraso",
+                      "✓ Realizada tira a matrícula do aviso"],
+                     ["Análise de Garantia (O.S., nº da O.S., data da análise)"]),
+    ])

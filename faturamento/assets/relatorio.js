@@ -1811,7 +1811,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Dados (script#garantia-dados, JSON em gzip): uma linha por matrícula, já no ranking da média do faturado (R$) dos
 // meses fechados. A análise manual (média do sistema, motivo, retorno, foto do faturado) fica em garItens e vai para a
 // seção "garantia" do ajustes_relatorio.json — a mesma análise para todos.
-const GAR = { dados: null, porLig: new Map(), ref: '', top: 1000, refs: [], tarifa: null, soAnalise: false, busca: [], cats: null,
+const GAR = { dados: null, porLig: new Map(), ref: '', top: 1000, refs: [], tarifa: null, soAnalise: false, busca: [],
               ordem: { campo: 'rank', desc: false }, carregando: null };
 const GAR_LS = 'faturamento_garantia';
 let garItens = {};
@@ -1865,7 +1865,7 @@ function garValorCol(d, c) {
 }
 function garLinhasTop() {
     const busca = GAR.busca;                             // filtro por matrícula (parte do número; várias separadas por espaço)
-    let ls = GAR.lista.filter((d) => garVisivel(d) && (!GAR.soAnalise || garEmAnalise(d)) && (!GAR.cats || GAR.cats.has(garCat(d)))
+    let ls = GAR.lista.filter((d) => garVisivel(d) && (!GAR.soAnalise || garEmAnalise(d)) && (!GAR_CAT_TOP.cats || GAR_CAT_TOP.cats.has(garCat(d)))
         && (!busca.length || busca.some((t) => String(d.lig).includes(t))));
     const { campo, desc } = GAR.ordem;
     const num = GAR_COLS_TOP.find((c) => c[0] === campo)?.[2] !== 't';
@@ -1876,41 +1876,47 @@ function garLinhasTop() {
     });
     return ls;
 }
-// filtro de categoria do Top 1000 (lista com caixas, como o filtro de grupos do cabeçalho); null = todas
+// filtro de categoria (lista com caixas, como o filtro de grupos do cabeçalho): uma instância por sub-aba; cats null = todas
 const garCat = (d) => String((d && d.cat) || '').trim() || '(sem categoria)';
-function garMontarCategorias() {
-    const lista = document.getElementById('garCatLista'); if (!lista || lista.dataset.pronta) return;
-    const n = {}; GAR.lista.forEach((d) => { const c = garCat(d); n[c] = (n[c] || 0) + 1; });
-    const cats = Object.keys(n).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    lista.innerHTML = '<label><input type="checkbox" id="garCatTodas" checked> <b>Selecionar todas</b></label><hr>'
-        + cats.map((c) => `<label><input type="checkbox" class="gar-cat" value="${garEsc(c)}" checked> ${garEsc(c)} <small>(${n[c]})</small></label>`).join('');
-    lista.dataset.pronta = '1';
+function garFiltroCategoria(p, fonte, aoMudar) {
+    // p: prefixo dos ids (p+'DD', p+'Btn', p+'Lista', p+'Todas'); fonte(): matrículas para contar; aoMudar(): redesenha
+    const f = { cats: null }, el = (s) => document.getElementById(p + s), chk = p + '-chk';
+    f.montar = () => {
+        const lista = el('Lista'); if (!lista || lista.dataset.pronta) return;
+        const n = {}; (fonte() || []).forEach((d) => { const c = garCat(d); n[c] = (n[c] || 0) + 1; });
+        const cats = Object.keys(n).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        lista.innerHTML = `<label><input type="checkbox" id="${p}Todas" checked> <b>Selecionar todas</b></label><hr>`
+            + cats.map((c) => `<label><input type="checkbox" class="${chk}" value="${garEsc(c)}" checked> ${garEsc(c)} <small>(${n[c]})</small></label>`).join('');
+        lista.dataset.pronta = '1';
+    };
+    const ler = () => {
+        const caixas = Array.from(document.querySelectorAll(`#${p}Lista .${chk}`)), marc = caixas.filter((c) => c.checked);
+        f.cats = marc.length === caixas.length ? null : new Set(marc.map((c) => c.value));
+        const todas = el('Todas');
+        if (todas) { todas.checked = marc.length === caixas.length; todas.indeterminate = marc.length > 0 && marc.length < caixas.length; }
+        const b = el('Btn');
+        if (b) { b.textContent = (!f.cats ? 'Todas' : marc.length === 1 ? marc[0].value : `${marc.length} de ${caixas.length}`) + ' ▾'; b.classList.toggle('ativo', !!f.cats); }
+        aoMudar();
+    };
+    document.addEventListener('change', (e) => {
+        if (e.target.id === p + 'Todas') { document.querySelectorAll(`#${p}Lista .${chk}`).forEach((c) => { c.checked = e.target.checked; }); ler(); }
+        else if (e.target.classList && e.target.classList.contains(chk)) ler();
+    });
+    document.addEventListener('click', (e) => {
+        const dd = el('DD'); if (!dd) return;
+        if (e.target.id === p + 'Btn') { const ab = dd.classList.toggle('aberto'); e.target.setAttribute('aria-expanded', ab ? 'true' : 'false'); return; }
+        if (!dd.contains(e.target)) { dd.classList.remove('aberto'); el('Btn').setAttribute('aria-expanded', 'false'); }
+    });
+    document.addEventListener('keydown', (e) => {
+        const dd = el('DD');
+        if (e.key === 'Escape' && dd && dd.classList.contains('aberto')) { dd.classList.remove('aberto'); el('Btn').focus(); }
+    });
+    return f;
 }
-function garLerCategorias() {
-    const caixas = Array.from(document.querySelectorAll('#garCatLista .gar-cat')), marc = caixas.filter((c) => c.checked);
-    GAR.cats = marc.length === caixas.length ? null : new Set(marc.map((c) => c.value));
-    const todas = document.getElementById('garCatTodas');
-    if (todas) { todas.checked = marc.length === caixas.length; todas.indeterminate = marc.length > 0 && marc.length < caixas.length; }
-    const b = document.getElementById('garCatBtn');
-    if (b) { b.textContent = (!GAR.cats ? 'Todas' : marc.length === 1 ? marc[0].value : `${marc.length} de ${caixas.length}`) + ' ▾'; b.classList.toggle('ativo', !!GAR.cats); }
-    garDesenharTop();
-}
-document.addEventListener('change', (e) => {
-    if (e.target.id === 'garCatTodas') { document.querySelectorAll('#garCatLista .gar-cat').forEach((c) => { c.checked = e.target.checked; }); garLerCategorias(); }
-    else if (e.target.classList && e.target.classList.contains('gar-cat')) garLerCategorias();
-});
-document.addEventListener('click', (e) => {
-    const dd = document.getElementById('garCatDD'); if (!dd) return;
-    if (e.target.id === 'garCatBtn') { const ab = dd.classList.toggle('aberto'); e.target.setAttribute('aria-expanded', ab ? 'true' : 'false'); return; }
-    if (!dd.contains(e.target)) { dd.classList.remove('aberto'); document.getElementById('garCatBtn').setAttribute('aria-expanded', 'false'); }
-});
-document.addEventListener('keydown', (e) => {
-    const dd = document.getElementById('garCatDD');
-    if (e.key === 'Escape' && dd && dd.classList.contains('aberto')) { dd.classList.remove('aberto'); document.getElementById('garCatBtn').focus(); }
-});
+const GAR_CAT_TOP = garFiltroCategoria('garCat', () => GAR.lista, () => garDesenharTop());
 function garDesenharTop() {
     const tab = document.getElementById('garTabelaTop'); if (!tab || !GAR.dados) return;
-    garMontarCategorias();
+    GAR_CAT_TOP.montar();
     garGrupos = gruposFiltro();
     const { campo, desc } = GAR.ordem;
     tab.tHead.innerHTML = '<tr>' + GAR_COLS_TOP.map(([c, t, tipo]) => `<th class="gar-ord ${tipo === 'n' ? 'num' : ''}" data-ord="${c}" tabindex="0" title="Ordenar">${t}${c === campo ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '<th></th></tr>';
@@ -1939,6 +1945,78 @@ function garDesenharTop() {
     b.classList.toggle('ativo', GAR.soAnalise); b.setAttribute('aria-pressed', GAR.soAnalise ? 'true' : 'false');
     b.textContent = GAR.soAnalise ? `Mostrando só em análise (${emAnalise}) — ver todas` : `Somente em análise (${emAnalise})`;
 }
+
+// --- Aumentos e quedas: Top 100 pela variação do faturado (água + esgoto) contra o mês anterior ---
+// Só matrículas que faturaram nos dois meses (grupo ainda não lido no mês não vira "queda"). O ranking é refeito com os
+// filtros (SUP, Grupo, Categoria, Somente em análise); a busca por matrícula só procura dentro do Top 100.
+const GAR_VAR = { soAnalise: false, busca: [], base: null };
+const GAR_CAT_VAR = garFiltroCategoria('garVcat', () => garVarBase(), () => garDesenharVar());
+function garVarBase() {
+    if (!GAR.var_base) GAR.var_base = (GAR.dados || []).filter((d) => d.val != null && d.vAnt != null);
+    return GAR.var_base;
+}
+const garDifVal = (d) => d.val - d.vAnt;
+function garVarLista(tipo) {
+    const s = tipo === 'aumento' ? 1 : -1;
+    return garVarBase().filter((d) => garVisivel(d) && (!GAR_VAR.soAnalise || garEmAnalise(d))
+            && (!GAR_CAT_VAR.cats || GAR_CAT_VAR.cats.has(garCat(d))) && s * garDifVal(d) > 0)
+        .sort((a, b) => s * (garDifVal(b) - garDifVal(a)));
+}
+const GAR_COLS_VAR = ['#', 'Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'SUP', 'Econ.', 'Cons. fat. anterior (m³)',
+    'Cons. fat. atual (m³)', 'Δ cons. (m³)', 'Faturado anterior (R$)', 'Faturado atual (R$)', 'Δ R$', 'Δ %', 'Situação conta'];
+function garDesenharVar() {
+    if (!GAR.dados || !document.getElementById('garTabelaAumento')) return;
+    garGrupos = gruposFiltro();
+    GAR_CAT_VAR.montar();
+    const naAnalise = new Set(Object.keys(garItens).filter((k) => k.startsWith(GAR.ref + '|')).map((k) => k.slice(GAR.ref.length + 1)));
+    const busca = GAR_VAR.busca, conta = {};
+    ['aumento', 'queda'].forEach((tipo) => {
+        const tab = document.getElementById(tipo === 'aumento' ? 'garTabelaAumento' : 'garTabelaQueda');
+        const lista = garVarLista(tipo), top = lista.slice(0, 100);
+        const vis = top.map((d, i) => [d, i + 1]).filter(([d]) => !busca.length || busca.some((t) => String(d.lig).includes(t)));
+        conta[tipo] = [vis.length, lista.length];
+        tab.tHead.innerHTML = '<tr>' + GAR_COLS_VAR.map((c, i) => `<th class="${i === 0 || i >= 7 && i <= 14 ? 'num' : ''}">${c}</th>`).join('') + '<th></th></tr>';
+        tab.tBodies[0].innerHTML = vis.map(([d, r]) => {
+            const dc = (d.cons != null && d.cAnt != null) ? d.cons - d.cAnt : null, dv = garDifVal(d), pv = d.vAnt ? dv / d.vAnt : null;
+            const sit = d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? 'Em análise' : d.sit)}</span>` : '';
+            const lig = String(d.lig), cls = dv < 0 ? 'gar-queda' : 'gar-aumento';
+            return `<tr><td class="num">${r}</td><td>${garEsc(lig)}</td><td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td>`
+                + `<td>${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td>${garEsc(d.sup)}</td><td class="num">${garN(garValorCol(d, 'eco'))}</td>`
+                + `<td class="num">${garN(d.cAnt, 1)}</td><td class="num">${garN(d.cons, 1)}</td><td class="num ${dc < 0 ? 'gar-neg' : ''}">${garN(dc, 1)}</td>`
+                + `<td class="num">${garR(d.vAnt)}</td><td class="num">${garR(d.val)}</td><td class="num gar-forte ${cls}">${garR(dv)}</td>`
+                + `<td class="num ${cls}">${pv == null ? '–' : (pv > 0 ? '+' : '') + fmtBR(pv * 100, 1) + '%'}</td><td>${sit}</td>`
+                + `<td><button type="button" class="btn-just gar-add" data-lig="${garEsc(lig)}" ${naAnalise.has(lig) ? 'disabled title="Já está na Análise de Garantia"' : 'title="Levar para a Análise de Garantia"'}>${naAnalise.has(lig) ? '✓' : '+ Análise'}</button></td></tr>`;
+        }).join('') || `<tr><td colspan="${GAR_COLS_VAR.length + 1}" class="gar-vazio">${busca.length ? 'Matrícula fora deste Top 100 (com os filtros escolhidos).' : 'Nenhuma matrícula com os filtros escolhidos.'}</td></tr>`;
+    });
+    const emAnalise = garVarBase().filter((d) => garVisivel(d) && garEmAnalise(d)).length;
+    document.getElementById('garVarContagem').textContent = `Aumentos: ${conta.aumento[0]} de ${conta.aumento[1]} · Quedas: ${conta.queda[0]} de ${conta.queda[1]}`;
+    const b = document.getElementById('garVarSoAnalise');
+    b.classList.toggle('ativo', GAR_VAR.soAnalise); b.setAttribute('aria-pressed', GAR_VAR.soAnalise ? 'true' : 'false');
+    b.textContent = GAR_VAR.soAnalise ? `Mostrando só em análise (${emAnalise}) — ver todas` : `Somente em análise (${emAnalise})`;
+}
+function garBaixarVar(tipo) {
+    const lista = garVarLista(tipo), P = tipo === 'aumento' ? 'Aumento' : 'Queda';
+    const cols = ['Ranking', 'Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'Rota', 'SUP', 'Econ. residencial', 'Econ. comercial',
+        'Econ. industrial', 'Econ. pública', 'Econ. total', 'Tem esgoto', 'Situação conta', 'Situação lançamento',
+        'Cons. faturado mês anterior (m³)', 'Cons. faturado atual (m³)', 'Δ consumo (m³)', 'Δ % consumo',
+        'Faturado mês anterior (R$)', 'Faturado atual (R$)', `${P} (R$)`, 'Δ % faturado', 'Média faturado meses fechados (R$)', 'Posição no Top 1000'];
+    const pct = (a, b) => (b ? Math.round((a - b) / b * 1000) / 10 : null), r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
+    const linhas = lista.map((d, i) => [i + 1, d.lig, d.nome, d.cat, d.loc, d.grupo, d.rota, d.sup, d.res, d.com, d.ind, d.pub, garValorCol(d, 'eco'),
+        d.esg ? 'Sim' : 'Não', d.sit || '', d.lanc || '', d.cAnt, d.cons, r2(d.cons != null && d.cAnt != null ? d.cons - d.cAnt : null), pct(d.cons, d.cAnt),
+        d.vAnt, d.val, r2(garDifVal(d)), pct(d.val, d.vAnt), d.mVal, d.rank && d.rank <= GAR.top ? d.rank : '']);
+    baixarTexto(csvDe(cols, linhas), `Garantia_${P}s_${GAR.ref.replace('/', '-')}${GAR_VAR.soAnalise ? '_em_analise' : ''}${GAR_CAT_VAR.cats ? '_categorias_filtradas' : ''}.csv`);
+}
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'garVarSoAnalise') { GAR_VAR.soAnalise = !GAR_VAR.soAnalise; garDesenharVar(); return; }
+    if (e.target.id === 'garVarLimpar') { const i = document.getElementById('garVarBusca'); i.value = ''; GAR_VAR.busca = []; garDesenharVar(); i.focus(); return; }
+    const b = e.target.closest && e.target.closest('[data-var-baixar]');
+    if (b) garBaixarVar(b.dataset.varBaixar);
+});
+document.addEventListener('input', (e) => {
+    if (e.target.id !== 'garVarBusca') return;
+    GAR_VAR.busca = e.target.value.match(/\d+/g) || [];
+    clearTimeout(GAR_VAR.t); GAR_VAR.t = setTimeout(garDesenharVar, 150);
+});
 
 // --- Análise de Garantia ---
 const garChave = (lig) => `${GAR.ref}|${lig}`;
@@ -2209,7 +2287,7 @@ function garBaixarTop() {
     const pct = (p) => (p == null ? null : Math.round(p * 1000) / 10);
     const linhas = garLinhasTop().map((d) => [d.rank, d.lig, d.nome, d.cat, d.loc, d.grupo, d.sup, garValorCol(d, 'eco'), d.mMed, d.mCons, d.cons,
         pct(garVar(d.cons, d.mCons)), d.mVal, d.val, pct(garVar(d.val, d.mVal)), d.sit || '']);
-    baixarTexto(csvDe(cols, linhas), `Garantia_Top${GAR.top}_${GAR.ref.replace('/', '-')}${GAR.soAnalise ? '_em_analise' : ''}${GAR.cats ? '_categorias_filtradas' : ''}.csv`);
+    baixarTexto(csvDe(cols, linhas), `Garantia_Top${GAR.top}_${GAR.ref.replace('/', '-')}${GAR.soAnalise ? '_em_analise' : ''}${GAR_CAT_TOP.cats ? '_categorias_filtradas' : ''}.csv`);
 }
 function garExportarEmail() {
     const itens = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)) && (it.motivo || it.retorno));
@@ -2340,7 +2418,7 @@ function garDesenharResumo() {
 function garRedesenhar() {
     if (!GAR.dados) return;
     garGrupos = gruposFiltro();
-    garDesenharTop(); garDesenharAnalise(); garDesenharResumo(); garDesenharOS();
+    garDesenharTop(); garDesenharVar(); garDesenharAnalise(); garDesenharResumo(); garDesenharOS();
 }
 var syncGarantia = criaSync('garantia', 'Análise de garantia', () => garItens,
     (m) => { garItens = m; try { localStorage.setItem(GAR_LS, JSON.stringify(garItens)); } catch (e) {} },

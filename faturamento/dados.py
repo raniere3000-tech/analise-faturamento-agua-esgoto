@@ -107,7 +107,7 @@ def gera_aba_dados_html(ctx):
               'O orçado das linhas "RI" só existe se a planilha tiver linhas com esses nomes.</p>'
               + (_mapeamento_orcado(ctx) or '<p class="nota-secao">Nenhuma planilha de orçado carregada.</p>'))
     return ('<div class="card val-card"><h2>Dados e validação dos cálculos</h2>'
-            '<p class="nota-secao">Clique em um tópico para abrir. Em 1 a 5, cada tabela e gráfico do relatório, aba por aba: o que mostra, '
+            '<p class="nota-secao">Clique em um tópico para abrir. Em 1 a 7, cada tabela e gráfico do relatório, aba por aba: o que mostra, '
             'quais bases e colunas entram, o cálculo passo a passo, como foi montado, uma amostra e botões para baixar a tabela (Excel) '
             'e a base usada (CSV).</p>'
             + topico(f"Avisos ({len(avisos)})", lista)

@@ -667,3 +667,4 @@ table.op-mini .num { text-align:right; }
     .op-grafico { height:220px; }
     .op-rodape { flex-direction:column; align-items:flex-start; }
 }
+.gar-painel[data-gar="variacao"] > .card:first-child { overflow:visible; }   /* lista de categorias por cima das tabelas */

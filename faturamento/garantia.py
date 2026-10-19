@@ -23,7 +23,7 @@ from .formatacao import nome_mes, normaliza_texto
 
 TOP = int(REGRAS.get("garantia_top", 1000))
 COLUNAS = ["lig", "nome", "cat", "loc", "grupo", "rota", "sup", "res", "com", "ind", "pub", "esg", "sit", "lanc",
-           "mMed", "mCons", "mVal", "n", "med", "cons", "val", "rank"]
+           "mMed", "mCons", "mVal", "n", "med", "cons", "val", "rank", "vAnt", "cAnt"]
 _ECO = {"res": "Qtd. Economia Residencial", "com": "Qtd. Economia Comercial", "ind": "Qtd. Economia Industrial",
         "pub": "Qtd. Economia Publica"}
 
@@ -73,10 +73,10 @@ def monta_garantia(ctx):
         s = s[s.index.get_level_values(1).isin(fechados)]
         return s.groupby(level=0).mean()
 
-    def do_mes(s):
+    def do_mes(s, r=None):
         if not len(s):
             return pd.Series(dtype=float)
-        s = s[s.index.get_level_values(1) == ra]
+        s = s[s.index.get_level_values(1) == (r or ra)]
         return s.droplevel(1)
 
     mVal, mCons, mMed = media(pm_val), media(pm_cons), media(pm_med)
@@ -103,6 +103,8 @@ def monta_garantia(ctx):
     d = cad.drop(columns=["ref", "ordem"])
     d["mVal"], d["mCons"], d["mMed"], d["n"] = mVal, mCons, mMed, n_meses
     d["val"], d["cons"], d["med"] = aVal, aCons, aMed
+    rn = getattr(ctx, "ref_anterior", None)                       # mês anterior: sub-aba Aumentos e quedas
+    d["vAnt"], d["cAnt"] = (do_mes(pm_val, rn), do_mes(pm_cons, rn)) if rn else (np.nan, np.nan)
     d = d.reset_index()
     d = d.sort_values(["mVal", "val"], ascending=False, na_position="last").reset_index(drop=True)
     d["rank"] = np.where(d["mVal"].notna(), np.arange(1, len(d) + 1), np.nan)
@@ -143,7 +145,7 @@ def gera_aba_garantia_html(ctx):
   <div class="gar-topo">
     <h2>Garantia — {e(ctx.mes_atual)}</h2>
     <span class="gar-sub" role="tablist" aria-label="Partes da análise de garantia">
-      <button type="button" data-gar-aba="top" class="ativo" aria-pressed="true">Top {TOP}</button><button type="button" data-gar-aba="analise" aria-pressed="false">Análise de Garantia</button><button type="button" data-gar-aba="resumo" aria-pressed="false">Resumo de Ganhos</button>
+      <button type="button" data-gar-aba="top" class="ativo" aria-pressed="true">Top {TOP}</button><button type="button" data-gar-aba="variacao" aria-pressed="false">Aumentos e quedas</button><button type="button" data-gar-aba="analise" aria-pressed="false">Análise de Garantia</button><button type="button" data-gar-aba="resumo" aria-pressed="false">Resumo de Ganhos</button>
     </span>
   </div>
   <p class="nota-secao">Top {TOP} matrículas pela <b>média do faturado (água + esgoto)</b> dos meses fechados disponíveis ({e(meses)});
@@ -161,6 +163,25 @@ def gera_aba_garantia_html(ctx):
     </div>
     <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaTop"><thead></thead><tbody></tbody></table></div>
   </div>
+</div>
+<div class="gar-painel" data-gar="variacao" hidden>
+  <div class="card">
+    <div class="gar-barra">
+      <span class="gar-contagem" id="garVarContagem"></span>
+      <span class="gar-busca"><label for="garVarBusca">Matrícula</label><input type="text" id="garVarBusca" inputmode="numeric" autocomplete="off" placeholder="Filtrar por matrícula (uma ou várias)"><button type="button" class="btn-just" id="garVarLimpar" title="Limpar o filtro de matrícula" aria-label="Limpar o filtro de matrícula">✕</button></span>
+      <span class="gar-dd" id="garVcatDD"><span class="gar-dd-rot">Categoria</span><button type="button" class="gar-dd-btn" id="garVcatBtn" aria-haspopup="true" aria-expanded="false" aria-controls="garVcatLista" title="Filtrar por categoria (marque quantas quiser)">Todas ▾</button><div class="gar-dd-lista" id="garVcatLista" role="group" aria-label="Categorias"></div></span>
+      <button type="button" class="btn-just gar-filtro" id="garVarSoAnalise" aria-pressed="false">Somente em análise</button>
+    </div>
+    <p class="nota-secao">Matrículas que faturaram nos dois meses ({e(nome_mes(ctx.ref_anterior)) if getattr(ctx, "ref_anterior", None) else "mês anterior"} e {e(ctx.mes_atual)}), pela variação do
+    <b>faturado de água + esgoto</b> (R$). O ranking é refeito com os filtros (Superintendência, Grupo, Categoria e "Somente em análise");
+    o filtro de matrícula só procura dentro do Top 100. A seta <b>⬇≡</b> baixa o analítico completo (todas as matrículas com aumento ou queda).</p>
+  </div>
+  <div class="card"><div class="gar-topo"><h2>Top 100 aumentos — {e(ctx.mes_atual)} × mês anterior</h2>
+    <button type="button" class="btn-just" data-var-baixar="aumento" title="Baixar o analítico dos aumentos (CSV, todas as matrículas com aumento, com os filtros)" aria-label="Baixar o analítico dos aumentos">&#11015;&#8801;</button></div>
+    <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaAumento"><thead></thead><tbody></tbody></table></div></div>
+  <div class="card"><div class="gar-topo"><h2>Top 100 quedas — {e(ctx.mes_atual)} × mês anterior</h2>
+    <button type="button" class="btn-just" data-var-baixar="queda" title="Baixar o analítico das quedas (CSV, todas as matrículas com queda, com os filtros)" aria-label="Baixar o analítico das quedas">&#11015;&#8801;</button></div>
+    <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaQueda"><thead></thead><tbody></tbody></table></div></div>
 </div>
 <div class="gar-painel" data-gar="analise" hidden>
   <div class="card">
