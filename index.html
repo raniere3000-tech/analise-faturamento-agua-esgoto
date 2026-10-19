@@ -406,7 +406,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v103</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v104</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -429,6 +429,12 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         <span class="menu-pdf-lista" id="menuPdf" role="menu" hidden>
           <button type="button" role="menuitem" data-modo="celular">📱 Para ler no celular<small>Folha em pé, letra grande, colunas principais</small></button>
           <button type="button" role="menuitem" data-modo="a4">🖨 A4 para imprimir<small>Folhas deitadas, com todas as colunas</small></button>
+        </span></span>
+      <span class="menu-pdf" id="menuPrintWrap"><button type="button" class="btn-top" id="btnPrint" hidden aria-haspopup="true" aria-expanded="false" aria-controls="menuPrint" title="Imagem em alta resolução de um quadro do painel, para colar na apresentação">🖼 Prints ▾</button>
+        <span class="menu-pdf-lista" id="menuPrint" role="menu" hidden>
+          <button type="button" role="menuitem" data-print="dre">DRE<small>Realizado + Forecast, sem a coluna Forecast</small></button>
+          <button type="button" role="menuitem" data-print="garantia">Análise de Garantia<small>Totais, resumo e garantia por grupo</small></button>
+          <button type="button" role="menuitem" data-print="indiretas">Faturamento Indireto e Plano de Ação<small>Indiretas (R$) e, abaixo, o plano do mês</small></button>
         </span></span>
       <button type="button" class="btn-top" id="btnOnePage" hidden title="One page (acompanhamento do faturamento em uma página, conforme os filtros da tela)">📊 One page</button>
       <button type="button" class="btn-top" id="btnAcomp" hidden title="Baixar as tabelas da planilha de Acompanhamento Mensal (Excel, uma aba por tabela) da Superintendência escolhida">📥 Acompanhamento</button>
@@ -555,7 +561,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v103-20261019"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v104-20261019"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -955,7 +961,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   function fechaRelatorio() {
     $("etapaTop20").hidden = true;
     $("quadroRelatorio").hidden = true;
-    $("btnPdf").hidden = true; $("menuPdf").hidden = true; $("btnOnePage").hidden = true;
+    $("btnPdf").hidden = true; $("menuPdf").hidden = true; $("btnOnePage").hidden = true; $("btnPrint").hidden = true; $("menuPrint").hidden = true;
     $("vazioWrap").hidden = false;
     document.body.classList.remove("relatorio-aberto", "top20-aberto");
     document.title = "Análise de Faturamento — Água e Esgoto";
@@ -1478,7 +1484,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     $("listaGrupos").innerHTML = `<label><input type="checkbox" id="chkTodosGrupos" checked> <b>Selecionar todos</b></label><hr>` +
       grupos.map((g) => `<label><input type="checkbox" class="chk-grupo-top" value="${escapa(g.value)}" checked> ${escapa(g.value)}</label>`).join("");
     $("btnGrupo").textContent = "Todos ▾"; $("btnGrupo").disabled = false;
-    $("btnPdf").hidden = false; $("btnOnePage").hidden = false;
+    $("btnPdf").hidden = false; $("btnOnePage").hidden = false; $("btnPrint").hidden = false;
     filtrosEstado.view = "resumo";
     // filtros de cada pessoa (neste navegador): a última escolha volta ao abrir; sem escolha salva, SUP Interior,
     // Comparar padrão, mês vigente e grupos Liberados/Em Análise. Mês e grupos só voltam se o mês vigente for o mesmo.
@@ -1581,6 +1587,27 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     const w = janela(); w.focus();
     if (!w.gerarExecutivo) { w.print(); return; }                 // relatório antigo (sem executivo): imprime a tela
     w.gerarExecutivo(await libsPdf(), b.dataset.modo);            // sem as bibliotecas, o relatório tenta o CDN e depois a impressão
+  }));
+  // Prints da apresentação: o relatório gera o PNG (e baixa); aqui ele também vai para a área de transferência (Ctrl+V no slide).
+  // O ClipboardItem recebe a promessa na hora do clique: a cópia continua valendo depois do tempo de gerar a imagem.
+  const menuPrint = $("menuPrint");
+  const fechaMenuPrint = () => { menuPrint.hidden = true; $("btnPrint").setAttribute("aria-expanded", "false"); };
+  $("btnPrint").addEventListener("click", (e) => {
+    e.stopPropagation();
+    menuPrint.hidden = !menuPrint.hidden; $("btnPrint").setAttribute("aria-expanded", String(!menuPrint.hidden));
+  });
+  document.addEventListener("click", (e) => { if (!menuPrint.hidden && !e.target.closest("#menuPrintWrap")) fechaMenuPrint(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menuPrint.hidden) fechaMenuPrint(); });
+  menuPrint.querySelectorAll("button[data-print]").forEach((b) => b.addEventListener("click", () => {
+    fechaMenuPrint();
+    const w = janela();
+    if (!w.gerarPrint) { alert("Este relatório foi gerado por uma versão anterior do painel: atualize a análise para ter os prints."); return; }
+    const imagem = libsPdf().then((l) => w.gerarPrint(b.dataset.print, l));
+    let copia = null;
+    try { if (navigator.clipboard && window.ClipboardItem) copia = navigator.clipboard.write([new ClipboardItem({ "image/png": imagem })]); } catch (e) { copia = null; }
+    (copia || Promise.reject(new Error("sem área de transferência")))
+      .then(() => w.printAviso("Print copiado: cole no slide com Ctrl+V (também foi baixado em PNG).", 6000))
+      .catch(() => imagem.catch(() => null));        // sem cópia, fica o arquivo baixado (e o aviso do relatório)
   }));
   $("btnOnePage").addEventListener("click", async () => {
     const w = janela(); w.focus();

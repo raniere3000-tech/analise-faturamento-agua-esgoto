@@ -657,3 +657,13 @@ table.op-mini .num { text-align:right; }
     .op-rodape { flex-direction:column; align-items:flex-start; }
 }
 .gar-painel[data-gar="variacao"] > .card:first-child { overflow:visible; }   /* lista de categorias por cima das tabelas */
+
+/* Prints da apresentação (PNG): folha branca de largura fixa, só as tabelas */
+.print-folha { padding:14px 16px; background:#FFFFFF; }
+/* sem algarismos tabulares: o html2canvas mede o texto com eles e desenha sem, abrindo espaços ("R$ (31.568 )") */
+.print-folha, .print-folha * { font-variant-numeric:normal !important; }
+.print-folha .print-bloco + .print-bloco { margin-top:16px; }
+.print-folha table { width:100%; }
+.print-folha .tabela-previsao { font-size:14px; }
+.print-folha .tabela-plano { font-size:12.5px; }
+.print-folha .gar-kpis { margin-top:0; }

@@ -3048,6 +3048,89 @@ async function gerarOnePage(libs) {
 }
 document.addEventListener('DOMContentLoaded', () => opDesenhar());
 
+// ===== Prints para a apresentação semanal: imagem (PNG) em alta resolução de um quadro do painel =====
+// 'dre' = tabela do Forecast (Realizado + Forecast, sem a coluna Forecast); 'garantia' = quadros do Resumo de Ganhos;
+// 'indiretas' = indiretas (R$) e, logo abaixo, o plano de ação do mês (se houver). Segue os filtros da tela.
+// A folha é montada à parte numa largura fixa (letra do tamanho da tela) e fotografada em escala 3: colada no slide, fica nítida.
+const PRINT_TIPOS = { dre: ['DRE', 1000], garantia: ['Analise_Garantia', 1300], indiretas: ['Indiretas_Plano', 1300] };
+function printAviso(texto, ms) {
+    let a = document.getElementById('printAviso');
+    if (!a) {
+        a = document.createElement('div'); a.id = 'printAviso';
+        a.style.cssText = 'position:fixed; right:16px; bottom:16px; z-index:99999; background:#1A2740; color:#fff; padding:10px 16px; border-radius:8px; font:600 13px sans-serif; box-shadow:0 6px 20px rgba(0,0,0,.25); max-width:360px;';
+        document.body.appendChild(a);
+    }
+    a.textContent = texto; clearTimeout(a._t);
+    if (ms) a._t = setTimeout(() => a.remove(), ms);
+}
+async function printItens(tipo) {
+    const q = (sel) => document.querySelector(sel), sup = ESTADO.sup, mes = ESTADO.mes;
+    const limpa = (el, cls) => {
+        if (!el) return null;
+        const c = el.cloneNode(true);
+        c.querySelectorAll('[contenteditable]').forEach((x) => x.removeAttribute('contenteditable'));
+        c.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id')); c.removeAttribute('id');
+        c.querySelectorAll('[title]').forEach((x) => x.removeAttribute('title'));
+        if (cls) c.classList.add(...cls.split(' '));
+        return c;
+    };
+    if (tipo === 'dre') return [limpa(q(`#view-forecast .prev-bloco[data-sup="${sup}"] table.tabela-previsao`), 'prev-sem-forecast')];
+    if (tipo === 'garantia') {
+        await garCarregar(); garGrupos = gruposFiltro(); garDesenharResumo();
+        return [limpa(q('#garResumo'))];
+    }
+    const ind = limpa(q(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] table.tabela-previsao`), 'prev-sem-forecast');
+    const plano = limpa(q('#plano-card.tem-dados #planoTabela'));
+    return [ind, plano];
+}
+async function gerarPrint(tipo, libs) {
+    const [rotulo, W] = PRINT_TIPOS[tipo] || PRINT_TIPOS.dre;
+    const itens = (await printItens(tipo)).filter(Boolean);
+    if (!itens.length) { printAviso('Nada para fotografar: o quadro não existe para os filtros da tela.', 5000); throw new Error('sem quadro'); }
+    if (!libs) { try { const p = window.parent; if (p && p !== window && p.libsPdfSite) libs = await p.libsPdfSite(); } catch (e) { libs = null; } }
+    const l = await obterLibsPdf(libs);
+    printAviso('Gerando o print…');
+    const folha = document.createElement('div'); folha.className = 'print-folha';
+    itens.forEach((el) => { const b = document.createElement('div'); b.className = 'print-bloco'; b.appendChild(el); folha.appendChild(b); });
+    const fr = document.createElement('iframe');
+    fr.setAttribute('aria-hidden', 'true'); fr.title = 'Print';
+    fr.style.cssText = `position:fixed; left:0; top:0; width:${W}px; height:800px; border:0; opacity:0; pointer-events:none; z-index:-1;`;
+    document.body.appendChild(fr);
+    try {
+        const estilos = Array.from(document.querySelectorAll('style')).map((x) => x.textContent).join('\n');
+        const doc = fr.contentDocument;
+        doc.open();
+        doc.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>' + estilos
+            + '\nhtml, body { margin:0; padding:0; background:#FFFFFF; overflow:hidden !important; }</style></head><body>' + folha.outerHTML + '</body></html>');
+        doc.close();
+        await Promise.race([doc.fonts && doc.fonts.ready ? doc.fonts.ready.catch(() => null) : null, new Promise((r) => setTimeout(r, 3000))]);
+        await Promise.race([injetaLibs(doc, l), new Promise((_, r) => setTimeout(() => r(new Error('bibliotecas demoraram')), 15000))]);
+        const w = fr.contentWindow;
+        if (!w.html2canvas) throw new Error('html2canvas indisponível');
+        const raiz = doc.body.firstElementChild;
+        // tabela mais larga que a folha: a folha alarga para caber inteira (com a margem dos dois lados)
+        let largura = W;
+        raiz.querySelectorAll('table').forEach((t) => { largura = Math.max(largura, Math.ceil(t.scrollWidth) + 34); });
+        fr.style.width = largura + 'px'; await new Promise((r) => setTimeout(r, 50));
+        const alt = Math.ceil(raiz.scrollHeight);
+        fr.style.width = largura + 'px'; fr.style.height = alt + 'px'; await new Promise((r) => setTimeout(r, 50));
+        const foto = await w.html2canvas(raiz, { scale: 3, backgroundColor: '#FFFFFF', logging: false,
+            windowWidth: largura, windowHeight: alt, width: largura, height: alt });
+        const blob = await new Promise((ok) => foto.toBlob(ok, 'image/png'));
+        const url = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = url; a.download = `Print_${rotulo}_${ESTADO.sup}_${opMesCurto(ESTADO.mes || '')}`.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_') + '.png';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        printAviso('Print baixado (PNG).', 5000);
+        return blob;
+    } catch (erro) {
+        printAviso('Não foi possível gerar o print: ' + erro.message, 6000);
+        throw erro;
+    } finally {
+        fr.remove();
+    }
+}
+
 // chave "Somente grupos liberados" do Resumo de Ganhos: preferência de cada pessoa (lembrada neste navegador)
 try { GAR.soLiberados = localStorage.getItem('faturamento_gar_so_liberados') === '1'; } catch (e) { GAR.soLiberados = false; }
 document.addEventListener('click', (e) => {
