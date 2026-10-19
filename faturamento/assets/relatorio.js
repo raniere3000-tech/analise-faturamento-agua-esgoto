@@ -1539,10 +1539,13 @@ function paginaCelular(w, foto, filhos, posicao, recorte) {
     });
     if (!folhas.length) return null;
     const alturaMm = (f) => (f.fim - f.topo) * mmPorPx + 2 * M + RODAPE;
-    const pdf = new w.jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: [PW, alturaMm(folhas[0])], compress: true });
+    // orientação pela forma da folha: folha mais baixa que larga (seção curta) com "portrait" fazia o jsPDF trocar
+    // largura e altura — a folha ficava estreita e cortava a tabela e o rodapé à direita
+    const orient = (ph) => (ph >= PW ? 'portrait' : 'landscape');
+    const pdf = new w.jspdf.jsPDF({ orientation: orient(alturaMm(folhas[0])), unit: 'mm', format: [PW, alturaMm(folhas[0])], compress: true });
     folhas.forEach((f, i) => {
         const PH = alturaMm(f);
-        if (i) pdf.addPage([PW, PH], 'portrait');
+        if (i) pdf.addPage([PW, PH], orient(PH));
         pdf.addImage(recorte(f.topo, f.fim - f.topo), 'JPEG', M, M, LW, (f.fim - f.topo) * mmPorPx);
         pdf.setFontSize(7); pdf.setTextColor(73, 102, 140);
         pdf.text(`Águas do Rio · Relatório Executivo · ${i + 1} de ${folhas.length}`, PW - M, PH - 3.5, { align: 'right' });
