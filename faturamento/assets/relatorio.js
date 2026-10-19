@@ -2913,7 +2913,7 @@ function opBlocoTop(D) {
     // o nome encurta com "…"; o grupo e o valor ficam sempre inteiros
     const lista = (tit, cls, itens) => `<div class="op-top ${cls}"><div class="op-top-tit">${tit}</div>`
         + (itens.length ? itens.map((x, i) => `<div class="op-top-lin"><span class="op-top-nome" title="${garEsc(x.nome)}">${i + 1}. ${garEsc(x.nome)}</span>`
-            + `${x.grupo ? `<span class="op-top-grupo">Grupo ${garEsc(x.grupo)}</span>` : ''}<b>${opMoeda(x.v, 2)}</b></div>`).join('')
+            + `<span class="op-top-grupo">${x.grupo ? `Grupo ${garEsc(x.grupo)}` : ''}</span><b>${opMoeda(x.v, 2)}</b></div>`).join('')
             : `<p class="op-vazio">${opSoLiberadas && !GAR.dados ? 'Carregando as matrículas…' : 'Sem clientes.'}</p>`) + '</div>';
     const m = opMesCurto((opEditor() || { dataset: {} }).dataset.ref || '');
     return `<div class="op-tops">${lista('Maiores aumentos de faturamento — ' + garEsc(m), 'op-top-pos', opTop5(D, 'aumento'))}`
