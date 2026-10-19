@@ -1093,10 +1093,13 @@ function definicaoAnalitico(tipo, ra, rn) {
         const n = (v, c) => numBR(v(c)) || 0, dif = (a, b) => (v) => Math.round((n(v, b) - n(v, a)) * 100) / 100;
         // com grupos filtrados, cada mês só conta se a matrícula estava num grupo marcado NAQUELE mês (como o painel):
         // quem mudou de grupo aparece na lista, mas os números do outro mês ficam em branco
+        const marcados = gruposFiltro();
+        // "A-ATIVA" / "C - Cortada" → "Ativa" / "Cortada"
+        const sitTexto = (t) => { t = String(t || '').trim().replace(/^[A-Za-z0-9]{1,3}\s*-\s*/, '').toLowerCase(); return t ? t[0].toUpperCase() + t.slice(1) : ''; };
         return { nome: `Diretas_${d[1] === 'agua' ? 'Agua' : 'Esgoto'}`, grupos: par('Grupo'),
             porMes: [[`Grupo ${rn}`, [eAnt, cAnt, vAnt]], [`Grupo ${ra}`, [eAt, cAt, vAt]]],
             cols: base.concat(par('Grupo'), ['Migração de grupo'], par('Situação Ligação'), par('Situação Lançamento'),
-                [eAnt, eAt, 'Δ economias', cAnt, cAt, 'Δ consumo', vAnt, vAt, 'Δ valor', 'Δ % valor', 'O que aconteceu']),
+                [eAnt, eAt, 'Δ economias', cAnt, cAt, 'Δ consumo', vAnt, vAt, 'Δ valor', 'Δ % valor', 'O que aconteceu', 'Situação']),
             filtro: (v) => n(v, vAnt) !== 0 || n(v, vAt) !== 0 || n(v, eAnt) !== 0 || n(v, eAt) !== 0,
             extra: {
                 'Δ economias': dif(eAnt, eAt), 'Δ consumo': dif(cAnt, cAt), 'Δ valor': dif(vAnt, vAt),
@@ -1109,6 +1112,23 @@ function definicaoAnalitico(tipo, ra, rn) {
                     if (n(v, eAt) < n(v, eAnt)) return b < a ? 'Caiu: perdeu economias' : 'Perdeu economias';
                     if (n(v, eAt) > n(v, eAnt)) return b > a ? 'Subiu: ganhou economias' : 'Ganhou economias';
                     return b < a ? 'Caiu: menor consumo/valor' : b > a ? 'Subiu: maior consumo/valor' : 'Igual';
+                },
+                // Situação (análise de ciclo): 1º mudança de grupo, vista do grupo de referência — o filtrado; se os dois grupos
+                // estão no filtro (ou não há filtro), o grupo atual (coluna Grupo). 2º sem mudança: o mês sem economias
+                // faturadas traz a situação da ligação naquele mês; 3º economias nos dois meses. O resto fica em branco (análise manual).
+                'Situação': (v) => {
+                    const ga = v(`Grupo ${rn}`), gb = v(`Grupo ${ra}`);
+                    if (ga && gb && normGrupo(ga) !== normGrupo(gb)) {
+                        const na = normGrupo(ga), nb = normGrupo(gb);
+                        const temA = !marcados || marcados.has(na), temB = !marcados || marcados.has(nb);
+                        const ref = temA && !temB ? na : temB && !temA ? nb : normGrupo(v('Grupo'));
+                        return ref === na ? `Passou para o Grupo ${gb}` : ref === nb ? `Estava no Grupo ${ga}` : '';
+                    }
+                    const ea = n(v, eAnt), eb = n(v, eAt);
+                    if (ea > 0 && eb > 0) return 'Faturou os dois meses';
+                    if (eb > 0) return sitTexto(v(`Situação Ligação ${rn}`));
+                    if (ea > 0) return sitTexto(v(`Situação Ligação ${ra}`));
+                    return '';
                 },
             },
             ordem: 'Δ valor', crescente: true };
