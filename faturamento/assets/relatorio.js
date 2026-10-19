@@ -2910,7 +2910,7 @@ function opTop5(D, tipo) {
         .map((tr) => ({ nome: tr.cells[iNome].textContent.trim(), grupo: iGrupo >= 0 ? tr.cells[iGrupo].textContent.trim() : '', v: Math.abs(opNum(tr.cells[iVal].textContent) || 0) })));
 }
 function opBlocoTop(D) {
-    // o nome encurta com "…"; o grupo e o valor ficam sempre inteiros
+    // o nome comprido quebra linha; o grupo e o valor ficam sempre inteiros, em colunas fixas
     const lista = (tit, cls, itens) => `<div class="op-top ${cls}"><div class="op-top-tit">${tit}</div>`
         + (itens.length ? itens.map((x, i) => `<div class="op-top-lin"><span class="op-top-nome" title="${garEsc(x.nome)}">${i + 1}. ${garEsc(x.nome)}</span>`
             + `<span class="op-top-grupo">${x.grupo ? `Grupo ${garEsc(x.grupo)}` : ''}</span><b>${opMoeda(x.v, 2)}</b></div>`).join('')
