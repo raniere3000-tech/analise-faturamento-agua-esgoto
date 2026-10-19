@@ -2706,21 +2706,22 @@ function opBlocoCards(D) {
     return `<div class="op-cards">${quadros.join('')}</div>`;
 }
 
-// ---- Faturamento aberto: linhas das tabelas de forecast (aba Forecast e aba Indiretas), já com as edições do forecast ----
-// {chave: {r: realizado, o: orçado (D.ref), f: forecast, t: realizado + forecast}}; mês fechado: forecast vazio
+// ---- Faturamento aberto: números da aba Forecast (mês vigente), já com as edições do forecast ----
+// {chave: {r: realizado, o: orçado (D.ref), f: forecast, t: realizado + forecast}}. O forecast é um só (editar na aba
+// Forecast ou na Indiretas muda os dois); mês fechado ou sem a aba Forecast: tabela da aba Indiretas, sem forecast.
 function opLinhasPrev(D) {
-    const tabs = [];
-    if (D.vigente) tabs.push(document.querySelector(`#view-forecast .prev-bloco[data-sup="${D.sup}"] table.tabela-previsao`));
-    tabs.push(document.querySelector(`#view-indiretas .sup-bloco[data-sup="${D.sup}"][data-mes="${D.mes}"] table.tabela-previsao`));
+    const fc = D.vigente ? document.querySelector(`#view-forecast .prev-bloco[data-sup="${D.sup}"] table.tabela-previsao`) : null;
+    const t = fc || document.querySelector(`#view-indiretas .sup-bloco[data-sup="${D.sup}"][data-mes="${D.mes}"] table.tabela-previsao`);
+    const comFc = D.vigente && !!t;
     const L = {};
-    tabs.filter(Boolean).forEach((t) => t.querySelectorAll('tbody tr[data-k]').forEach((tr) => {
+    if (t) t.querySelectorAll('tbody tr[data-k]').forEach((tr) => {
         const k = tr.dataset.k; if (L[k] || /^ev_/.test(k)) return;
         const txt = (sel) => (tr.querySelector(sel) || {}).textContent;
         const orc = tr.querySelector(`td[data-tipo="orc"][data-src="${D.ref}"]`);
-        L[k] = { r: opNum(txt('.p-real')), o: orc ? opNum(orc.textContent) : null, f: D.vigente ? opNum(txt('.p-prev')) : null,
-                 t: D.vigente ? opNum(txt('.p-fech')) : null };
-    }));
-    if (!L.tot && (L.iA || L.iE)) {                     // sem a aba Indiretas: total = água + esgoto indireto da aba Forecast
+        L[k] = { r: opNum(txt('.p-real')), o: orc ? opNum(orc.textContent) : null, f: comFc ? opNum(txt('.p-prev')) : null,
+                 t: comFc ? opNum(txt('.p-fech')) : null };
+    });
+    if (fc || (!L.tot && (L.iA || L.iE))) {             // aba Forecast: total indiretas = água + esgoto indireto dela
         const s = (c) => [L.iA, L.iE].some((x) => x && x[c] != null) ? [L.iA, L.iE].reduce((t, x) => t + ((x && x[c]) || 0), 0) : null;
         L.tot = { r: s('r'), o: s('o'), f: s('f'), t: s('t') };
     }
