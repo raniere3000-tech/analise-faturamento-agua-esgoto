@@ -235,13 +235,22 @@ def padroniza_referencia(serie):
     return serie.map(dict(zip(unicos, _padroniza_referencia(unicos))))
 
 
-def _padroniza_referencia(serie):
-    dt = pd.to_datetime(serie, format="%d/%m/%Y", errors="coerce")
-    for formato in ("%m/%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%Y-%m", "%m-%Y"):
+def converte_datas(serie, formatos=("%d/%m/%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M")):
+    """Datas do jeito que vêm do Excel ou do CSV ('05/10/2026', '2026-10-05 00:00:00'...) -> datetime, formato a formato.
+    Sem adivinhar com dayfirst: o pandas lia '2026-10-05' como ano-dia-mês (5 de maio) e deixava vazio dia acima de 12."""
+    serie = pd.Series(serie).astype(str).str.strip()
+    dt = pd.Series(pd.NaT, index=serie.index, dtype="datetime64[ns]")
+    for formato in formatos:
         faltam = dt.isna()
         if not faltam.any():
             break
         dt.loc[faltam] = pd.to_datetime(serie[faltam], format=formato, errors="coerce")
+    return dt
+
+
+def _padroniza_referencia(serie):
+    dt = converte_datas(serie, ("%d/%m/%Y", "%m/%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
+                                "%Y-%m", "%m-%Y"))
     faltam = dt.isna()
     if faltam.any():                       # nomes de mês ('out/26', 'Outubro/2026') e o que sobrar
         texto = serie[faltam].str.replace(r"(?i)^([a-zç]{3})[a-zç]*", lambda m: m.group(1), regex=True)
