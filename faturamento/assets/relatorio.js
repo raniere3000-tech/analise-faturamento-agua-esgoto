@@ -2128,8 +2128,23 @@ function garVarLista(tipo) {
             && (!GAR_CAT_VAR.cats || GAR_CAT_VAR.cats.has(garCat(d))) && s * garDifVal(d) > 0)
         .sort((a, b) => s * (garDifVal(b) - garDifVal(a)));
 }
-const GAR_COLS_VAR = ['#', 'Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'SUP', 'Econ.', 'Cons. fat. anterior (m³)',
-    'Cons. fat. atual (m³)', 'Δ cons. (m³)', 'Faturado anterior (R$)', 'Faturado atual (R$)', 'Δ R$', 'Δ %', 'Situação conta'];
+// [campo, título, tipo]: clique no título ordena a tabela (as 100 do ranking): número começa do maior, texto de A a Z;
+// o terceiro clique volta à ordem do ranking (#). Cada tabela (aumentos / quedas) tem a sua ordem.
+const GAR_COLS_VAR = [['rank', '#', 'n'], ['lig', 'Matrícula', 't'], ['nome', 'Cliente', 't'], ['cat', 'Categoria', 't'], ['loc', 'Localidade', 't'],
+    ['grupo', 'Grupo', 't'], ['sup', 'SUP', 't'], ['eco', 'Econ.', 'n'], ['cAnt', 'Cons. fat. anterior (m³)', 'n'], ['cons', 'Cons. fat. atual (m³)', 'n'],
+    ['dc', 'Δ cons. (m³)', 'n'], ['vAnt', 'Faturado anterior (R$)', 'n'], ['val', 'Faturado atual (R$)', 'n'], ['dv', 'Δ R$', 'n'], ['pv', 'Δ %', 'n'],
+    ['sit', 'Situação conta', 't']];
+GAR_VAR.ordem = { aumento: { campo: null, desc: false }, queda: { campo: null, desc: false } };
+function garVarValor(d, r, c) {
+    if (c === 'rank') return r;
+    if (c === 'eco') return garValorCol(d, 'eco');
+    if (c === 'dc') return d.cons != null && d.cAnt != null ? d.cons - d.cAnt : null;
+    if (c === 'dv') return garDifVal(d);
+    if (c === 'pv') return d.vAnt ? garDifVal(d) / d.vAnt : null;
+    if (c === 'sit') return garEmAnalise(d) ? 'Em análise' : d.sit;
+    if (c === 'grupo') return parseInt(normGrupo(d.grupo), 10) || 0;
+    return d[c];
+}
 function garDesenharVar() {
     if (!GAR.dados || !document.getElementById('garTabelaAumento')) return;
     garGrupos = gruposFiltro();
@@ -2141,7 +2156,17 @@ function garDesenharVar() {
         const lista = garVarLista(tipo), top = lista.slice(0, 100);
         const vis = top.map((d, i) => [d, i + 1]).filter(([d]) => !busca.length || busca.some((t) => String(d.lig).includes(t)));
         conta[tipo] = [vis.length, lista.length];
-        tab.tHead.innerHTML = '<tr>' + GAR_COLS_VAR.map((c, i) => `<th class="${i === 0 || i >= 7 && i <= 14 ? 'num' : ''}">${c}</th>`).join('') + '<th></th></tr>';
+        const { campo, desc } = GAR_VAR.ordem[tipo];
+        if (campo) {
+            const num = GAR_COLS_VAR.find((c) => c[0] === campo)[2] === 'n' || campo === 'grupo';
+            vis.sort(([a, ra], [b, rb]) => {
+                let x = garVarValor(a, ra, campo), y = garVarValor(b, rb, campo);
+                if (num) { x = x == null ? -Infinity : x; y = y == null ? -Infinity : y; return desc ? y - x : x - y; }
+                return desc ? String(y || '').localeCompare(String(x || '')) : String(x || '').localeCompare(String(y || ''));
+            });
+        }
+        tab.tHead.innerHTML = '<tr>' + GAR_COLS_VAR.map(([c, t, tipoC]) => `<th class="gar-ord ${tipoC === 'n' ? 'num' : ''}" data-ord-var="${c}" tabindex="0" `
+            + `title="Clique para ordenar">${t}${c === campo ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '<th></th></tr>';
         tab.tBodies[0].innerHTML = vis.map(([d, r]) => {
             const dc = (d.cons != null && d.cAnt != null) ? d.cons - d.cAnt : null, dv = garDifVal(d), pv = d.vAnt ? dv / d.vAnt : null;
             const sit = d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? 'Em análise' : d.sit)}</span>` : '';
@@ -2172,7 +2197,19 @@ function garBaixarVar(tipo) {
         d.vAnt, d.val, r2(garDifVal(d)), pct(d.val, d.vAnt), d.mVal, d.rank && d.rank <= GAR.top ? d.rank : '']);
     baixarPlanilha(cols, linhas, `Garantia_${P}s_${GAR.ref.replace('/', '-')}${GAR_VAR.soAnalise ? '_em_analise' : ''}${GAR_CAT_VAR.cats ? '_categorias_filtradas' : ''}.csv`);
 }
+function garVarOrdenar(th) {
+    const tipo = th.closest('#garTabelaAumento') ? 'aumento' : 'queda', c = th.dataset.ordVar, o = GAR_VAR.ordem[tipo];
+    const texto = GAR_COLS_VAR.find((x) => x[0] === c)[2] === 't' && c !== 'grupo', primeiro = !texto;      // número: maior primeiro
+    GAR_VAR.ordem[tipo] = o.campo !== c ? { campo: c, desc: primeiro } : o.desc === primeiro ? { campo: c, desc: !primeiro } : { campo: null, desc: false };
+    garDesenharVar();
+}
+document.addEventListener('keydown', (e) => {
+    const th = (e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('th[data-ord-var]');
+    if (th) { e.preventDefault(); garVarOrdenar(th); }
+});
 document.addEventListener('click', (e) => {
+    const th = e.target.closest && e.target.closest('th[data-ord-var]');
+    if (th) { garVarOrdenar(th); return; }
     if (e.target.id === 'garVarSoAnalise') { GAR_VAR.soAnalise = !GAR_VAR.soAnalise; garDesenharVar(); return; }
     if (e.target.id === 'garVarLimpar') { const i = document.getElementById('garVarBusca'); i.value = ''; GAR_VAR.busca = []; garDesenharVar(); i.focus(); return; }
     const b = e.target.closest && e.target.closest('[data-var-baixar]');
