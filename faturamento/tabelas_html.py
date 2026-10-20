@@ -33,35 +33,49 @@ def selo_situacao(sit, grupo="", ref=""):
             f'title="Situação automática — clique para alterar">{html.escape(sit)}</span>')
 
 
-def linhas_pendentes(ctx, comp, com_dias):
-    """Grupos do mês vigente que ainda não entram na comparação (em leitura hoje = LIS, ou ainda não lidos = Aguardando):
-    aparecem só com a Situação, sem valores (não entram no total)."""
+def grupos_pendentes(ctx, comp, rubrica):
+    """Grupos do mês vigente que ainda não entram na comparação (em leitura hoje = LIS, ou ainda não lidos = Aguardando),
+    como linhas no formato do comparativo: mês atual zerado e o mês anterior com os valores daquele grupo (como a tabela
+    contra o orçado mostra o orçado). Os valores do mês anterior vêm da base completa (esses grupos ficam fora da análise)."""
+    from .comparativo import agrega_por_grupo
     from .leitura import chave_grupo
     sit = situacao_dos_grupos(ctx)
     na_tabela = {chave_grupo(g) for g in comp["Grupo"].dropna()}
     fat = getattr(ctx, "fatura_total", None)
     if fat is None or "Grupo" not in fat.columns:
-        return ""
+        return pd.DataFrame()
     vistos, grupos = set(), []
     for g in fat["Grupo"].dropna().astype(str).str.strip().unique():
         k = chave_grupo(g)
         if g in ("", "nan", "None") or k in na_tabela or k in vistos or sit.get(k) not in (LIS, AGUARDANDO):
             continue
         vistos.add(k); grupos.append(g)
+    if not grupos:
+        return pd.DataFrame()
     grupos.sort(key=lambda g: (int(chave_grupo(g)) if chave_grupo(g).isdigit() else 10**9, g))
-    campos = (["dias-atual", "dias-anterior"] if com_dias else []) + _CAMPOS_TABELA
-    so_det = {"dias-atual", "dias-anterior", "vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm"}
-    out = []
+    cache = getattr(ctx, "_ant_pendentes", None)
+    if cache is None:
+        cache = ctx._ant_pendentes = {}
+    if rubrica not in cache:
+        base = getattr(ctx, "base_completa", None)
+        base = ctx.base_final if base is None else base
+        ant = base[base["Referencia de Leitura"] == ctx.ref_anterior]
+        ant = ant[ant["Grupo"].isin([g for g in ant["Grupo"].dropna().unique() if chave_grupo(g) in vistos])]
+        cache[rubrica] = {chave_grupo(r["Grupo"]): r for _, r in agrega_por_grupo(ant, rubrica).iterrows()} if len(ant) else {}
+    metricas = ["Dias_Leitura", "Faturamento", "Economias", "Volume_Faturado", "Volume_Medio", "Tarifa_Media", "Ticket_Medio"]
+    linhas = []
     for g in grupos:
-        e = html.escape(g, quote=True)
-        det = ' class="x-det"'
-        vazias = "".join(f'<td data-field="{c}"{det if c in so_det else ""} style="color:#94a3b8;">–</td>' for c in campos)
-        out.append(f'<tr class="linha-pendente" data-grupo="{e}"><td data-field="grupo">{e}</td>'
-                   f'<td data-field="situacao">{selo_situacao(sit[chave_grupo(g)], g, ctx.ref_atual)}</td>{vazias}</tr>')
-    return "".join(out)
+        r = cache[rubrica].get(chave_grupo(g))
+        d = {"Grupo": g}
+        for m in metricas:
+            d[f"{m}_atual"] = 0.0
+            d[f"{m}_anterior"] = float(r[m]) if r is not None else 0.0
+        linhas.append(d)
+    return pd.DataFrame(linhas)
 
 
-def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_ant=None, card_attrs="", detalhe="", pendentes=False):
+def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_ant=None, card_attrs="", detalhe="", pendentes=""):
+    """pendentes: rubrica ("AGUA"/"ESGOTO") para acrescentar os grupos ainda não lidos (LIS / Aguardando) com o mês anterior."""
     rot_atual = rot_atual or ctx.mes_atual_curto
     rot_ant = rot_ant or ctx.mes_anterior_curto
     so_detalhe = {"dias-atual", "dias-anterior", "vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm"}
@@ -73,7 +87,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
         cor = "#C2560C" if valor<0 else "#05050D"
         txt = f"{valor*100:.1f}%".replace(".", ",") if pct else fmt_num(valor,dec)
         return f'<td data-field="{campo}"{cl(campo)} style="color:{cor};">{txt}</td>'
-    def linha(grupo, d, is_media=False):
+    def linha(grupo, d, is_media=False, pendente=False):
         delta_fat = d["Faturamento_atual"] - d["Faturamento_anterior"]
         delta_eco = d["Economias_atual"] - d["Economias_anterior"]
         delta_pct_eco = (delta_eco / d["Economias_anterior"]) if d["Economias_anterior"] else 0
@@ -88,7 +102,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
         delta_pct_tar = pct(delta_tar, d["Tarifa_Media_anterior"])
         delta_pct_tic = pct(delta_tic, d["Ticket_Medio_anterior"])
         g_attr = "" if is_media else html.escape(str(grupo), quote=True)
-        classe = "linha-media" if is_media else ""
+        classe = "linha-media" if is_media else "linha-pendente" if pendente else ""
         attrs=""
         if not is_media:
             attrs = (
@@ -132,7 +146,11 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     for _, r in comp.iterrows():
         linhas_html += linha(r["Grupo"], r)
     if pendentes:
-        linhas_html += linhas_pendentes(ctx, comp, com_dias)
+        pend = grupos_pendentes(ctx, comp, pendentes)
+        for _, r in pend.iterrows():
+            linhas_html += linha(r["Grupo"], r, pendente=True)
+        if len(pend):                               # o total soma também o mês anterior dos grupos ainda não lidos
+            comp = pd.concat([comp, pend], ignore_index=True)
     media = {
         "Dias_Leitura_atual": media_dias(comp["Dias_Leitura_atual"]) if len(comp) else 0,      # só grupos com leitura no mês
         "Dias_Leitura_anterior": media_dias(comp["Dias_Leitura_anterior"]) if len(comp) else 0,

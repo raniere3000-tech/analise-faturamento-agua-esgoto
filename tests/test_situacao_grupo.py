@@ -41,14 +41,17 @@ def test_coluna_situacao_nas_tabelas_de_diretas(sessao):
     assert '<th rowspan="2" title="LIS' in tab and ">Situação</th>" in tab
     linhas = re.findall(r'<tr class="([^"]*)" data-grupo="([^"]*)"', tab)
     pend = [g for c, g in linhas if c == "linha-pendente"]
-    assert pend == ["06", "07", "08"]                          # LIS e Aguardando aparecem sem valores
-    assert re.search(r'data-grupo="07"><td data-field="grupo">07</td><td data-field="situacao"><span class="sit-grupo sit-lis" '
+    assert pend == ["06", "07", "08"]                          # LIS e Aguardando: mês atual zerado, mês anterior com valores
+    assert re.search(r'data-grupo="07"[^>]*>\s*<td data-field="grupo">07</td>\s*<td data-field="situacao"><span class="sit-grupo sit-lis" '
                      r'role="button" tabindex="0" data-sit-auto="LIS" data-sit-grupo="7" data-sit-ref="09/2026"[^>]*>LIS</span>', tab)
     assert re.search(r'sit-liberado"[^>]*data-sit-auto="Liberado"[^>]*>Liberado</span>', tab)
     assert re.search(r'sit-analise"[^>]*data-sit-auto="Em Análise"[^>]*>Em Análise</span>', tab)
-    # linha pendente não tem valores: o total do JS continua só com os grupos comparados
+    # linha pendente: atual 0 e o mês anterior do grupo (como a tabela contra o orçado); entra no total
     p = tab[tab.index('class="linha-pendente"'):]
-    assert "data-fat-atual" not in p[:p.index("</tr>")]
+    p = p[:p.index("</tr>")]
+    m = re.search(r'data-fat-atual="([^"]*)" data-fat-anterior="([^"]*)"', p)
+    assert m and float(m.group(1)) == 0 and float(m.group(2)) > 0
+    assert re.search(r'data-field="delta-pct-fat"[^>]*>-100,0%', p)
 
 
 def test_grupo_lido_so_no_consumo_usa_a_situacao_do_consumo():
