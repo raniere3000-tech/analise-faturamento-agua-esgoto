@@ -146,6 +146,9 @@ class Sessao:
         passo(81, "Criando cards: Situação de lançamento (por que analisar cada código)")
         from .situacao_lancamento import gera_cards_situacao_html
         cards_situacao_html = gera_cards_situacao_html(ctx)
+        passo(81.5, "Criando tabela: Cortadas com consumo (possível irregularidade)")
+        from .cortadas_consumo import gera_cortadas_consumo_html
+        cards_situacao_html += gera_cortadas_consumo_html(ctx)
 
         passo(82, "Calculando: resumo consolidado por grupo")
         df_resumo_grupo = monta_dados_resumo_grupo(ctx)
