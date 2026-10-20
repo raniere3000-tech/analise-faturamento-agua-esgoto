@@ -334,3 +334,18 @@ def test_cortadas_com_consumo(analise):
     assert set(d["N. Ligação"]) == set(med[med > 0].index)
     html_rel = lê_html(analise)
     assert 'id="tabela-cortadas-consumo"' in html_rel and "function cortRecalcular" in html_rel
+
+
+def test_cortadas_usa_so_o_consumo_medido(analise):
+    from faturamento.cortadas_consumo import monta_cortadas_consumo
+    ctx = analise.ctx
+    original = ctx.base_final
+    try:
+        ctx.base_final = original.drop(columns=["Consumo Medido"])
+        assert monta_cortadas_consumo(ctx).empty          # sem medição não usa o faturado no lugar
+        zerado = original.copy()
+        zerado["Consumo Medido"] = 0
+        ctx.base_final = zerado
+        assert monta_cortadas_consumo(ctx).empty          # faturado > 0 com medido 0 não entra
+    finally:
+        ctx.base_final = original
