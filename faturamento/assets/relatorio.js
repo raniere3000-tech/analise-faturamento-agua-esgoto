@@ -2931,7 +2931,8 @@ function opGrupos(D) {
     ['tabela-agua', 'tabela-esgoto'].map((id) => document.getElementById(id)).filter(Boolean).forEach((t) => t.querySelectorAll('tbody tr[data-grupo]').forEach((tr) => {
         if (tr.style.display === 'none' || !tr.dataset.grupo) return;
         const g = pega(tr.dataset.grupo);
-        g.r += parseFloat(tr.dataset.fatAtual) || 0; g.a += parseFloat(tr.dataset.fatAnterior) || 0;
+        // grupo ainda não lido (linha-pendente): o mês anterior aparece na tabela das Diretas, mas aqui segue sem valores
+        if (!tr.classList.contains('linha-pendente')) { g.r += parseFloat(tr.dataset.fatAtual) || 0; g.a += parseFloat(tr.dataset.fatAnterior) || 0; }
         const s = tr.querySelector('.sit-grupo'); if (s && !g.sit) g.sit = s.textContent.trim();
     }));
     if (bloco) bloco.querySelectorAll('table.tabela-comparativo tbody tr[data-grupo]').forEach((tr) => {
