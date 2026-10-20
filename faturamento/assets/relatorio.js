@@ -32,6 +32,7 @@ function definirFiltros(parcial) {
     });
     aplicarSupNosGrupos();
     aplicarFontes();
+    cortRecalcular();
     [['selSup', ESTADO.sup], ['selMes', ESTADO.mes], ['selRef', ESTADO.ref]].forEach(([id, v]) => {
         const el = document.getElementById(id); if (el && v) el.value = v;
     });
@@ -216,6 +217,7 @@ function filtrarPorGrupo() {
     recalcularKPIsResumo();
     refazTops();                                            // Top 100 refeito só com os grupos marcados
     sitlRecalcular();                                       // cards da Situação de lançamento
+    cortRecalcular();                                       // cortadas com consumo
     if (typeof garRedesenhar === 'function') garRedesenhar();   // aba Garantia (Top 1000, análise e resumo)
     if (typeof planoDesenhar === 'function') planoDesenhar();   // aba Plano de ação
     if (typeof opDesenhar === 'function') opDesenhar();         // aba One page
@@ -3302,4 +3304,35 @@ document.addEventListener('click', (e) => {
     GAR.soLiberados = !GAR.soLiberados;
     try { localStorage.setItem('faturamento_gar_so_liberados', GAR.soLiberados ? '1' : '0'); } catch (er) { /* sem armazenamento */ }
     garDesenharResumo();
+});
+
+// Análise > Cortadas com consumo: linhas pelos grupos marcados e pela SUP do cabeçalho, totais refeitos
+function cortRecalcular() {
+    const t = document.getElementById('tabela-cortadas-consumo');
+    if (!t) return;
+    const marcados = new Set(Array.from(document.querySelectorAll('.chk-grupo:checked')).map(c => c.value));
+    const todos = !document.querySelector('.chk-grupo');
+    let qtd = 0, med = 0, val = 0, reinc = 0;
+    t.querySelectorAll('tbody tr').forEach(tr => {
+        const ok = (todos || marcados.has(tr.dataset.grupo)) && (ESTADO.sup === 'TODAS' || tr.dataset.sup === ESTADO.sup);
+        tr.style.display = ok ? '' : 'none';
+        if (!ok) return;
+        qtd++; med += parseFloat(tr.dataset.med) || 0; val += parseFloat(tr.dataset.val) || 0; reinc += tr.dataset.reinc === '1' ? 1 : 0;
+    });
+    const f = (v, d) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const p = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    p('cort-qtd', f(qtd, 0)); p('cort-med', f(med, 1)); p('cort-val', 'R$ ' + f(val, 2)); p('cort-reinc', f(reinc, 0));
+}
+document.addEventListener('DOMContentLoaded', cortRecalcular);
+// seta da lista: baixa as linhas visíveis (grupos e SUP filtrados); números voltam a ser números
+document.addEventListener('click', async function (e) {
+    const b = e.target.closest && e.target.closest('.btn-cortadas');
+    const t = document.getElementById('tabela-cortadas-consumo');
+    if (!b || !t) return;
+    const cols = Array.from(t.querySelectorAll('thead th')).map(th => th.textContent.trim());
+    const num = (s) => { const x = parseFloat(s.replace('R$', '').replace(/\./g, '').replace(',', '.')); return isNaN(x) ? s : x; };
+    const linhas = Array.from(t.querySelectorAll('tbody tr')).filter(tr => tr.style.display !== 'none')
+        .map(tr => Array.from(tr.children).map((td, i) => { const s = td.textContent.trim(); return [4, 5, 7, 8, 9].includes(i) ? num(s) : s; }));
+    const sup = ESTADO.sup !== 'TODAS' ? '_' + ESTADO.sup.replace(/[^A-Za-z0-9]/g, '') : '';
+    await baixarPlanilha(cols, linhas, `Cortadas_com_consumo_${b.dataset.mes}${sup}.xlsx`);
 });

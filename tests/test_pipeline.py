@@ -318,3 +318,19 @@ def test_preferencias_de_visualizacao_por_pessoa(analise):
         assert secao in html, secao
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert 'const FILTROS_LS = "faturamento_filtros_pessoais";' in site and "configAlterada" not in site
+
+
+def test_cortadas_com_consumo(analise):
+    from faturamento.analitico import _norm_situacao
+    d = analise.ctx.resultados["cortadas_consumo"]
+    assert len(d), "a base sintética tem ligações cortadas com consumo"
+    ra = analise.ctx.ref_atual
+    assert (d[f"Consumo Medido {ra}"] > 0).all()
+    assert d[f"Consumo Medido {ra}"].is_monotonic_decreasing
+    b = analise.ctx.base_final
+    at = b[(b["Referencia de Leitura"] == ra) & (b["__serv"] == "A")]
+    cort = at[at["Situacao Ligacao"].map(_norm_situacao) == "Cortada"]
+    med = pd.to_numeric(cort["Consumo Medido"], errors="coerce").fillna(0).groupby(cort["N. Ligação"].astype(str).str.strip()).sum()
+    assert set(d["N. Ligação"]) == set(med[med > 0].index)
+    html_rel = lê_html(analise)
+    assert 'id="tabela-cortadas-consumo"' in html_rel and "function cortRecalcular" in html_rel
