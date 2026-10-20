@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Aba Análise: ligações cortadas com consumo no mês atual (possível irregularidade, ex.: religação por conta própria).
 
-Critério: linha de água do mês atual com Situação Ligação "CORT…" e Consumo Medido > 0 (sem a coluna Consumo Medido,
-usa o Consumo Faturado). Uma linha por ligação, da maior para a menor medição. O filtro de grupos e o de
+Critério: linha de água do mês atual com Situação Ligação "CORT…" e Consumo Medido > 0. Só a medição é
+referência (o Consumo Faturado entra como informação); sem a coluna Consumo Medido a seção fica vazia. Uma linha por ligação, da maior para a menor medição. O filtro de grupos e o de
 Superintendência escondem as linhas e refazem os totais no navegador (cortRecalcular, relatorio.js).
 """
 import html
@@ -29,7 +29,9 @@ def monta_cortadas_consumo(ctx):
     b = ctx.base_final
     if b is None or "Situacao Ligacao" not in b.columns:
         return pd.DataFrame()
-    col_med = "Consumo Medido" if "Consumo Medido" in b.columns else "Consumo Faturado"
+    if "Consumo Medido" not in b.columns:            # a referência é só a medição: sem ela não há o que apontar
+        return pd.DataFrame()
+    col_med = "Consumo Medido"
     at = _agua_do_mes(b, ctx.ref_atual)
     cortada = at["Situacao Ligacao"].map(_norm_situacao) == "Cortada"
     at = at[cortada]
@@ -63,7 +65,6 @@ def monta_cortadas_consumo(ctx):
     d[f"Consumo Medido {ctx.ref_atual}"] = soma["med"]
     d[f"Consumo Faturado {ctx.ref_atual}"] = soma["fat"]
     d[f"Valor Água {ctx.ref_atual} (R$)"] = soma["val"]
-    d.attrs["coluna_medida"] = col_med
     return d.sort_values(f"Consumo Medido {ctx.ref_atual}", ascending=False).reset_index()
 
 
@@ -72,9 +73,10 @@ def gera_cortadas_consumo_html(ctx):
     ctx.resultados["cortadas_consumo"] = d
     titulo = f"Cortadas com consumo — possível irregularidade ({ctx.mes_atual})"
     if not len(d):
-        return f"<div class='card' id='cortadas-consumo'><h2>{titulo}</h2><p>Nenhuma ligação cortada com consumo no mês.</p></div>"
+        msg = ("Nenhuma ligação cortada com consumo medido no mês." if "Consumo Medido" in ctx.base_final.columns
+               else "A base de consumo não tem a coluna Consumo Medido: sem ela não dá para apontar cortadas medindo.")
+        return f"<div class='card' id='cortadas-consumo'><h2>{titulo}</h2><p>{msg}</p></div>"
     ra, rn = ctx.ref_atual, ctx.ref_anterior
-    col_med = d.attrs.get("coluna_medida", "Consumo Medido")
     e = lambda v: html.escape("" if pd.isna(v) else str(v), quote=True)
     rot = "Baixar a lista (Excel), com os filtros de grupo e Superintendência"
     dl = (f'<button type="button" class="btn-just btn-cortadas" data-mes="{e(ctx.mes_atual.replace("/", "-"))}" '
@@ -95,11 +97,10 @@ def gera_cortadas_consumo_html(ctx):
             f'<td style="font-weight:700">{fmt_num(med, 1)}</td><td>{fmt_num(r[f"Consumo Faturado {ra}"], 1)}</td>'
             f'<td>R$ {fmt_num(r[f"Valor Água {ra} (R$)"], 2)}</td>'
             f'<td style="text-align:left">{e(r["Situação Lançamento"])}</td></tr>')
-    base_med = "Consumo Medido" if col_med == "Consumo Medido" else "Consumo Faturado (a base não tem Consumo Medido)"
     return f"""
     <div class="card" id="cortadas-consumo">
     <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">{titulo} {dl}</h2>
-    <p class="nota-secao">Ligações com Situação Ligação <b>cortada</b> no mês e {base_med} &gt; 0 na conta de água: se está cortada,
+    <p class="nota-secao">Ligações com Situação Ligação <b>cortada</b> no mês e Consumo Medido &gt; 0 (só a medição conta; o faturado aparece apenas como informação) na conta de água: se está cortada,
     não deveria medir. Pode ser religação por conta própria, corte não executado ou situação cadastral errada. Em
     <span style="color:#C2560C;font-weight:700">laranja</span>, as que já estavam cortadas e medindo em {rn}.</p>
     <div class="cort-cards" style="display:flex; gap:12px; flex-wrap:wrap; margin:8px 0 12px;">
