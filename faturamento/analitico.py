@@ -46,6 +46,9 @@ def _por_mes(ctx, ref):
     out["linhas_agua"] = lig[a].value_counts()
     out["consumo_agua"] = consumo[a].groupby(lig[a].values).sum()
     out["valor_agua"] = valor[a].groupby(lig[a].values).sum()
+    if "Consumo Medido" in b.columns:                        # cortadas com consumo: a referência é só a medição
+        medido = pd.to_numeric(b["Consumo Medido"], errors="coerce").fillna(0)
+        out["medido_agua"] = medido[a].groupby(lig[a].values).sum()
     e = serv == "E"
     # economias faturadas = mesma regra do Comparativo das Diretas: economias das linhas com Consumo Faturado > 0
     eco = pd.to_numeric(b["Economias_Totais"], errors="coerce").fillna(0) if "Economias_Totais" in b.columns else consumo * 0
@@ -99,6 +102,8 @@ def monta_analitico(ctx):
         d[f"Economias {ref}"] = x["Economias_Totais"] if "Economias_Totais" in x.columns else np.nan
     for ref, x in ((rn, an), (ra, at)):
         d[f"Consumo água {ref}"] = x.get("consumo_agua")
+    for ref, x in ((rn, an), (ra, at)):
+        d[f"Consumo medido água {ref}"] = x.get("medido_agua")
     d["Δ consumo água"] = d[f"Consumo água {ra}"] - d[f"Consumo água {rn}"]
     d["Δ % consumo água"] = (d["Δ consumo água"] / d[f"Consumo água {rn}"].where(d[f"Consumo água {rn}"] > 0)) * 100
     for ref, x in ((rn, an), (ra, at)):

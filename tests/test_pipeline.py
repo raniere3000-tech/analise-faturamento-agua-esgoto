@@ -349,3 +349,19 @@ def test_cortadas_usa_so_o_consumo_medido(analise):
         assert monta_cortadas_consumo(ctx).empty          # faturado > 0 com medido 0 não entra
     finally:
         ctx.base_final = original
+
+
+def test_botao_cortadas_com_consumo_usa_o_analitico(analise):
+    from faturamento.analitico import _norm_situacao
+    ctx = analise.ctx
+    ra = ctx.ref_atual
+    d = ctx.resultados["analitico"]
+    assert f"Consumo medido água {ra}" in d.columns and f"Consumo medido água {ctx.ref_anterior}" in d.columns
+    # mesmo critério da lista da aba Análise: cortada no mês atual e Consumo Medido > 0
+    sel = d[(d[f"Situação Ligação {ra}"].map(lambda s: _norm_situacao(s) if pd.notna(s) else "") == "Cortada")
+            & (d[f"Consumo medido água {ra}"].fillna(0) > 0)]
+    assert set(sel["N. Ligação"]) == set(ctx.resultados["cortadas_consumo"]["N. Ligação"])
+    html_rel = lê_html(analise)
+    assert "window.baixarCortadasConsumo" in html_rel and "case 'cortadas'" in html_rel
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert 'id="btnCortadas"' in site and "w.baixarCortadasConsumo()" in site
