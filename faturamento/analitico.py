@@ -35,7 +35,7 @@ def _por_mes(ctx, ref):
         return pd.DataFrame()
     # dados descritivos da linha de água (a primeira, se houver mais de uma)
     cols = [c for c in ("Grupo", "Nome Cliente", "Categoria", "Situacao Ligacao", "Situacao Lancamento", "__sup",
-                        "Economias_Totais") if c in agua.columns]
+                        "Economias_Totais", "Nome da Localidade", "Zona") if c in agua.columns]
     desc = agua[cols].assign(__lig=lig[a].values).drop_duplicates("__lig").set_index("__lig")
     mn = classifica_minimo(agua.assign(**{"Consumo Faturado": consumo[a]}))
     mn = mn.assign(__lig=lig[a].values).drop_duplicates("__lig").set_index("__lig")
@@ -77,6 +77,8 @@ def monta_analitico(ctx):
     d["Nome Cliente"] = pega("Nome Cliente")
     d["Categoria"] = pega("Categoria")
     d["Superintendência"] = pega("__sup")
+    d["Localidade"] = pega("Nome da Localidade")
+    d["Zona"] = pega("Zona")
     g_at = at["Grupo"].astype(object).where(at["Grupo"].notna()) if "Grupo" in at.columns else pd.Series(np.nan, index=ligs)
     g_an = an["Grupo"].astype(object).where(an["Grupo"].notna()) if "Grupo" in an.columns else pd.Series(np.nan, index=ligs)
     d["Grupo"] = g_at.combine_first(g_an)                                   # para o filtro de grupos do relatório

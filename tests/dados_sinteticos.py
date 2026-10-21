@@ -97,6 +97,7 @@ def gera_pasta(destino, n_ligacoes=400, n_grupos=8, semente=7, mes_atual=(9, 202
                     "Categoria": l["categoria"], "Situacao Ligacao": l["situacao"], "Situacao Conta": l["conta"],
                     "Situação Lançamento": sit_lanc, "Rubrica": rub, "Valor Parcela": _br(val),
                     "Data de Vencimento": f"28/{mm:02d}/{aa}", "Referencia de Leitura": ref_leitura,
+                    "Nome da Zona": f"ZONA {l['grupo']}",
                     **({"Nome da Localidade": l["cidade"], "Endereco Ligacao": "RUA X, 1"} if com_dre else {}),
                 })
             eco = {f"Qtd. Economia {t}": 0 for t in ("Residencial", "Comercial", "Industrial", "Publica", "Outros")}
