@@ -205,6 +205,9 @@ html { height: 100%; }
 .prog-linha { display: flex; align-items: center; gap: 12px; font-size: .85rem; color: #D5E0F2; }
 .prog-linha .barra { flex: 0 1 320px; width: 320px; height: 8px; margin: 0; background: rgba(255,255,255,.2); }
 .prog-linha b { color: #fff; font-variant-numeric: tabular-nums; min-width: 38px; }
+.btn-cancelar { margin-left: auto; padding: 5px 12px; border-radius: 8px; font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.35); }
+.btn-cancelar:hover { background: rgba(255,255,255,.24); }
+.btn-cancelar[hidden] { display: none; }
 .top .nota { color: #C8D4EA; margin-top: 4px; }
 .top .arquivo { background: rgba(255,255,255,.15); color: #fff; }
 .top .progresso.erro .nota { color: #FFC9A0; }
@@ -410,7 +413,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v116</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v117</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -433,7 +436,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   </div>
   <div class="fonte-status" id="fonteStatus">Nenhuma pasta conectada.</div>
   <div class="progresso" id="progresso" hidden>
-    <div class="prog-linha"><div class="barra"><div class="barra-fill" id="barraFill"></div></div><b id="statusPct">0%</b><span id="statusTexto">Preparando…</span><span class="eta" id="statusEta" hidden></span></div>
+    <div class="prog-linha"><div class="barra"><div class="barra-fill" id="barraFill"></div></div><b id="statusPct">0%</b><span id="statusTexto">Preparando…</span><span class="eta" id="statusEta" hidden></span><button type="button" class="btn-cancelar" id="btnCancelar" hidden title="Parar o carregamento (por exemplo, para conectar outra pasta)">✕ Cancelar</button></div>
     <p class="nota" id="statusNota"></p>
     <ol class="etapas" id="listaEtapas" hidden aria-live="polite"></ol>
     <div class="arquivos" id="listaArquivos" hidden></div>
@@ -568,7 +571,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v116-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v117-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -865,11 +868,27 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     }
   }
 
+  // "Conectar pasta" fica sempre disponível: durante um carregamento, ele cancela o atual e abre a escolha da pasta
   function bloqueia(sim) {
     rodando = sim;
-    btnPasta.disabled = sim;
     btnAtualizar.disabled = sim;
     btnEtapa2.disabled = sim;
+    $("btnCancelar").hidden = !sim;
+    clearTimeout(avisoLento);
+  }
+  // Cancelar: descarta a leitura em andamento (o Python é reiniciado na próxima vez). Serve, por exemplo, quando a
+  // pasta conectada mudou de nome no OneDrive e o carregamento não avança.
+  let execucao = 0, avisoLento = null;
+  function cancelaExecucao(motivo) {
+    execucao++;
+    if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
+    if (esperaAcomp) { esperaAcomp({ tipo: "acompanhamentoErro", motivo: "carregamento cancelado" }); esperaAcomp = null; }
+    fechaRelatorio();
+    progresso.hidden = false;
+    progresso.classList.add("erro");
+    setStatus("Carregamento cancelado", 0);
+    $("statusNota").innerHTML = motivo || "Clique em <b>📁 Conectar pasta</b> para escolher a pasta (por exemplo, se ela mudou de nome) ou em <b>↻ Atualizar</b> para tentar de novo.";
+    bloqueia(false);
   }
 
   // resumo da leitura: quantos arquivos foram lidos agora e quantos vieram de análises anteriores (guardados no navegador)
@@ -1017,6 +1036,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     $("statusNota").textContent = worker ? "Lendo os arquivos da pasta…" : "Carregando o Python no navegador. Na primeira vez pode levar cerca de 1 minuto.";
     setStatus("Lendo a pasta…", 0);
     bloqueia(true);
+    execucao++;
     pegaWorker();                                  // já começa a carregar o Python
   }
 
@@ -1046,20 +1066,30 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 
   async function analisaHandle(handle) {
     iniciaExecucao();
+    const minha = execucao;                       // cancelada (ou substituída) no meio do caminho: o resultado é descartado
+    // a pasta pode ter mudado de nome/lugar (OneDrive): se a leitura não termina, avisa que dá para cancelar e escolher outra
+    avisoLento = setTimeout(() => { if (rodando && minha === execucao) $("statusNota").innerHTML =
+      `A leitura da pasta "${handle.name}" está demorando. Se ela mudou de nome ou de lugar, clique em <b>✕ Cancelar</b> e depois em <b>📁 Conectar pasta</b>.`; }, 40000);
     try {
       if ((await handle.queryPermission({ mode: "read" })) !== "granted" &&
           (await handle.requestPermission({ mode: "read" })) !== "granted") {
-        mostraErro("O acesso à pasta não foi liberado.");
+        if (minha === execucao) mostraErro("O acesso à pasta não foi liberado.");
         return;
       }
-      enviaParaAnalise(await lerPastaHandle(handle), handle.name);
+      const arquivos = await lerPastaHandle(handle);
+      if (minha !== execucao) return;
+      clearTimeout(avisoLento);
+      enviaParaAnalise(arquivos, handle.name);
     } catch (e) {
-      mostraErro("Não foi possível ler a pasta.", String(e));
+      if (minha !== execucao) return;
+      if (e && (e.name === "NotFoundError" || e.name === "NotReadableError"))
+        mostraErro(`A pasta "${handle.name}" não foi encontrada — ela pode ter mudado de nome ou de lugar. Clique em 📁 Conectar pasta e escolha a pasta de novo.`, String(e));
+      else mostraErro("Não foi possível ler a pasta.", String(e));
     }
   }
 
   async function escolhePasta() {
-    if (rodando) return;
+    if (rodando) cancelaExecucao();               // carregando (ex.: pasta antiga que mudou de nome): para e escolhe outra
     if ("showDirectoryPicker" in window) {
       try {
         const handle = await window.showDirectoryPicker({ id: "faturamento", mode: "read" });
@@ -1627,6 +1657,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   quadro().addEventListener("load", () => { if (quadro().srcdoc) montaFiltros(); });
 
   btnPasta.addEventListener("click", escolhePasta);
+  $("btnCancelar").addEventListener("click", () => { if (rodando) cancelaExecucao(); });
   // ===== Export "Acompanhamento Mensal" (não aparece no painel nem no PDF) =====
   // Gera no Python (análise já carregada) as tabelas da planilha semanal da SUP escolhida. As indiretas dividem o realizado
   // de cada semana pelos dias úteis da semana: cada export guarda o realizado acumulado ("foto") no ajustes_relatorio.json,
@@ -1711,9 +1742,11 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     const lista = Array.from(inputPasta.files || []);
     if (!lista.length) return;
     iniciaExecucao();
+    const minha = execucao;
     const nomePasta = (lista[0].webkitRelativePath || "").split("/")[0] || "pasta";
     try {
-      enviaParaAnalise(await lerListaArquivos(lista), nomePasta);
+      const arquivos = await lerListaArquivos(lista);
+      if (minha === execucao) enviaParaAnalise(arquivos, nomePasta);
     } catch (e) {
       mostraErro("Não foi possível ler os arquivos.", String(e));
     }
