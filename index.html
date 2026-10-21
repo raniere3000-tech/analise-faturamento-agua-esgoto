@@ -413,7 +413,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v117</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v118</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -571,7 +571,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v117-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v118-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -881,6 +881,8 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   let execucao = 0, avisoLento = null;
   function cancelaExecucao(motivo) {
     execucao++;
+    idb.set("pasta", null);                       // recarregar a página não volta a tentar a pasta que travou
+    pickerSeguro(true);
     if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
     if (esperaAcomp) { esperaAcomp({ tipo: "acompanhamentoErro", motivo: "carregamento cancelado" }); esperaAcomp = null; }
     fechaRelatorio();
@@ -1088,11 +1090,26 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     }
   }
 
+  // Janela de escolha da pasta. Normalmente abre na última pasta usada (id "faturamento"); depois de um cancelamento ou
+  // de erro ("modo seguro") abre na Área de Trabalho: se a pasta antiga mudou de nome no OneDrive, o Chrome tentava abrir
+  // nela e a janela travava sem aparecer ("File picker already active" nas tentativas seguintes).
+  const PICKER_LS = "faturamento_picker_seguro";
+  const pickerSeguro = (sim) => { try { if (sim) localStorage.setItem(PICKER_LS, "1"); else localStorage.removeItem(PICKER_LS); } catch (e) {} };
+  let escolhendo = false;
   async function escolhePasta() {
     if (rodando) cancelaExecucao();               // carregando (ex.: pasta antiga que mudou de nome): para e escolhe outra
     if ("showDirectoryPicker" in window) {
+      if (escolhendo) {
+        setFonte("A janela para escolher a pasta já está aberta — ela pode estar atrás do navegador ou em outro monitor.");
+        return;
+      }
+      let seguro = false;
+      try { seguro = localStorage.getItem(PICKER_LS) === "1"; } catch (e) {}
+      escolhendo = true;
       try {
-        const handle = await window.showDirectoryPicker({ id: "faturamento", mode: "read" });
+        const handle = await window.showDirectoryPicker(seguro ? { mode: "read", startIn: "desktop" } : { id: "faturamento", mode: "read" });
+        escolhendo = false;
+        pickerSeguro(false);
         pastaHandle = handle;
         nuvemInicial();
         idb.set("pasta", handle);
@@ -1102,7 +1119,14 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         btnAtualizar.title = `Reler a pasta "${handle.name}"`;
         analisaHandle(handle);
       } catch (e) {
-        if (e.name !== "AbortError") mostraErro("Não foi possível abrir a pasta.", String(e));
+        escolhendo = false;
+        if (e.name === "AbortError") return;
+        pickerSeguro(true);                         // a próxima tentativa abre na Área de Trabalho
+        if (/already active/i.test(String(e.message))) {
+          mostraErro("O navegador ainda considera aberta uma janela anterior de escolha de pasta. Procure-a (pode estar atrás do navegador "
+            + "ou em outro monitor) ou recarregue a página e clique de novo em Conectar pasta.", String(e));
+          $("statusNota").insertAdjacentHTML("beforeend", ' <button type="button" class="btn-cancelar" id="btnRecarregar">↻ Recarregar a página</button>');
+        } else mostraErro("Não foi possível abrir a pasta.", String(e));
       }
     } else {
       inputPasta.value = "";
@@ -1658,6 +1682,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 
   btnPasta.addEventListener("click", escolhePasta);
   $("btnCancelar").addEventListener("click", () => { if (rodando) cancelaExecucao(); });
+  document.addEventListener("click", (e) => { if (e.target.id === "btnRecarregar") location.reload(); });
   // ===== Export "Acompanhamento Mensal" (não aparece no painel nem no PDF) =====
   // Gera no Python (análise já carregada) as tabelas da planilha semanal da SUP escolhida. As indiretas dividem o realizado
   // de cada semana pelos dias úteis da semana: cada export guarda o realizado acumulado ("foto") no ajustes_relatorio.json,
