@@ -341,6 +341,34 @@ def test_cortadas_com_consumo(analise):
     assert {"Localidade", "Zona"} <= set(an.columns)
 
 
+def test_cortadas_3_meses(tmp_path):
+    """Combinações de meses (m-2, m-1, atual) em que cada ligação apareceu cortada com Consumo Medido > 0."""
+    from faturamento.analitico import _norm_situacao
+    from faturamento.cortadas_consumo import refs_3meses
+    destino = tmp_path / "dados"
+    gera_pasta(str(destino), n_ligacoes=150, n_grupos=4, n_meses=3)
+    sessao = Sessao(str(destino), progresso=lambda pct, desc: None)
+    sessao.preparar()
+    sessao.continuar()
+    ctx = sessao.ctx
+    refs = refs_3meses(ctx)
+    assert refs == ["07/2026", "08/2026", "09/2026"]
+    d = ctx.resultados["cortadas_3meses"]
+    assert len(d) and (d["Chave"].str.len() == 3).all() and (d["Chave"] != "000").all()
+    b = ctx.base_final
+    for k, r in enumerate(refs):                               # a marca de cada mês confere com a base
+        ag = b[(b["Referencia de Leitura"] == r) & (b["__serv"] == "A")]
+        cort = ag[ag["Situacao Ligacao"].map(_norm_situacao) == "Cortada"]
+        med = pd.to_numeric(cort["Consumo Medido"], errors="coerce").fillna(0).groupby(cort["N. Ligação"].astype(str).str.strip()).sum()
+        assert set(d.loc[d["Chave"].str[k] == "1", "N. Ligação"]) == set(med[med > 0].index)
+    um = d[d["Chave"] == "110"]
+    assert (um["Combinação"] == "07/2026 + 08/2026").all()
+    assert (d.loc[d["Chave"] == "100", "Combinação"] == "Só 07/2026").all()
+    html_rel = lê_html(sessao)
+    assert 'id="tabela-cortadas-3meses"' in html_rel and "function cort3Recalcular" in html_rel
+    assert html_rel.count('class="c3-combo"') == 7
+
+
 def test_cortadas_usa_so_o_consumo_medido(analise):
     from faturamento.cortadas_consumo import monta_cortadas_consumo
     ctx = analise.ctx
