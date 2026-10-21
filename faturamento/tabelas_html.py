@@ -79,8 +79,11 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     rot_atual = rot_atual or ctx.mes_atual_curto
     rot_ant = rot_ant or ctx.mes_anterior_curto
     so_detalhe = {"dias-atual", "dias-anterior", "vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm"}
+    # diferenças absolutas: só com "Mostrar todas as colunas" (nas principais ficam só os Δ %)
+    so_abs = {"delta-fat", "delta-eco", "delta-vol", "delta-vm", "delta-tar", "delta-tic"}
     def cl(campo):
-        return ' class="x-det"' if campo in so_detalhe else ""
+        c = " ".join(x for x, ok in (("x-det", campo in so_detalhe), ("x-abs", campo in so_abs)) if ok)
+        return f' class="{c}"' if c else ""
     def td(campo, valor):
         return f'<td data-field="{campo}"{cl(campo)}>{valor}</td>'
     def deltac(campo, valor, dec=2, pct=False):
@@ -171,8 +174,8 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     sub = f'<th>{rot_atual}</th><th>{rot_ant}</th>'
     subd = f'<th class="x-det">{rot_atual}</th><th class="x-det">{rot_ant}</th>'
     th_dias = '<th colspan="2" class="x-det">Dias Leitura</th>' if com_dias else ""
-    dif = '<th>Abs</th><th>%</th>'                     # cada Δ: diferença absoluta e percentual (sobre o mês anterior)
-    difd = '<th class="x-det">Abs</th><th class="x-det">%</th>'
+    dif = '<th class="x-abs">Abs</th><th>%</th>'      # cada Δ: diferença absoluta e percentual (sobre o mês anterior)
+    difd = '<th class="x-det x-abs">Abs</th><th class="x-det">%</th>'
     sub_dias = subd if com_dias else ""
     cabecalho = f"""
     <tr class="header-grupo">
@@ -180,17 +183,17 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
         <th rowspan="2" title="LIS = em leitura hoje · Aguardando = ainda não lido · Em Análise = ao menos uma conta EM ANALISE · Liberado = todas LIBERADA. Clique no selo para alterar manualmente.">Situação</th>
         {th_dias}
         <th colspan="2">Faturamento</th>
-        <th colspan="2">Δ Fat.</th>
+        <th colspan="2" data-full="2" data-comp="1">Δ Fat.</th>
         <th colspan="2">Economias</th>
-        <th colspan="2">Δ Economias</th>
+        <th colspan="2" data-full="2" data-comp="1">Δ Economias</th>
         <th colspan="2">Volume Faturado</th>
-        <th colspan="2">Δ Volume</th>
+        <th colspan="2" data-full="2" data-comp="1">Δ Volume</th>
         <th colspan="2" class="x-det">Volume Médio</th>
         <th colspan="2" class="x-det">Δ Vol. Médio</th>
         <th colspan="2">Tarifa Média</th>
-        <th colspan="2">Δ Tarifa</th>
+        <th colspan="2" data-full="2" data-comp="1">Δ Tarifa</th>
         <th colspan="2">Ticket Médio</th>
-        <th colspan="2">Δ Ticket</th>
+        <th colspan="2" data-full="2" data-comp="1">Δ Ticket</th>
     </tr>
     <tr class="header-sub">
         {sub_dias}

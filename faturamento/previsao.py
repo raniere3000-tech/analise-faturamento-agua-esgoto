@@ -258,21 +258,20 @@ def _valor_linha(d, chave):
 
 
 def tabela_previsao_html(ctx, sup, ref, linhas_def, atual, falta, editavel=True, primeira="Rubrica", ocultas=(),
-                         orcados=None, colunas_extra=(), rotulo_delta="Δ R$"):
-    """Tabela Orçados | Realizado | Forecast ✎ | Realizado + Forecast | Δ % e Δ R$ por orçado.
+                         orcados=None, colunas_extra=()):
+    """Tabela Realizado | Forecast ✎ | Realizado + Forecast | Orçados | Δ % por orçado.
     linhas_def: [(chave, rótulo, formato, negrito, classe)] (chave None = linha em branco).
     As edições ficam guardadas por mês × SUP × linha (relatorio.js): editar aqui muda todas as tabelas iguais (Forecast e Indiretas)."""
     e = lambda v: html.escape(v, quote=True)
     fontes, _ = _fontes(ctx)
     fontes = [f for f in fontes if not f.upper().count("SUP")] + [f for f in fontes if f.upper().count("SUP")]   # RF primeiro, SUP depois
     orc = orcados if orcados is not None else _orcados_do_mes(ctx, sup, ref, fontes)
+    # ordem: Realizado | Forecast ✎ | Realizado + Forecast | orçados | Δ % contra cada orçado (sem a diferença absoluta)
     cab = [f"<th>{primeira}</th>"] + [f"<th>{t}</th>" for t, _ in colunas_extra]
-    cab += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{html.escape(f)}</th>' for f in fontes]
     cab += ["<th>Realizado</th>", '<th class="prev-col-prev p-col-forecast">Forecast' + (" ✎" if editavel else "") + "</th>",
             "<th>Realizado<br>+ Forecast</th>"]
-    for f in fontes:
-        cab += [f'<th data-src="{e(f)}" data-tipo="dreal">Δ %<br>vs {html.escape(f)}</th>',
-                f'<th data-src="{e(f)}" data-tipo="dreal">{rotulo_delta}<br>vs {html.escape(f)}</th>']
+    cab += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{html.escape(f)}</th>' for f in fontes]
+    cab += [f'<th data-src="{e(f)}" data-tipo="dreal">Δ %<br>vs {html.escape(f)}</th>' for f in fontes]
     linhas = []
     # linhas ocultas: entram no recálculo do navegador (ex.: aberturas RI para o Total indiretas) mas não aparecem
     extra = [(k, k, "moeda", False, "prev-oculta") for k in ocultas]
@@ -285,7 +284,6 @@ def tabela_previsao_html(ctx, sup, ref, linhas_def, atual, falta, editavel=True,
         auto = falta.get(chave) if basica and real is not None else None     # forecast = o que ainda vai ser faturado
         tds = [f'<td class="dre-rotulo">{html.escape(rotulo)}</td>']
         tds += [f'<td class="num">{valores.get(chave, "")}</td>' for _, valores in colunas_extra]
-        tds += [f'<td class="num" data-src="{e(f)}" data-tipo="orc">{_fmt(_valor_linha(orc[f], chave), formato)}</td>' for f in fontes]
         tds.append(f'<td class="num p-real">{_fmt(real, formato)}</td>')
         cls = "num p-prev p-col-forecast" + (" prev-edit" if basica else "")
         attrs = ' contenteditable="true" spellcheck="false"' if basica else ""
@@ -293,10 +291,10 @@ def tabela_previsao_html(ctx, sup, ref, linhas_def, atual, falta, editavel=True,
                 "Calculado a partir das linhas editáveis" if editavel else "Mês fechado: sem forecast")
         tds.append(f'<td class="{cls}" data-k="{chave}"{attrs} title="{dica}">{_fmt(auto, formato)}</td>')
         tds.append('<td class="num p-fech">-</td>')
+        tds += [f'<td class="num" data-src="{e(f)}" data-tipo="orc">{_fmt(_valor_linha(orc[f], chave), formato)}</td>' for f in fontes]
         for f in fontes:
             o = _attr(_valor_linha(orc[f], chave))
             tds.append(f'<td class="num p-dorc" data-src="{e(f)}" data-tipo="dreal" data-orc="{o}">-</td>')
-            tds.append(f'<td class="num p-dorcv" data-src="{e(f)}" data-tipo="dreal" data-orc="{o}">-</td>')
         linhas.append(f'<tr class="{"dre-forte" if negrito else classe}" data-k="{chave}" data-fmt="{formato}" '
                       f'data-real="{_attr(real)}" data-auto="{_attr(auto)}" data-canc="{1 if chave == "canc" else 0}">'
                       + "".join(tds) + "</tr>")
@@ -429,8 +427,7 @@ def indiretas_previsao_html(ctx, sup, ref):
     tk = {"ev_" + k: ("R$ " + fmt_num(v, 2) if v else "-") for k, v in ev["ticket"].items()}
     fin = tabela_previsao_html(ctx, sup, ref, LINHAS_IND_FIN, real, falta, editavel, "Classe")
     eventos = tabela_previsao_html(ctx, sup, ref, LINHAS_IND_EV, ev["real"], ev["falta"] if editavel else {}, editavel,
-                                   "Classe", orcados=ev["orcado"], colunas_extra=[("Ticket médio<br>3 meses (R$)", tk)],
-                                   rotulo_delta="Δ eventos")
+                                   "Classe", orcados=ev["orcado"], colunas_extra=[("Ticket médio<br>3 meses (R$)", tk)])
     return fin, eventos, ev, editavel
 
 
