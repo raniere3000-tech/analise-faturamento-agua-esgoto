@@ -334,6 +334,11 @@ def test_cortadas_com_consumo(analise):
     assert set(d["N. Ligação"]) == set(med[med > 0].index)
     html_rel = lê_html(analise)
     assert 'id="tabela-cortadas-consumo"' in html_rel and "function cortRecalcular" in html_rel
+    # zona ("Nome da Zona" na fatura vira "Zona") e localidade na tabela, no Excel dela e no analítico do botão
+    assert d["Zona"].notna().all() and (d["Zona"].astype(str) == "ZONA " + d["Grupo"].astype(str)).all()
+    assert "<th>Localidade</th><th>Zona</th>" in html_rel and "base.concat(['Localidade', 'Zona']" in html_rel
+    an = analise.ctx.resultados["analitico"]
+    assert {"Localidade", "Zona"} <= set(an.columns)
 
 
 def test_cortadas_usa_so_o_consumo_medido(analise):

@@ -43,9 +43,9 @@ BYTES_CABECALHO = 256 * 1024
 # Colunas que o relatório usa (o resto — endereço, bairro, complemento, rota... — não é carregado: economiza memória)
 COLUNAS_USADAS_FATURA = set(NOMES_LIGACAO) | {"Grupo", "Rubrica", "Valor Parcela", "Referencia de Leitura", "Data de Vencimento",
                                               "Nome Cliente", "Categoria", "Situacao Ligacao", "Situacao Conta", "Nome da Localidade",
-                                              "Situacao Lancamento", "Rota"}
+                                              "Situacao Lancamento", "Rota", "Zona"}
 COLUNAS_USADAS_CONSUMO = set(NOMES_LIGACAO) | {"Leitura Atual", "Consumo Medido", "Consumo Faturado", "Mes Lancamento",
-                                               "Ano Lancamento", "Situacao Conta", "Grupo", "Nome da Localidade", "Situacao Lancamento"} | set(COLUNAS_ECONOMIA_TODAS)          # para achar o cabeçalho e o tipo do arquivo basta o começo
+                                               "Ano Lancamento", "Situacao Conta", "Grupo", "Nome da Localidade", "Situacao Lancamento", "Zona"} | set(COLUNAS_ECONOMIA_TODAS)          # para achar o cabeçalho e o tipo do arquivo basta o começo
 
 
 def mapeia_unicos(serie, funcao):
@@ -119,7 +119,8 @@ def _encoding_csv(caminho):
         return "utf-8-sig" if erro.start >= len(raw) - 3 else "latin-1"
 
 
-NOMES_VARIANTES = {"SITUACAOLANCAMENTO": "Situacao Lancamento", "SITLANCAMENTO": "Situacao Lancamento"}
+NOMES_VARIANTES = {"SITUACAOLANCAMENTO": "Situacao Lancamento", "SITLANCAMENTO": "Situacao Lancamento",
+                   "NOMEDAZONA": "Zona", "NOMEZONA": "Zona", "ZONACOMERCIAL": "Zona"}   # "Zona": cortadas com consumo
 
 
 def le_dataframe(caminho, nrows=None, sheet_name=0, colunas=None):

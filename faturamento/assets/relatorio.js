@@ -1089,7 +1089,7 @@ function definicaoAnalitico(tipo, ra, rn) {
             return { nome: 'Cortadas_com_consumo', exige: mAt,
                 semColuna: 'A base de consumo deste relatório não tem a coluna Consumo Medido (ou o relatório é de uma versão anterior): atualize a análise.',
                 vazio: 'Nenhuma ligação cortada com consumo medido no mês (com os filtros da tela).',
-                cols: base.concat(par('Grupo'), par('Situação Ligação'), par('Situação Lançamento'), par('Economias'), [mAnt, mAt],
+                cols: base.concat(['Localidade', 'Zona'], par('Grupo'), par('Situação Ligação'), par('Situação Lançamento'), par('Economias'), [mAnt, mAt],
                     par('Consumo água'), par('Valor água'), par('Valor esgoto'), par('Acima/Abaixo do mínimo'), ['Cortada e medindo há 2 meses']),
                 filtro: (v) => cortada(v(`Situação Ligação ${ra}`)) && numBR(v(mAt)) > 0,
                 extra: { [mAt]: (v) => numBR(v(mAt)),
@@ -3388,7 +3388,7 @@ document.addEventListener('click', async function (e) {
     const cols = Array.from(t.querySelectorAll('thead th')).map(th => th.textContent.trim());
     const num = (s) => { const x = parseFloat(s.replace('R$', '').replace(/\./g, '').replace(',', '.')); return isNaN(x) ? s : x; };
     const linhas = Array.from(t.querySelectorAll('tbody tr')).filter(tr => tr.style.display !== 'none')
-        .map(tr => Array.from(tr.children).map((td, i) => { const s = td.textContent.trim(); return [4, 5, 7, 8, 9].includes(i) ? num(s) : s; }));
+        .map(tr => Array.from(tr.children).map((td, i) => { const s = td.textContent.trim(); return [6, 7, 9, 10, 11].includes(i) ? num(s) : s; }));   // Economias, medidos, faturado e valor
     const sup = ESTADO.sup !== 'TODAS' ? '_' + ESTADO.sup.replace(/[^A-Za-z0-9]/g, '') : '';
     await baixarPlanilha(cols, linhas, `Cortadas_com_consumo_${b.dataset.mes}${sup}.xlsx`);
 });

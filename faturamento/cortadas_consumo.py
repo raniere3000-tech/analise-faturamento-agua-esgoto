@@ -43,7 +43,8 @@ def monta_cortadas_consumo(ctx):
     soma = soma[soma["med"] > 0]
     if not len(soma):
         return pd.DataFrame()
-    cols = [c for c in ("Grupo", "Nome Cliente", "Categoria", "__sup", "Situacao Lancamento", "Economias_Totais") if c in at.columns]
+    cols = [c for c in ("Grupo", "Nome Cliente", "Categoria", "__sup", "Situacao Lancamento", "Economias_Totais",
+                        "Nome da Localidade", "Zona") if c in at.columns]
     desc = at[cols].assign(__lig=lig.values).drop_duplicates("__lig").set_index("__lig").reindex(soma.index)
 
     # mês anterior: se já estava cortada e quanto mediu (cortada há mais de um mês e medindo pesa mais)
@@ -56,6 +57,8 @@ def monta_cortadas_consumo(ctx):
     d.index.name = "N. Ligação"
     d["Nome Cliente"] = desc.get("Nome Cliente")
     d["Grupo"] = desc.get("Grupo")
+    d["Localidade"] = desc.get("Nome da Localidade")
+    d["Zona"] = desc.get("Zona")
     d["Categoria"] = desc.get("Categoria")
     d["Superintendência"] = desc.get("__sup")
     d["Situação Lançamento"] = desc.get("Situacao Lancamento")
@@ -91,6 +94,7 @@ def gera_cortadas_consumo_html(ctx):
             f'<tr data-grupo="{e(r["Grupo"])}" data-sup="{e(r["Superintendência"])}" data-med="{med}" '
             f'data-val="{r[f"Valor Água {ra} (R$)"]}" data-reinc="{int(reinc)}">'
             f'<td>{e(r["N. Ligação"])}</td><td style="text-align:left">{e(r["Nome Cliente"])}</td><td>{e(r["Grupo"])}</td>'
+            f'<td style="text-align:left">{e(r["Localidade"])}</td><td>{e(r["Zona"])}</td>'
             f'<td style="text-align:left">{e(r["Categoria"])}</td><td>{fmt_num(r["Economias"])}</td>'
             f'<td>{"—" if pd.isna(med_an) else fmt_num(med_an, 1)}</td>'
             f'<td{destaque}>{e(sit_an)}</td>'
@@ -111,7 +115,7 @@ def gera_cortadas_consumo_html(ctx):
     </div>
     <div class="table-wrap" style="max-height:520px; overflow:auto;">
     <table class="tabela-cortadas" id="tabela-cortadas-consumo">
-    <thead><tr><th>Ligação</th><th>Cliente</th><th>Grupo</th><th>Categoria</th><th>Economias</th><th>Medido {rn} (m³)</th>
+    <thead><tr><th>Ligação</th><th>Cliente</th><th>Grupo</th><th>Localidade</th><th>Zona</th><th>Categoria</th><th>Economias</th><th>Medido {rn} (m³)</th>
     <th>Situação {rn}</th><th>Medido {ra} (m³)</th><th>Faturado {ra} (m³)</th><th>Valor água {ra}</th><th>Situação lançamento</th></tr></thead>
     <tbody>{"".join(linhas)}</tbody></table></div>
     </div>"""
