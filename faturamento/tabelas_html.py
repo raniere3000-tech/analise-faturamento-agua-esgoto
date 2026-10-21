@@ -78,7 +78,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     """pendentes: rubrica ("AGUA"/"ESGOTO") para acrescentar os grupos ainda não lidos (LIS / Aguardando) com o mês anterior."""
     rot_atual = rot_atual or ctx.mes_atual_curto
     rot_ant = rot_ant or ctx.mes_anterior_curto
-    so_detalhe = {"dias-atual", "dias-anterior", "vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm"}
+    so_detalhe = {"vm-atual", "vm-anterior", "delta-vm", "delta-pct-vm"}      # dias de leitura ficam nas colunas principais
     # diferenças absolutas: só com "Mostrar todas as colunas" (nas principais ficam só os Δ %)
     so_abs = {"delta-fat", "delta-eco", "delta-vol", "delta-vm", "delta-tar", "delta-tic"}
     def cl(campo):
@@ -173,10 +173,10 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     linhas_html += linha("Total / Média", media, is_media=True)
     sub = f'<th>{rot_atual}</th><th>{rot_ant}</th>'
     subd = f'<th class="x-det">{rot_atual}</th><th class="x-det">{rot_ant}</th>'
-    th_dias = '<th colspan="2" class="x-det">Dias Leitura</th>' if com_dias else ""
+    th_dias = '<th colspan="2">Dias Leitura</th>' if com_dias else ""
     dif = '<th class="x-abs">Abs</th><th>%</th>'      # cada Δ: diferença absoluta e percentual (sobre o mês anterior)
     difd = '<th class="x-det x-abs">Abs</th><th class="x-det">%</th>'
-    sub_dias = subd if com_dias else ""
+    sub_dias = sub if com_dias else ""
     cabecalho = f"""
     <tr class="header-grupo">
         <th rowspan="2">Grupo</th>
