@@ -208,6 +208,9 @@ html { height: 100%; }
 .btn-cancelar { margin-left: auto; padding: 5px 12px; border-radius: 8px; font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.35); }
 .btn-cancelar:hover { background: rgba(255,255,255,.24); }
 .btn-cancelar[hidden] { display: none; }
+.ajuda-pasta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.ajuda-pasta .btn-cancelar { margin-left: 0; }
+.ajuda-pasta-nota { display: block; margin-top: 6px; color: #C8D4EA; }
 .top .nota { color: #C8D4EA; margin-top: 4px; }
 .top .arquivo { background: rgba(255,255,255,.15); color: #fff; }
 .top .progresso.erro .nota { color: #FFC9A0; }
@@ -413,7 +416,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v118</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v119</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -571,7 +574,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v118-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v119-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1095,17 +1098,40 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   // nela e a janela travava sem aparecer ("File picker already active" nas tentativas seguintes).
   const PICKER_LS = "faturamento_picker_seguro";
   const pickerSeguro = (sim) => { try { if (sim) localStorage.setItem(PICKER_LS, "1"); else localStorage.removeItem(PICKER_LS); } catch (e) {} };
-  let escolhendo = false;
+  let escolhendo = false, tentativasPasta = 0;
+  // ajuda quando a janela de escolha não aparece (OneDrive travado, pasta renomeada): explica e oferece o modo alternativo
+  // (a escolha de pasta "clássica" do navegador, que usa outro caminho do Windows). Nele o painel abre normalmente, mas sem
+  // a conexão gravável: as edições ficam só neste navegador até conectar a pasta do jeito normal.
+  function ajudaPasta(texto) {
+    if (rodando) return;
+    fechaRelatorio();
+    progresso.hidden = false;
+    progresso.classList.add("erro");
+    setStatus("A janela para escolher a pasta não apareceu", 0);
+    $("statusNota").innerHTML = texto + '<span class="ajuda-pasta"><button type="button" class="btn-cancelar" id="btnPastaAlt">📂 Escolher a pasta pelo modo alternativo</button>'
+      + '<button type="button" class="btn-cancelar" id="btnRecarregar">↻ Recarregar a página</button></span>'
+      + '<small class="ajuda-pasta-nota">No modo alternativo o relatório abre normalmente, mas as alterações (forecast, situação dos grupos, '
+      + 'justificativas, garantia) ficam só neste navegador até a pasta ser conectada do jeito normal.</small>';
+  }
+  const TEXTO_SEM_JANELA = "O Windows não mostrou a janela de escolha da pasta. Isso costuma acontecer quando o OneDrive está travado "
+    + "(por exemplo, depois de uma pasta compartilhada mudar de nome). Veja se o ícone do OneDrive mostra erro ou sincronização parada, "
+    + "procure uma janela \"Selecionar pasta\" escondida na barra de tarefas, ou feche esta aba e abra o site em uma aba nova.";
   async function escolhePasta() {
     if (rodando) cancelaExecucao();               // carregando (ex.: pasta antiga que mudou de nome): para e escolhe outra
     if ("showDirectoryPicker" in window) {
-      if (escolhendo) {
-        setFonte("A janela para escolher a pasta já está aberta — ela pode estar atrás do navegador ou em outro monitor.");
-        return;
-      }
+      if (escolhendo) { ajudaPasta(TEXTO_SEM_JANELA); return; }
       let seguro = false;
       try { seguro = localStorage.getItem(PICKER_LS) === "1"; } catch (e) {}
       escolhendo = true;
+      // a janela do Windows tira o foco da página: sem isso em 4 s, ela não apareceu (vale só para esta tentativa)
+      const tentativa = ++tentativasPasta;
+      let abriu = false;
+      const marca = () => { abriu = true; };
+      window.addEventListener("blur", marca, { once: true });
+      setTimeout(() => {
+        window.removeEventListener("blur", marca);
+        if (escolhendo && !abriu && tentativa === tentativasPasta) { pickerSeguro(true); ajudaPasta(TEXTO_SEM_JANELA); }
+      }, 4000);
       try {
         const handle = await window.showDirectoryPicker(seguro ? { mode: "read", startIn: "desktop" } : { id: "faturamento", mode: "read" });
         escolhendo = false;
@@ -1123,9 +1149,8 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         if (e.name === "AbortError") return;
         pickerSeguro(true);                         // a próxima tentativa abre na Área de Trabalho
         if (/already active/i.test(String(e.message))) {
-          mostraErro("O navegador ainda considera aberta uma janela anterior de escolha de pasta. Procure-a (pode estar atrás do navegador "
-            + "ou em outro monitor) ou recarregue a página e clique de novo em Conectar pasta.", String(e));
-          $("statusNota").insertAdjacentHTML("beforeend", ' <button type="button" class="btn-cancelar" id="btnRecarregar">↻ Recarregar a página</button>');
+          $("logExecucao").textContent += "\n" + String(e);
+          ajudaPasta("O navegador ainda considera aberta uma janela anterior de escolha de pasta. " + TEXTO_SEM_JANELA);
         } else mostraErro("Não foi possível abrir a pasta.", String(e));
       }
     } else {
@@ -1682,7 +1707,10 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 
   btnPasta.addEventListener("click", escolhePasta);
   $("btnCancelar").addEventListener("click", () => { if (rodando) cancelaExecucao(); });
-  document.addEventListener("click", (e) => { if (e.target.id === "btnRecarregar") location.reload(); });
+  document.addEventListener("click", (e) => {
+    if (e.target.id === "btnRecarregar") location.reload();
+    if (e.target.id === "btnPastaAlt") { inputPasta.value = ""; inputPasta.click(); }
+  });
   // ===== Export "Acompanhamento Mensal" (não aparece no painel nem no PDF) =====
   // Gera no Python (análise já carregada) as tabelas da planilha semanal da SUP escolhida. As indiretas dividem o realizado
   // de cada semana pelos dias úteis da semana: cada export guarda o realizado acumulado ("foto") no ajustes_relatorio.json,
@@ -1766,6 +1794,8 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   inputPasta.addEventListener("change", async () => {
     const lista = Array.from(inputPasta.files || []);
     if (!lista.length) return;
+    // modo alternativo (ou navegador sem a conexão de pasta): só leitura — nada é gravado numa pasta antiga que travou
+    pastaHandle = null; nuvemInicial(); btnAtualizar.hidden = true; btnEtapa2.hidden = true;
     iniciaExecucao();
     const minha = execucao;
     const nomePasta = (lista[0].webkitRelativePath || "").split("/")[0] || "pasta";
