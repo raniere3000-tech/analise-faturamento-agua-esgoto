@@ -119,3 +119,138 @@ def gera_cortadas_consumo_html(ctx):
     <th>Situação {rn}</th><th>Medido {ra} (m³)</th><th>Faturado {ra} (m³)</th><th>Valor água {ra}</th><th>Situação lançamento</th></tr></thead>
     <tbody>{"".join(linhas)}</tbody></table></div>
     </div>"""
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Cortadas com consumo nos 3 últimos meses (m-2, m-1 e o atual): em quais meses cada ligação apareceu cortada
+# medindo. Combinação = a lista desses meses (ex.: "08/2026 + 09/2026"); o filtro de grupos/SUP e o clique numa
+# combinação são feitos no navegador (cort3Recalcular, relatorio.js).
+# ---------------------------------------------------------------------------------------------------------------
+
+def refs_3meses(ctx):
+    atual = pd.to_datetime(ctx.ref_atual, format="%m/%Y")
+    return [(atual - pd.DateOffset(months=k)).strftime("%m/%Y") for k in (2, 1, 0)]
+
+
+def _situacao_do_mes(b, ref):
+    """Por ligação no mês: situação (Cortada/Ativa/Outra) e Consumo Medido da água."""
+    ag = _agua_do_mes(b, ref)
+    if not len(ag):
+        return pd.DataFrame(columns=["sit", "med"])
+    lig = ag["N. Ligação"].astype(str).str.strip()
+    sit = ag["Situacao Ligacao"].map(_norm_situacao).replace("", "Outra")
+    return pd.DataFrame({"sit": sit.groupby(lig.values).first(), "med": _num(ag["Consumo Medido"]).groupby(lig.values).sum()})
+
+
+def combinacao_rotulo(chave, refs):
+    meses = [r for r, c in zip(refs, chave) if c == "1"]
+    return ("Só " + meses[0]) if len(meses) == 1 else " + ".join(meses)
+
+
+# ordem de leitura: as que mais insistem primeiro, depois as que pararam e as que começaram agora
+ORDEM_COMBOS = ["111", "110", "011", "101", "100", "010", "001"]
+
+
+def monta_cortadas_3meses(ctx):
+    """DataFrame: uma linha por ligação que esteve cortada com consumo medido em ao menos um dos 3 meses."""
+    b = ctx.base_final
+    if b is None or "Situacao Ligacao" not in b.columns or "Consumo Medido" not in b.columns:
+        return pd.DataFrame()
+    refs = refs_3meses(ctx)
+    por_mes = [_situacao_do_mes(b, r) for r in refs]
+    flags = [((m["sit"] == "Cortada") & (m["med"] > 0)) for m in por_mes]
+    ligs = sorted(set().union(*[f[f].index for f in flags]))
+    if not ligs:
+        return pd.DataFrame()
+    idx = pd.Index(ligs)
+    chave = pd.Series("", index=idx)
+    for f in flags:
+        chave = chave + f.reindex(idx).fillna(False).astype(bool).map({True: "1", False: "0"})
+
+    # dados descritivos da linha de água mais recente em que a ligação aparece
+    cols = [c for c in ("Grupo", "Nome Cliente", "Categoria", "__sup", "Nome da Localidade", "Zona") if c in b.columns]
+    ag = pd.concat([_agua_do_mes(b, r) for r in reversed(refs)])
+    desc = ag[cols].assign(__lig=ag["N. Ligação"].astype(str).str.strip().values).drop_duplicates("__lig").set_index("__lig").reindex(idx)
+
+    d = pd.DataFrame(index=idx)
+    d.index.name = "N. Ligação"
+    d["Nome Cliente"] = desc.get("Nome Cliente")
+    d["Grupo"] = desc.get("Grupo")
+    d["Localidade"] = desc.get("Nome da Localidade")
+    d["Zona"] = desc.get("Zona")
+    d["Categoria"] = desc.get("Categoria")
+    d["Superintendência"] = desc.get("__sup")
+    d["Chave"] = chave
+    d["Combinação"] = chave.map(lambda c: combinacao_rotulo(c, refs))
+    for r, m in zip(refs, por_mes):
+        d[f"Situação {r}"] = m["sit"].reindex(idx).fillna("Sem fatura")
+        d[f"Consumo Medido {r}"] = m["med"].reindex(idx)
+    d["Medido nos 3 meses"] = d[[f"Consumo Medido {r}" for r in refs]].sum(axis=1)
+    d["__ordem"] = d["Chave"].map({c: i for i, c in enumerate(ORDEM_COMBOS)})
+    d = d.sort_values(["__ordem", "Medido nos 3 meses"], ascending=[True, False]).drop(columns="__ordem")
+    return d.reset_index()
+
+
+def gera_cortadas_3meses_html(ctx):
+    d = monta_cortadas_3meses(ctx)
+    ctx.resultados["cortadas_3meses"] = d
+    refs = refs_3meses(ctx)
+    titulo = f"Cortadas com consumo nos 3 últimos meses ({refs[0]} a {refs[2]})"
+    if not len(d):
+        return ""
+    e = lambda v: html.escape("" if pd.isna(v) else str(v), quote=True)
+    ra = refs[2]
+    faltam = [r for r in refs if not (ctx.base_final["Referencia de Leitura"] == r).any()]
+    aviso = (f" <b>Atenção:</b> {', '.join(faltam)} não está na base carregada; as combinações com esse mês ficam zeradas."
+             if faltam else "")
+    sit_cls = {"Cortada": "cortada", "Ativa": "ativa", "Sem fatura": "semfat"}
+
+    # resumo por combinação (o navegador refaz com os filtros)
+    resumo = []
+    for c in ORDEM_COMBOS:
+        x = d[d["Chave"] == c]
+        marcas = "".join(f'<td class="c3-marca">{"●" if k == "1" else ""}</td>' for k in c)
+        sat = x[f"Situação {ra}"]
+        resumo.append(
+            f'<tr class="c3-combo" data-c3="{c}" title="Clique para ver só estas ligações">{marcas}'
+            f'<td style="text-align:left">{e(combinacao_rotulo(c, refs))}</td>'
+            f'<td class="c3-n" style="font-weight:700">{fmt_num(len(x))}</td><td class="c3-cort">{fmt_num((sat == "Cortada").sum())}</td>'
+            f'<td class="c3-ativ">{fmt_num((sat == "Ativa").sum())}</td><td class="c3-sf">{fmt_num((~sat.isin(["Cortada", "Ativa"])).sum())}</td>'
+            f'<td class="c3-med">{fmt_num(x["Medido nos 3 meses"].sum(), 1)}</td></tr>')
+    linhas = []
+    for _, r in d.iterrows():
+        meses = "".join(
+            f'<td>{e(r[f"Situação {m}"])}</td><td>{"—" if pd.isna(r[f"Consumo Medido {m}"]) else fmt_num(r[f"Consumo Medido {m}"], 1)}</td>'
+            for m in refs)
+        linhas.append(
+            f'<tr data-grupo="{e(r["Grupo"])}" data-sup="{e(r["Superintendência"])}" data-c3="{r["Chave"]}" '
+            f'data-med="{r["Medido nos 3 meses"]}" data-sitat="{sit_cls.get(r[f"Situação {ra}"], "outra")}">'
+            f'<td>{e(r["N. Ligação"])}</td><td style="text-align:left">{e(r["Nome Cliente"])}</td><td>{e(r["Grupo"])}</td>'
+            f'<td style="text-align:left">{e(r["Localidade"])}</td><td>{e(r["Zona"])}</td>'
+            f'<td style="text-align:left">{e(r["Categoria"])}</td><td style="text-align:left;font-weight:700">{e(r["Combinação"])}</td>'
+            f'{meses}<td style="font-weight:700">{fmt_num(r["Medido nos 3 meses"], 1)}</td></tr>')
+    rot = "Baixar a lista (Excel), com os filtros de grupo, Superintendência e combinação"
+    dl = (f'<button type="button" class="btn-just btn-cortadas3" data-mes="{e(ctx.mes_atual.replace("/", "-"))}" '
+          f'title="{rot}" aria-label="{rot}">&#11015;&#8801;</button>')
+    cab_meses = "".join(f"<th>Situação {m}</th><th>Medido {m} (m³)</th>" for m in refs)
+    return f"""
+    <div class="card" id="cortadas-3meses">
+    <h2 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">{titulo} {dl}</h2>
+    <p class="nota-secao">Ligações que apareceram <b>cortadas com Consumo Medido &gt; 0</b> na conta de água em pelo menos um dos
+    três meses, agrupadas pela combinação de meses em que isso aconteceu (● = cortada medindo no mês). Só a medição conta.
+    As colunas da direita dizem como a ligação está em {ra}: ainda cortada, ativa (religada) ou sem fatura.
+    Clique numa combinação para ver só as ligações dela; clique de novo para ver todas.{aviso}</p>
+    <div class="table-wrap">
+    <table class="tabela-cortadas tabela-c3" id="tabela-cortadas-3meses-resumo">
+    <thead><tr>{"".join(f"<th>{m}</th>" for m in refs)}<th>Combinação</th><th>Ligações</th><th>Ainda cortadas em {ra}</th>
+    <th>Ativas em {ra}</th><th>Sem fatura / outra em {ra}</th><th>Medido nos 3 meses (m³)</th></tr></thead>
+    <tbody>{"".join(resumo)}</tbody>
+    <tfoot><tr><td colspan="4" style="text-align:left">Total</td><td class="c3-n">{fmt_num(len(d))}</td><td class="c3-cort"></td>
+    <td class="c3-ativ"></td><td class="c3-sf"></td><td class="c3-med">{fmt_num(d["Medido nos 3 meses"].sum(), 1)}</td></tr></tfoot></table></div>
+    <p class="c3-filtro-info" id="c3-filtro-info" style="margin:10px 0 6px; font-size:12.5px; color:#49668C;">Mostrando todas as combinações.</p>
+    <div class="table-wrap" style="max-height:520px; overflow:auto;">
+    <table class="tabela-cortadas" id="tabela-cortadas-3meses">
+    <thead><tr><th>Ligação</th><th>Cliente</th><th>Grupo</th><th>Localidade</th><th>Zona</th><th>Categoria</th><th>Combinação</th>
+    {cab_meses}<th>Medido nos 3 meses (m³)</th></tr></thead>
+    <tbody>{"".join(linhas)}</tbody></table></div>
+    </div>"""

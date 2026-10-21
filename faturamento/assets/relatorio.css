@@ -686,3 +686,10 @@ table.op-mini .num { text-align:right; }
 .tabela-cortadas { width:100%; border-collapse:collapse; font-size:12.5px; }
 .tabela-cortadas th { position:sticky; top:0; background:#1b3a5c; color:#fff; padding:6px; }
 .tabela-cortadas td { padding:4px 6px; border-bottom:1px solid #e5ebf2; text-align:center; }
+.tabela-c3 tr.c3-combo { cursor:pointer; }
+.tabela-c3 tr.c3-combo:hover td { background:#f3f7fb; }
+.tabela-c3 tr.c3-ativa td { background:#fdeee3; font-weight:700; }
+.tabela-c3 tr.c3-vazia td { color:#9aaabb; }
+.tabela-c3 td.c3-marca { color:#C2560C !important; font-size:15px; width:62px; }
+.tabela-c3 tr.c3-vazia td.c3-marca { color:#c9d3de !important; }
+.tabela-c3 tfoot td { font-weight:700; border-top:2px solid #1b3a5c; padding:5px 6px; text-align:center; }

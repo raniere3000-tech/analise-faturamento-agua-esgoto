@@ -32,7 +32,7 @@ function definirFiltros(parcial) {
     });
     aplicarSupNosGrupos();
     aplicarFontes();
-    cortRecalcular();
+    cortRecalcular(); cort3Recalcular();
     [['selSup', ESTADO.sup], ['selMes', ESTADO.mes], ['selRef', ESTADO.ref]].forEach(([id, v]) => {
         const el = document.getElementById(id); if (el && v) el.value = v;
     });
@@ -217,7 +217,7 @@ function filtrarPorGrupo() {
     recalcularKPIsResumo();
     refazTops();                                            // Top 100 refeito só com os grupos marcados
     sitlRecalcular();                                       // cards da Situação de lançamento
-    cortRecalcular();                                       // cortadas com consumo
+    cortRecalcular(); cort3Recalcular();                    // cortadas com consumo (mês e 3 meses)
     if (typeof garRedesenhar === 'function') garRedesenhar();   // aba Garantia (Top 1000, análise e resumo)
     if (typeof planoDesenhar === 'function') planoDesenhar();   // aba Plano de ação
     if (typeof opDesenhar === 'function') opDesenhar();         // aba One page
@@ -3380,6 +3380,63 @@ function cortRecalcular() {
     p('cort-qtd', f(qtd, 0)); p('cort-med', f(med, 1)); p('cort-val', 'R$ ' + f(val, 2)); p('cort-reinc', f(reinc, 0));
 }
 document.addEventListener('DOMContentLoaded', cortRecalcular);
+
+// Análise > Cortadas com consumo nos 3 últimos meses: resumo por combinação refeito com grupos e SUP; o clique numa
+// combinação mostra só as ligações dela (clique de novo para ver todas)
+let C3_COMBO = '';
+function cort3Recalcular() {
+    const t = document.getElementById('tabela-cortadas-3meses');
+    const res = document.getElementById('tabela-cortadas-3meses-resumo');
+    if (!t || !res) return;
+    const marcados = new Set(Array.from(document.querySelectorAll('.chk-grupo:checked')).map(c => c.value));
+    const todos = !document.querySelector('.chk-grupo');
+    const soma = {}, tot = { n: 0, cort: 0, ativ: 0, sf: 0, med: 0 };
+    t.querySelectorAll('tbody tr').forEach(tr => {
+        const ok = (todos || marcados.has(tr.dataset.grupo)) && (ESTADO.sup === 'TODAS' || tr.dataset.sup === ESTADO.sup);
+        tr.style.display = ok && (!C3_COMBO || tr.dataset.c3 === C3_COMBO) ? '' : 'none';
+        if (!ok) return;
+        const s = soma[tr.dataset.c3] || (soma[tr.dataset.c3] = { n: 0, cort: 0, ativ: 0, sf: 0, med: 0 });
+        const sit = tr.dataset.sitat === 'cortada' ? 'cort' : tr.dataset.sitat === 'ativa' ? 'ativ' : 'sf';
+        for (const x of [s, tot]) { x.n++; x[sit]++; x.med += parseFloat(tr.dataset.med) || 0; }
+    });
+    const f = (v, d) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const escreve = (linha, s) => {
+        s = s || { n: 0, cort: 0, ativ: 0, sf: 0, med: 0 };
+        for (const k of ['n', 'cort', 'ativ', 'sf']) { const td = linha.querySelector('.c3-' + k); if (td) td.textContent = f(s[k], 0); }
+        const td = linha.querySelector('.c3-med'); if (td) td.textContent = f(s.med, 1);
+    };
+    res.querySelectorAll('tbody tr.c3-combo').forEach(tr => {
+        escreve(tr, soma[tr.dataset.c3]);
+        tr.classList.toggle('c3-ativa', tr.dataset.c3 === C3_COMBO);
+        tr.classList.toggle('c3-vazia', !(soma[tr.dataset.c3] || {}).n);
+    });
+    const pe = res.querySelector('tfoot tr'); if (pe) escreve(pe, tot);
+    const info = document.getElementById('c3-filtro-info');
+    if (info) {
+        const sel = res.querySelector('tr.c3-combo.c3-ativa td:nth-child(4)');
+        info.textContent = C3_COMBO && sel ? 'Mostrando só: ' + sel.textContent + ' (clique de novo na combinação para ver todas).'
+            : 'Mostrando todas as combinações.';
+    }
+}
+document.addEventListener('DOMContentLoaded', cort3Recalcular);
+document.addEventListener('click', function (e) {
+    const tr = e.target.closest && e.target.closest('#tabela-cortadas-3meses-resumo tr.c3-combo');
+    if (!tr) return;
+    C3_COMBO = C3_COMBO === tr.dataset.c3 ? '' : tr.dataset.c3;
+    cort3Recalcular();
+});
+document.addEventListener('click', async function (e) {
+    const b = e.target.closest && e.target.closest('.btn-cortadas3');
+    const t = document.getElementById('tabela-cortadas-3meses');
+    if (!b || !t) return;
+    const cols = Array.from(t.querySelectorAll('thead th')).map(th => th.textContent.trim());
+    const nums = cols.map((c, i) => /^Medido/.test(c) ? i : -1).filter(i => i >= 0);
+    const num = (s) => { const x = parseFloat(s.replace(/\./g, '').replace(',', '.')); return isNaN(x) ? s : x; };
+    const linhas = Array.from(t.querySelectorAll('tbody tr')).filter(tr => tr.style.display !== 'none')
+        .map(tr => Array.from(tr.children).map((td, i) => { const s = td.textContent.trim(); return nums.includes(i) ? num(s) : s; }));
+    const sup = ESTADO.sup !== 'TODAS' ? '_' + ESTADO.sup.replace(/[^A-Za-z0-9]/g, '') : '';
+    await baixarPlanilha(cols, linhas, `Cortadas_3_meses_${b.dataset.mes}${sup}.xlsx`);
+});
 // seta da lista: baixa as linhas visíveis (grupos e SUP filtrados); números voltam a ser números
 document.addEventListener('click', async function (e) {
     const b = e.target.closest && e.target.closest('.btn-cortadas');
