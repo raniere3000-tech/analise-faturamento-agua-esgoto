@@ -416,7 +416,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v119</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v120</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -496,6 +496,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         <button type="button" role="menuitem" data-print="indiretas">Faturamento Indireto e Plano de Ação<small>Indiretas (R$) e, abaixo, o plano do mês</small></button>
       </span></span>
     <button type="button" class="btn-top" id="btnOnePage" hidden title="One page (acompanhamento do faturamento em uma página, conforme os filtros da tela)">📊 One page</button>
+    <button type="button" class="btn-top" id="btnCortadas" hidden title="Baixar o analítico (Excel) das ligações cortadas com Consumo Medido acima de 0 no mês, conforme os filtros da tela">✂ Cortadas com consumo</button>
     <button type="button" class="btn-top" id="btnAcomp" hidden title="Baixar as tabelas da planilha de Acompanhamento Mensal (Excel, uma aba por tabela) da Superintendência escolhida">📥 Acompanhamento</button>
   </div>
   <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto" hidden></iframe>
@@ -574,7 +575,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v119-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v120-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -993,7 +994,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     $("etapaTop20").hidden = true;
     $("quadroRelatorio").hidden = true;
     $("barraDados").hidden = true;
-    $("btnPdf").hidden = true; $("menuPdf").hidden = true; $("btnOnePage").hidden = true; $("btnPrint").hidden = true; $("menuPrint").hidden = true;
+    $("btnPdf").hidden = true; $("menuPdf").hidden = true; $("btnOnePage").hidden = true; $("btnCortadas").hidden = true; $("btnPrint").hidden = true; $("menuPrint").hidden = true;
     $("vazioWrap").hidden = false;
     document.body.classList.remove("relatorio-aberto", "top20-aberto");
     document.title = "Análise de Faturamento — Água e Esgoto";
@@ -1572,7 +1573,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     $("listaGrupos").innerHTML = `<label><input type="checkbox" id="chkTodosGrupos" checked> <b>Selecionar todos</b></label><hr>` +
       grupos.map((g) => `<label><input type="checkbox" class="chk-grupo-top" value="${escapa(g.value)}" checked> ${escapa(g.value)}</label>`).join("");
     $("btnGrupo").textContent = "Todos ▾"; $("btnGrupo").disabled = false;
-    $("btnPdf").hidden = false; $("btnOnePage").hidden = false; $("btnPrint").hidden = false;
+    $("btnPdf").hidden = false; $("btnOnePage").hidden = false; $("btnCortadas").hidden = false; $("btnPrint").hidden = false;
     filtrosEstado.view = "resumo";
     // filtros de cada pessoa (neste navegador): a última escolha volta ao abrir; sem escolha salva, SUP Interior,
     // Comparar padrão, mês vigente e grupos Liberados/Em Análise. Mês e grupos só voltam se o mês vigente for o mesmo.
@@ -1702,6 +1703,12 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     if (!w.gerarOnePage) { alert("Este relatório foi gerado por uma versão anterior do painel: atualize a análise para ter o One page."); return; }
     filtrosEstado.view = "onepage"; aplicaFiltros();               // mostra a folha que vai para o PDF
     w.gerarOnePage(await libsPdf());
+  });
+  // Cortadas com consumo: analítico das ligações cortadas com Consumo Medido > 0, com os filtros da tela
+  $("btnCortadas").addEventListener("click", () => {
+    const w = janela();
+    if (!w.baixarCortadasConsumo) { alert("Este relatório foi gerado por uma versão anterior do painel: atualize a análise para baixar as cortadas com consumo."); return; }
+    w.baixarCortadasConsumo();
   });
   quadro().addEventListener("load", () => { if (quadro().srcdoc) montaFiltros(); });
 

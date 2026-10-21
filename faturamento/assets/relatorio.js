@@ -1083,6 +1083,19 @@ function definicaoAnalitico(tipo, ra, rn) {
             [`Conta do mínimo ${ra}`], par('Acima/Abaixo do mínimo'), ['Mudança de classe']), filtro: algum(...par('Acima/Abaixo do mínimo')),
             extra: { 'Mudança de classe': (v) => { const a = v(`Acima/Abaixo do mínimo ${rn}`), b = v(`Acima/Abaixo do mínimo ${ra}`);
                 return a && b ? (a === b ? 'Manteve' : `${a} → ${b}`) : ''; } } };
+        // cortadas com consumo: Situação Ligação cortada no mês atual e Consumo Medido > 0 (o faturado é só informação)
+        case 'cortadas': {
+            const [mAnt, mAt] = par('Consumo medido água'), cortada = (t) => /CORT/i.test(t);
+            return { nome: 'Cortadas_com_consumo', exige: mAt,
+                semColuna: 'A base de consumo deste relatório não tem a coluna Consumo Medido (ou o relatório é de uma versão anterior): atualize a análise.',
+                vazio: 'Nenhuma ligação cortada com consumo medido no mês (com os filtros da tela).',
+                cols: base.concat(par('Grupo'), par('Situação Ligação'), par('Situação Lançamento'), par('Economias'), [mAnt, mAt],
+                    par('Consumo água'), par('Valor água'), par('Valor esgoto'), par('Acima/Abaixo do mínimo'), ['Cortada e medindo há 2 meses']),
+                filtro: (v) => cortada(v(`Situação Ligação ${ra}`)) && numBR(v(mAt)) > 0,
+                extra: { [mAt]: (v) => numBR(v(mAt)),
+                    'Cortada e medindo há 2 meses': (v) => (cortada(v(`Situação Ligação ${rn}`)) && numBR(v(mAnt)) > 0 ? 'Sim' : 'Não') },
+                ordem: mAt };
+        }
         case 'situacao': return { nome: 'Situacao_Lancamento', cols: base.concat(par('Situação Lançamento'), par('Leitura da situação'),
             par('Situação Ligação'), par('Economias'), par('Consumo água'), par('Valor total'), ['Δ valor total']),
             filtro: algum(...par('Situação Lançamento')) };
@@ -1152,14 +1165,19 @@ function definicaoAnalitico(tipo, ra, rn) {
         ordem: `${P} de consumo` };
 }
 
-document.addEventListener('click', async function (e) {
+document.addEventListener('click', function (e) {
     const b = e.target.closest && e.target.closest('.btn-detalhe');
-    if (!b) return;
+    if (b) baixaDetalhe(b);
+});
+// botão "Cortadas com consumo" do site (barra de cima): mesmo analítico, sem seta na tela
+window.baixarCortadasConsumo = () => baixaDetalhe({ dataset: { detalhe: 'cortadas' }, closest: () => null });
+async function baixaDetalhe(b) {
     try {
         const a = await lerAnalitico();
-        if (!a) return;
+        if (!a) { alert('Este relatório não tem o analítico por matrícula: atualize a análise.'); return; }
         const def = definicaoAnalitico(b.dataset.detalhe, a.ra, a.rn);
         if (!def) return;
+        if (def.exige && !a.cab.includes(def.exige)) { alert(def.semColuna); return; }
         const idx = Object.fromEntries(a.cab.map((c, i) => [c, i]));
         const bloco = b.closest('.sup-top-bloco');
         const sup = bloco ? bloco.dataset.sup : (ESTADO.sup || 'TODAS'), grupos = gruposFiltro();
@@ -1199,11 +1217,12 @@ document.addEventListener('click', async function (e) {
         const sitNome = (b.dataset.sit || b.dataset.gsit || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
         const nome = `${def.nome}${soEsg ? '_so_esgoto' : ''}${sitNome ? '_' + sitNome : ''}_${a.mes}${sup !== 'TODAS' ? '_' + sup.replace(/[^A-Za-z0-9]/g, '') : ''}${grupos ? '_grupos_filtrados' : ''}.csv`;
+        if (!linhas.length && def.vazio) { alert(def.vazio); return; }
         await baixarPlanilha(def.cols, linhas, nome);
     } catch (erro) {
         alert('Não foi possível baixar o analítico neste navegador (' + erro.message + ').');
     }
-});
+}
 
 // Situação de lançamento: botão Analítica / Sintética (vale para os quadros de todas as SUPs; lembra a última escolha)
 function sitlVisao(visao) {
