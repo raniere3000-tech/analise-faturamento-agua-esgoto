@@ -1171,6 +1171,54 @@ document.addEventListener('click', function (e) {
 });
 // botão "Cortadas com consumo" do site (barra de cima): mesmo analítico, sem seta na tela
 window.baixarCortadasConsumo = () => baixaDetalhe({ dataset: { detalhe: 'cortadas' }, closest: () => null });
+
+// ===== Bases analíticas (botão "Bases analíticas ▾" da aba Dados, no site) =====
+// "completa-atual" / "completa-anterior": uma linha por matrícula no mês, com os dados da matrícula, consumo medido de água,
+// consumo faturado de água e de esgoto (quem fatura esgoto tem o mesmo consumo da água) e faturamento água, esgoto e total.
+// Vem do analítico embutido (os dois meses lado a lado) + base da Garantia (rota, economias por tipo, situação da conta).
+// Segue os filtros da tela: Superintendência e grupos (o grupo da matrícula naquele mês).
+async function baixarBaseAnalitica(tipo) {
+    try {
+        const a = await lerAnalitico();
+        if (!a) { alert('Este relatório não tem o analítico por matrícula.'); return; }
+        const atual = tipo !== 'completa-anterior', ref = atual ? a.ra : a.rn;
+        if (document.getElementById('garantia-dados')) await garCarregar();
+        const idx = Object.fromEntries(a.cab.map((c, i) => [c, i]));
+        const sup = ESTADO.sup || 'TODAS', grupos = gruposFiltro();
+        const lig = (v) => String(v == null ? '' : v).trim().replace(/\.0+$/, '');
+        const cad = atual ? '' : ' (cadastro atual)';
+        const cols = ['Matrícula', 'Cliente', 'Categoria', 'Superintendência', 'Localidade', 'Zona', 'Grupo', 'Rota' + cad,
+            'Situação ligação', 'Situação lançamento'].concat(atual ? ['Situação conta'] : [], [
+            'Econ. residencial' + cad, 'Econ. comercial' + cad, 'Econ. industrial' + cad, 'Econ. pública' + cad, 'Economias',
+            'Economias faturadas água', 'Economias faturadas esgoto', 'Fatura esgoto',
+            'Consumo medido água (m³)', 'Consumo faturado água (m³)', 'Consumo faturado esgoto (m³)',
+            'Faturamento água (R$)', 'Faturamento esgoto (R$)', 'Faturamento total (R$)']);
+        const linhas = [];
+        a.linhas.forEach((l) => {
+            const v = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || '')), n = (c) => numBR(v(c));
+            const grupo = v(`Grupo ${ref}`), vA = n(`Valor água ${ref}`), vE = n(`Valor esgoto ${ref}`);
+            const cA = n(`Consumo água ${ref}`), med = n(`Consumo medido água ${ref}`), eA = n(`Economias faturadas água ${ref}`), eE = n(`Economias faturadas esgoto ${ref}`);
+            if (!grupo && vA == null && vE == null && cA == null && med == null) return;          // a matrícula não está neste mês
+            if (sup !== 'TODAS' && v('Superintendência') !== sup) return;
+            if (grupos && !(grupo && grupos.has(normGrupo(grupo)))) return;
+            const fatEsg = !!(vE || eE);
+            let cE = n(`Consumo esgoto ${ref}`);
+            if (fatEsg && !cE && cA) cE = cA;                                // quem fatura esgoto tem o consumo da água
+            const g = GAR.porLig && GAR.porLig.get(lig(v('N. Ligação')));
+            const r2 = (x) => (x == null || isNaN(x) ? null : Math.round(x * 100) / 100);
+            linhas.push([v('N. Ligação'), v('Nome Cliente'), v('Categoria'), v('Superintendência'), v('Localidade'), v('Zona'), grupo,
+                g ? g.rota : '', v(`Situação Ligação ${ref}`), v(`Situação Lançamento ${ref}`)].concat(atual ? [g ? (g.sit || '') : ''] : [], [
+                g ? g.res : null, g ? g.com : null, g ? g.ind : null, g ? g.pub : null, n(`Economias ${ref}`), eA, eE, fatEsg ? 'Sim' : 'Não',
+                r2(med), r2(cA), fatEsg ? r2(cE) : null, r2(vA), r2(vE), (vA == null && vE == null) ? null : r2((vA || 0) + (vE || 0))]));
+        });
+        linhas.sort((x, y) => (parseInt(normGrupo(x[6]), 10) || 0) - (parseInt(normGrupo(y[6]), 10) || 0) || String(x[0]).localeCompare(String(y[0])));
+        const mes = ref.replace('/', '-');
+        await baixarPlanilha(cols, linhas, `Base_completa_matriculas_${mes}${sup !== 'TODAS' ? '_' + sup.replace(/[^A-Za-z0-9]/g, '') : ''}${grupos ? '_grupos_filtrados' : ''}.xlsx`);
+    } catch (erro) {
+        alert('Não foi possível montar a base neste navegador (' + erro.message + ').');
+    }
+}
+window.baixarBaseAnalitica = baixarBaseAnalitica;
 async function baixaDetalhe(b) {
     try {
         const a = await lerAnalitico();
