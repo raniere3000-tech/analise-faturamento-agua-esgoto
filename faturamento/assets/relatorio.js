@@ -1190,9 +1190,11 @@ async function baixarBaseAnalitica(tipo) {
         const cols = ['Matrícula', 'Cliente', 'Categoria', 'Superintendência', 'Localidade', 'Zona', 'Grupo', 'Rota' + cad,
             'Situação ligação', 'Situação lançamento'].concat(atual ? ['Situação conta'] : [], [
             'Econ. residencial' + cad, 'Econ. comercial' + cad, 'Econ. industrial' + cad, 'Econ. pública' + cad, 'Economias',
-            'Economias faturadas água', 'Economias faturadas esgoto', 'Fatura esgoto',
+            'Economias faturadas água', 'Economias faturadas esgoto', 'Tipo de faturamento',
             'Consumo medido água (m³)', 'Consumo faturado água (m³)', 'Consumo faturado esgoto (m³)',
             'Faturamento água (R$)', 'Faturamento esgoto (R$)', 'Faturamento total (R$)']);
+        // situação da ligação sem o código antes do hífen, em maiúsculas e sem acento ("A-Ativa" → "ATIVA")
+        const sitLig = (t) => String(t || '').trim().replace(/^[A-Za-z0-9]{1,3}\s*-\s*/, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
         const linhas = [];
         a.linhas.forEach((l) => {
             const v = (c) => (idx[c] === undefined ? '' : (l[idx[c]] || '')), n = (c) => numBR(v(c));
@@ -1207,8 +1209,9 @@ async function baixarBaseAnalitica(tipo) {
             const g = GAR.porLig && GAR.porLig.get(lig(v('N. Ligação')));
             const r2 = (x) => (x == null || isNaN(x) ? null : Math.round(x * 100) / 100);
             linhas.push([v('N. Ligação'), v('Nome Cliente'), v('Categoria'), v('Superintendência'), v('Localidade'), v('Zona'), grupo,
-                g ? g.rota : '', v(`Situação Ligação ${ref}`), v(`Situação Lançamento ${ref}`)].concat(atual ? [g ? (g.sit || '') : ''] : [], [
-                g ? g.res : null, g ? g.com : null, g ? g.ind : null, g ? g.pub : null, n(`Economias ${ref}`), eA, eE, fatEsg ? 'Sim' : 'Não',
+                g ? g.rota : '', sitLig(v(`Situação Ligação ${ref}`)), v(`Situação Lançamento ${ref}`)].concat(atual ? [g ? (g.sit || '') : ''] : [], [
+                g ? g.res : null, g ? g.com : null, g ? g.ind : null, g ? g.pub : null, n(`Economias ${ref}`), eA, eE,
+                fatEsg ? (vA == null && cA == null && !eA ? 'ESGOTO' : 'AGUA E ESGOTO') : 'AGUA',
                 r2(med), r2(cA), fatEsg ? r2(cE) : null, r2(vA), r2(vE), (vA == null && vE == null) ? null : r2((vA || 0) + (vE || 0))]));
         });
         linhas.sort((x, y) => (parseInt(normGrupo(x[6]), 10) || 0) - (parseInt(normGrupo(y[6]), 10) || 0) || String(x[0]).localeCompare(String(y[0])));
