@@ -248,8 +248,9 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 @media (max-width: 640px) { .barra-dados { padding: 10px; gap: 6px; } .barra-dados .btn-top { padding: 8px 10px; font-size: 12.5px; } }
 .menu-pdf-lista { position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 40; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 22px rgba(17,42,66,.18); padding: 6px 0; min-width: 250px; }
 .menu-pdf-lista[hidden] { display: none; }
-#menuPdf button { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; padding: 9px 14px; cursor: pointer; }
-#menuPdf button:hover, #menuPdf button:focus-visible { background: #f2f8fc; outline: none; }
+#menuBases { min-width: 340px; left: 0; right: auto; }
+.menu-pdf-lista button { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; padding: 9px 14px; cursor: pointer; }
+.menu-pdf-lista button:hover, .menu-pdf-lista button:focus-visible { background: #f2f8fc; outline: none; }
 .menu-pdf-lista small { display: block; font-weight: 400; font-size: 11.5px; color: #5b6b80; margin-top: 2px; }
 .dropdown > button { border: 0; border-left: 1px solid rgba(255,255,255,.25); border-radius: 0 8px 8px 0; background: transparent; color: #fff; padding: 8px 11px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .dropdown-content { display: none; position: absolute; right: 0; background: #fff; color: var(--ink); min-width: 220px; border: 1px solid var(--line); box-shadow: 0 8px 22px rgba(17,42,66,.18); border-radius: 10px; z-index: 30; padding: 8px 0; max-height: 300px; overflow-y: auto; margin-top: 6px; }
@@ -416,7 +417,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v123</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v124</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -497,6 +498,11 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       </span></span>
     <button type="button" class="btn-top" id="btnOnePage" hidden title="One page (acompanhamento do faturamento em uma página, conforme os filtros da tela)">📊 One page</button>
     <button type="button" class="btn-top" id="btnCortadas" hidden title="Baixar o analítico (Excel) das ligações cortadas com Consumo Medido acima de 0 no mês, conforme os filtros da tela">✂ Cortadas com consumo</button>
+    <span class="menu-pdf" id="menuBasesWrap"><button type="button" class="btn-top" id="btnBases" hidden aria-haspopup="true" aria-expanded="false" aria-controls="menuBases" title="Bases analíticas em Excel, conforme os filtros da tela">📥 Bases analíticas ▾</button>
+      <span class="menu-pdf-lista" id="menuBases" role="menu" hidden>
+        <button type="button" role="menuitem" data-base="completa-atual">Base completa por matrícula — mês atual<small>Dados da matrícula, consumo medido e faturado (água e esgoto) e faturamento água, esgoto e total</small></button>
+        <button type="button" role="menuitem" data-base="completa-anterior">Base completa por matrícula — mês anterior<small>As mesmas colunas, para o mês anterior</small></button>
+      </span></span>
     <button type="button" class="btn-top" id="btnAcomp" hidden title="Baixar as tabelas da planilha de Acompanhamento Mensal (Excel, uma aba por tabela) da Superintendência escolhida">📥 Acompanhamento</button>
   </div>
   <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto" hidden></iframe>
@@ -575,7 +581,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v123-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v124-20261022"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -994,7 +1000,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     $("etapaTop20").hidden = true;
     $("quadroRelatorio").hidden = true;
     $("barraDados").hidden = true;
-    $("btnPdf").hidden = true; $("menuPdf").hidden = true; $("btnOnePage").hidden = true; $("btnCortadas").hidden = true; $("btnPrint").hidden = true; $("menuPrint").hidden = true;
+    $("btnPdf").hidden = true; $("menuPdf").hidden = true; $("btnOnePage").hidden = true; $("btnCortadas").hidden = true; $("btnBases").hidden = true; $("menuBases").hidden = true; $("btnPrint").hidden = true; $("menuPrint").hidden = true;
     $("vazioWrap").hidden = false;
     document.body.classList.remove("relatorio-aberto", "top20-aberto");
     document.title = "Análise de Faturamento — Água e Esgoto";
@@ -1573,7 +1579,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     $("listaGrupos").innerHTML = `<label><input type="checkbox" id="chkTodosGrupos" checked> <b>Selecionar todos</b></label><hr>` +
       grupos.map((g) => `<label><input type="checkbox" class="chk-grupo-top" value="${escapa(g.value)}" checked> ${escapa(g.value)}</label>`).join("");
     $("btnGrupo").textContent = "Todos ▾"; $("btnGrupo").disabled = false;
-    $("btnPdf").hidden = false; $("btnOnePage").hidden = false; $("btnCortadas").hidden = false; $("btnPrint").hidden = false;
+    $("btnPdf").hidden = false; $("btnOnePage").hidden = false; $("btnCortadas").hidden = false; $("btnBases").hidden = false; $("btnPrint").hidden = false;
     filtrosEstado.view = "resumo";
     // filtros de cada pessoa (neste navegador): a última escolha volta ao abrir; sem escolha salva, SUP Interior,
     // Comparar padrão, mês vigente e grupos Liberados/Em Análise. Mês e grupos só voltam se o mês vigente for o mesmo.
@@ -1705,6 +1711,21 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     w.gerarOnePage(await libsPdf());
   });
   // Cortadas com consumo: analítico das ligações cortadas com Consumo Medido > 0, com os filtros da tela
+  // Bases analíticas (aba Dados): o botão abre a lista de bases; o relatório monta o Excel com os filtros da tela
+  const menuBases = $("menuBases");
+  const fechaMenuBases = () => { menuBases.hidden = true; $("btnBases").setAttribute("aria-expanded", "false"); };
+  $("btnBases").addEventListener("click", (e) => {
+    e.stopPropagation();
+    menuBases.hidden = !menuBases.hidden; $("btnBases").setAttribute("aria-expanded", String(!menuBases.hidden));
+  });
+  document.addEventListener("click", (e) => { if (!menuBases.hidden && !e.target.closest("#menuBasesWrap")) fechaMenuBases(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menuBases.hidden) fechaMenuBases(); });
+  menuBases.querySelectorAll("button[data-base]").forEach((b) => b.addEventListener("click", () => {
+    fechaMenuBases();
+    const w = janela();
+    if (!w.baixarBaseAnalitica) { alert("Este relatório foi gerado por uma versão anterior do painel: atualize a análise para baixar as bases analíticas."); return; }
+    w.baixarBaseAnalitica(b.dataset.base);
+  }));
   $("btnCortadas").addEventListener("click", () => {
     const w = janela();
     if (!w.baixarCortadasConsumo) { alert("Este relatório foi gerado por uma versão anterior do painel: atualize a análise para baixar as cortadas com consumo."); return; }
