@@ -1514,6 +1514,7 @@ function gerarExecutivo(libs, modo) {
         c.querySelectorAll('.jg-col').forEach((col) => { const t = col.querySelector('.jg-txt'); if (t && !t.textContent.trim()) col.remove(); });
         c.querySelectorAll('.jg').forEach((b) => { const n = b.querySelectorAll('.jg-col').length; if (!n) b.remove(); else if (n === 1) b.querySelector('.jg-cols').classList.add('um'); });
         c.querySelectorAll('.btn-remover-item').forEach(x => x.remove());
+        if (el.id === 'plano-card') c.classList.add('exec-plano');      // no A4 é fotografado à parte, numa largura própria
         c.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
         c.removeAttribute('id');
         if (celular) c.querySelectorAll('table').forEach(enxugaTabelaCelular);
@@ -1691,11 +1692,57 @@ async function gerarPdfDireto(cont, libs, nome) {
         let y = M, primeira = true;
         const novaPagina = () => { pdf4.addPage(); y = M; };
         const mmPorPx = LW / foto.width;
+        // Plano de ação: fotografado à parte, numa largura escolhida para encaixar no espaço da página (LW × altura livre):
+        // as colunas de texto alargam, as linhas ficam mais baixas e a letra sai maior do que na largura padrão do Executivo
+        const fotoPlano = async (el, livreMm) => {
+            const f2 = document.createElement('iframe');
+            f2.setAttribute('aria-hidden', 'true');
+            f2.style.cssText = `position:fixed; left:0; top:0; width:${larguraBase}px; height:800px; border:0; opacity:0; pointer-events:none; z-index:-1;`;
+            document.body.appendChild(f2);
+            try {
+                const d2 = f2.contentDocument;
+                d2.open();
+                d2.write('<!DOCTYPE html><html lang="pt-BR"><head>' + doc.head.innerHTML + '<style>html, body { margin:0; padding:0; background:#FFFFFF; overflow:hidden !important; }'
+                    + ' #view-executivo { padding:0 !important; margin:0 !important; } #view-executivo .exec-plano { margin:0 !important; }'
+                    + ' #view-executivo table.tabela-plano td { max-width:none; }</style></head><body><div id="view-executivo" class="' + raiz.className + '">'
+                    + el.outerHTML + '</div></body></html>');
+                d2.close();
+                await Promise.race([d2.fonts && d2.fonts.ready ? d2.fonts.ready.catch(() => null) : null, new Promise((r) => setTimeout(r, 2000))]);
+                await injetaLibs(d2, libs);
+                const w2 = f2.contentWindow, item = d2.getElementById('view-executivo').firstElementChild, razao = LW / livreMm;
+                let melhor = null;
+                for (let L = larguraBase; L <= 2600; L += 100) {
+                    f2.style.width = L + 'px'; await new Promise((r) => requestAnimationFrame(() => r()));
+                    const hh = item.getBoundingClientRect().height, nota = Math.min(1 / L, 1 / (razao * hh));
+                    if (!melhor || nota > melhor.nota) melhor = { L, nota };
+                }
+                f2.style.width = melhor.L + 'px'; await new Promise((r) => setTimeout(r, 50));
+                const ret = item.getBoundingClientRect(), altJanela = Math.ceil(ret.height + 20);
+                f2.style.height = altJanela + 'px'; await new Promise((r) => setTimeout(r, 30));
+                const cv = await w2.html2canvas(item, { scale: 2, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 3000, windowWidth: melhor.L, windowHeight: altJanela });
+                return { url: cv.toDataURL('image/jpeg', 0.92), larg: ret.width, alt: ret.height };
+            } finally {
+                f2.remove();
+            }
+        };
         for (const [i, el] of filhos.entries()) {
             const { topo, altPx } = posicao(el, i);
             if (!altPx) continue;
             const alt = altPx * mmPorPx;
             if (el.classList.contains('exec-secao') && !primeira && y > M) novaPagina();
+            if (el.classList.contains('exec-plano')) {
+                let livre = M + LH - y;
+                if (livre < LH * 0.5) { novaPagina(); livre = LH; }
+                try {
+                    const fp = await fotoPlano(el, livre), esc = Math.min(LW / fp.larg, livre / fp.alt);     // mm por px
+                    if (esc >= (LW / largura) * 0.6) {                    // letra de pelo menos 60% da do resto do Executivo
+                        const ww = fp.larg * esc, hh = fp.alt * esc;
+                        pdf4.addImage(fp.url, 'JPEG', M + (LW - ww) / 2, y, ww, hh);
+                        y += hh + 3; primeira = false;
+                        continue;
+                    }
+                } catch (e) { console.warn('Plano de ação à parte indisponível; segue no formato padrão', e); }
+            }
             // quadro mais alto que o espaço (ex.: o plano de ação): reduz para caber inteiro numa página, em vez de cortar em
             // duas — até 60% do tamanho (maior que isso segue em fatias: a letra ficaria pequena demais). Se na página só
             // está o título da seção, o quadro fica com ele (nunca deixa o título sozinho numa página em branco).
