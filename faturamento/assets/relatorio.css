@@ -234,6 +234,7 @@ td.num { text-align:right; }
 
 /* Previsão de fechamento */
 .prev-titulo { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.prev-titulo .btn-avulso-dl { margin-right:auto; }      /* a seta fica logo depois do título; os botões do forecast vão para a direita */
 .prev-acoes { display:inline-flex; gap:6px; }
 .prev-acoes .btn-just { margin-left:0; padding:4px 10px; font-size:12px; }
 .tabela-previsao tbody tr td.prev-edit { background:#FFF8E1; cursor:text; outline:1px dashed #E0C070; outline-offset:-2px; }
@@ -331,7 +332,7 @@ td.num { text-align:right; }
 .val-filtro::before { content:"Filtro: "; font-weight:600; color:var(--marinho); }
 .btn-baixar-base { margin-left:0; padding:2px 9px; font-size:13px; line-height:20px; }
 .nome-base { font-weight:600; margin:0 4px; }
-.btn-detalhe { margin-left:0; padding:2px 8px; font-size:13px; line-height:20px; letter-spacing:-1px; }   /* ⬇≡ analítico por matrícula */
+.btn-detalhe, .btn-avulso-dl { margin-left:0; padding:2px 8px; font-size:13px; line-height:20px; letter-spacing:-1px; }   /* ⬇≡ analítico por matrícula */
 @media print { .btn-detalhe { display:none !important; } }
 
 /* Indiretas: duas tabelas (água / esgoto e total) com forecast editável; gráfico de evolução embaixo, largura inteira */

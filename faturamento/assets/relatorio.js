@@ -1172,6 +1172,22 @@ document.addEventListener('click', function (e) {
 // botão "Cortadas com consumo" do site (barra de cima): mesmo analítico, sem seta na tela
 window.baixarCortadasConsumo = () => baixaDetalhe({ dataset: { detalhe: 'cortadas' }, closest: () => null });
 
+// ===== Analítico do serviço avulso (seta ⬇≡ dos quadros de Indiretas): os lançamentos daquele mês e SUP =====
+document.addEventListener('click', async (e) => {
+    const b = e.target.closest && e.target.closest('.btn-avulso-dl');
+    if (!b) return;
+    const el = document.getElementById('avulso-dl');
+    if (!el) { alert('Este relatório não tem o analítico do serviço avulso: atualize a análise.'); return; }
+    try {
+        const { cab, linhas } = lerCsvTexto(new TextDecoder('utf-8').decode(await bytesEmbutidos(el)));
+        const iRef = cab.indexOf('Referência'), iSup = cab.indexOf('Superintendência'), ref = b.dataset.ref, sup = b.dataset.sup || 'TODAS';
+        const sel = linhas.filter((l) => l[iRef] === ref && (sup === 'TODAS' || l[iSup] === sup));
+        await baixarPlanilha(cab, sel, `Servico_avulso_${sup.replace(/[^A-Za-z0-9]/g, '')}_${ref.replace('/', '-')}.xlsx`);
+    } catch (erro) {
+        alert('Não foi possível baixar o analítico do serviço avulso (' + erro.message + ').');
+    }
+});
+
 // ===== Bases analíticas (botão "Bases analíticas ▾" da aba Dados, no site) =====
 // "completa-atual" / "completa-anterior": uma linha por matrícula no mês, com os dados da matrícula, consumo medido de água,
 // consumo faturado de água e de esgoto (quem fatura esgoto tem o mesmo consumo da água) e faturamento água, esgoto e total.
