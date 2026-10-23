@@ -499,10 +499,6 @@ tr.gar-linha-forte td:nth-child(2) { font-weight:800; }
 table.tabela-plano { font-family:var(--fonte); font-size:12px; }
 table.tabela-plano td { white-space:normal; text-align:left; vertical-align:top; min-width:70px; max-width:420px; }
 table.tabela-plano th { text-align:left; }
-/* Executivo A4: plano mais compacto (as colunas de texto longo alargam e a linha fica mais baixa) */
-#view-executivo:not(.exec-celular) table.tabela-plano { font-size:11px; }
-#view-executivo:not(.exec-celular) table.tabela-plano td { max-width:none; min-width:0; padding:3px 5px; line-height:1.25; }
-#view-executivo:not(.exec-celular) table.tabela-plano th { padding:4px 5px; }
 .pl-status { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap; }
 .pl-ok { background:#dcfce7; color:#166534; } .pl-andamento { background:#e0f2fe; color:#075985; }
 .pl-pendente { background:#f1f5f9; color:#475569; } .pl-atraso { background:#FFC7CE; color:#9C0006; }

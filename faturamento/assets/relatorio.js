@@ -1696,11 +1696,13 @@ async function gerarPdfDireto(cont, libs, nome) {
             if (!altPx) continue;
             const alt = altPx * mmPorPx;
             if (el.classList.contains('exec-secao') && !primeira && y > M) novaPagina();
-            // quadro só um pouco mais alto que o espaço (ex.: o plano de ação): reduz para caber inteiro numa página, em vez de
-            // cortar em duas — até 60% do tamanho; maior que isso, segue em fatias (a letra ficaria pequena demais)
+            // quadro mais alto que o espaço (ex.: o plano de ação): reduz para caber inteiro numa página, em vez de cortar em
+            // duas — até 60% do tamanho (maior que isso segue em fatias: a letra ficaria pequena demais). Se na página só
+            // está o título da seção, o quadro fica com ele (nunca deixa o título sozinho numa página em branco).
             const livre = M + LH - y, REDUZ = 0.6;
-            const cabeAqui = alt > LH && alt * REDUZ <= livre && livre >= LH * 0.5;
-            if (cabeAqui || (alt > LH && alt * REDUZ <= LH)) {
+            const soTitulo = i > 0 && filhos[i - 1].classList.contains('exec-secao') && y < M + 25;
+            const cabeAqui = alt > livre && alt * REDUZ <= livre && (soTitulo || (alt > LH && livre >= LH * 0.5));
+            if (cabeAqui || (alt > LH && alt * REDUZ <= LH && !soTitulo)) {
                 if (!cabeAqui) novaPagina();
                 const hh = M + LH - y, ww = LW * hh / alt;
                 pdf4.addImage(recorte(topo, altPx), 'JPEG', M + (LW - ww) / 2, y, ww, hh);
