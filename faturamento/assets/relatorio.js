@@ -3041,7 +3041,11 @@ function opBlocoDestaque(D) {
 function opBlocoCards(D) {
     const A = D.atual; if (!A) return '';
     const base = D.projecao != null ? D.projecao : A.bruto.r;
-    const quadros = D.refs.slice(0, 3).map((ref) => {
+    // RFs em ordem cronológica (ex.: RF3T25, RF1T26, RF2T26 — os 3 mais recentes), depois a tendência
+    const chaveRf = (r) => { const m = /RF\s*0?(\d)\s*T\s*(\d{2})/i.exec(r); return m ? +m[2] * 10 + +m[1] : null; };
+    const rfs = D.refs.filter((r) => chaveRf(r) != null).sort((a, b) => chaveRf(a) - chaveRf(b)).slice(-3);
+    const refsCards = rfs.concat(D.refs.filter((r) => chaveRf(r) == null)).slice(0, 3);
+    const quadros = refsCards.map((ref) => {
         const d = ref === D.ref ? A : opDre(D.sup, D.mes, ref), o = d && d.bruto.o;
         return `<div class="op-card"><span class="op-rot">${garEsc(ref)} — ${garEsc(opMesCurto(D.mes))}</span><b>${opMoeda(o, 2)}</b>`
             + (o ? opSeta(opVar(A.bruto.r, o), 'realizado vs orçado') : '<span class="op-var">sem orçado</span>') + '</div>';
@@ -3181,7 +3185,7 @@ function opGraficoGrupos(D, G, alvo) {
             { type: 'bar', label: rotBase, data: gs.map(base), backgroundColor: '#C9D6E3', borderRadius: 2, maxBarThickness: 46, order: 1 }] },
         options: { animation: false, responsive: true, maintainAspectRatio: false, devicePixelRatio: 2,
             layout: { padding: { top: 34 } },
-            plugins: { legend: { position: 'bottom', labels: { boxWidth: 18, boxHeight: 6, font: { size: 11 } } }, tooltip: { enabled: false } },
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 18, boxHeight: 6, font: { size: 11 }, sort: (x, y) => y.datasetIndex - x.datasetIndex } }, tooltip: { enabled: false } },   // legenda: orçado antes do realizado
             scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { display: false, beginAtZero: true } } },
         plugins: [{ id: 'opRotulos', afterDatasetsDraw(c) {
             const g = c.ctx, linha = c.getDatasetMeta(0).data, barras = c.getDatasetMeta(1).data, topo = c.chartArea.top - 26;
