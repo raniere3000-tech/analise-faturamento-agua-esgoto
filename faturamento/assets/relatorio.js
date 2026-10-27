@@ -1511,11 +1511,15 @@ function gerarExecutivo(libs, modo) {
     if (celular) cont.classList.add('exec-celular');
     // gráfico: vira imagem do que está desenhado; no celular é redesenhado estreito (letras do mesmo tamanho da tela)
     const fotoGrafico = (cv) => {
-        const ch = celular && window.Chart && Chart.getChart ? Chart.getChart(cv) : null;
+        const ch = window.Chart && Chart.getChart ? Chart.getChart(cv) : null;
         if (!ch) return cv.toDataURL('image/png');
         const dpr = ch.options.devicePixelRatio;
-        try { ch.options.devicePixelRatio = 3; ch.resize(EXEC_CEL_W - 40, 340); return ch.toBase64Image('image/png'); }
-        finally { ch.options.devicePixelRatio = dpr; ch.resize(); }
+        // redesenhado em alta resolução (3×): no celular, estreito; no A4, no tamanho da tela (o gráfico do resumo saía borrado)
+        // (no A4, com o tamanho do último desenho: a aba do gráfico pode estar escondida e ter tamanho zero agora)
+        const w0 = ch.width, h0 = ch.height;
+        if (!celular && !(w0 && h0)) return cv.toDataURL('image/png');
+        try { ch.options.devicePixelRatio = 3; if (celular) ch.resize(EXEC_CEL_W - 40, 340); else ch.resize(w0, h0); return ch.toBase64Image('image/png'); }
+        finally { ch.options.devicePixelRatio = dpr; if (celular) ch.resize(); else ch.resize(w0, h0); }
     };
     const clona = (el) => {
         if (!el) return null;
@@ -1676,7 +1680,9 @@ async function gerarPdfDireto(cont, libs, nome) {
         // computadores (barra de rolagem, escala do Windows, fontes) a cópia quebra o texto diferente, os quadros ficam
         // com outra altura e o recorte "escorregava" — o título da seção seguinte ia parar no fim da página anterior.
         // celular: imagem mais fina (a tela do telefone tem mais pontos), sem passar do limite de altura de um canvas (~32 mil px)
-        const ESC = celular ? Math.max(1, Math.min(3, Math.floor(300000 / Math.max(1, raiz.scrollHeight + 100)) / 10)) : 2;
+        // A4: um pouco mais de definição (até 2,5×) enquanto a altura do documento permitir; com muitas análises, volta a 2×
+        const ESC = celular ? Math.max(1, Math.min(3, Math.floor(300000 / Math.max(1, raiz.scrollHeight + 100)) / 10))
+            : Math.max(2, Math.min(2.5, Math.floor(300000 / Math.max(1, raiz.scrollHeight + 100)) / 10));
         let medidas = null;
         const foto = await w.html2canvas(raiz, { scale: ESC, backgroundColor: '#FFFFFF', logging: false, imageTimeout: 3000,
             windowWidth: largura, windowHeight: Math.max(800, Math.ceil(raiz.scrollHeight) + 100),
@@ -1741,11 +1747,38 @@ async function gerarPdfDireto(cont, libs, nome) {
                 f2.remove();
             }
         };
+        // Seções com várias tabelas (Orçado x Realizado e Faturamento Mês a Mês: água + esgoto): se não cabem juntas numa
+        // página, mas cabem reduzindo até 60%, vão juntas — a redução se ajusta ao tamanho das tabelas a cada ciclo lido;
+        // abaixo de 60% a letra ficaria pequena demais e a seção segue o formato normal (uma tabela por página)
+        const juntas = new Map(), pular = new Set();
+        filhos.forEach((el, i) => {
+            if (!el.classList.contains('exec-secao')) return;
+            const itens = [];
+            for (let j = i + 1; j < filhos.length && !filhos[j].classList.contains('exec-secao'); j++) itens.push(j);
+            if (itens.length < 2 || itens.some((j) => /exec-plano|exec-just-bloco|card-justificativa/.test(filhos[j].className))) return;
+            const alturas = itens.map((j) => posicao(filhos[j], j).altPx * mmPorPx);
+            if (alturas.some((h) => !h)) return;
+            const soma = alturas.reduce((t, h) => t + h, 0) + 3 * (itens.length - 1), livre = LH - posicao(el, i).altPx * mmPorPx - 3;
+            if (soma > livre && livre / soma >= 0.6) juntas.set(i, { itens, f: livre / soma });
+        });
         for (const [i, el] of filhos.entries()) {
+            if (pular.has(i)) continue;
             const { topo, altPx } = posicao(el, i);
             if (!altPx) continue;
             const alt = altPx * mmPorPx;
             if (el.classList.contains('exec-secao') && !primeira && y > M) novaPagina();
+            if (juntas.has(i)) {
+                pdf4.addImage(recorte(topo, altPx), 'JPEG', M, y, LW, alt);
+                y += alt + 3;
+                const { itens, f } = juntas.get(i), ww = LW * f;
+                itens.forEach((j) => {
+                    const p = posicao(filhos[j], j), hh = p.altPx * mmPorPx * f;
+                    pdf4.addImage(recorte(p.topo, p.altPx), 'JPEG', M + (LW - ww) / 2, y, ww, hh);
+                    y += hh + 3 * f; pular.add(j);
+                });
+                primeira = false;
+                continue;
+            }
             if (el.classList.contains('exec-plano')) {
                 let livre = M + LH - y;
                 if (livre < LH * 0.5) { novaPagina(); livre = LH; }
