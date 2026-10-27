@@ -694,3 +694,8 @@ table.op-mini .num { text-align:right; }
 .tabela-c3 td.c3-marca { color:#C2560C !important; font-size:15px; width:62px; }
 .tabela-c3 tr.c3-vazia td.c3-marca { color:#c9d3de !important; }
 .tabela-c3 tfoot td { font-weight:700; border-top:2px solid #1b3a5c; padding:5px 6px; text-align:center; }
+
+/* Garantia › O.S.: histórico das já marcadas como realizadas (recolhido) */
+.gar-os-hist { margin-top:12px; }
+.gar-os-hist > summary { cursor:pointer; font-weight:600; color:var(--marinho); font-size:13px; }
+.gar-os-hist[open] > summary { margin-bottom:8px; }

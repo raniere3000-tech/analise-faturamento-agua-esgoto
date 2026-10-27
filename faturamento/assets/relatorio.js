@@ -2696,14 +2696,31 @@ function garOS() {
         return { k, ref, lig, v, data, prazo, dias, vencida: dias >= 0, d: GAR.porLig.get(lig) };
     }).filter((o) => garVisivel(o.d)).sort((a, b) => b.dias - a.dias);
 }
+// O.S. já marcadas como realizadas: o botão "✓ Realizada" não apaga nada (só marca a data), então elas continuam na
+// análise e podem voltar para o aviso ("↺ Voltar para o aviso") — sem guardar nada a mais
+function garOSRealizadas() {
+    return Object.entries(garItens).filter(([, v]) => v.obs === OS_ABRIR && v.os_status === 'Realizada').map(([k, v]) => {
+        const i = k.lastIndexOf('|'), lig = k.slice(i + 1);
+        return { k, lig, v, data: v.os_data || (v.foto ? v.foto.slice(0, 10) : ''), d: GAR.porLig.get(lig) };
+    }).filter((o) => garVisivel(o.d)).sort((a, b) => String(b.v.os_realizada || '').localeCompare(String(a.v.os_realizada || '')));
+}
 function garDesenharOS() {
     const el = document.getElementById('garAvisoOS'); if (!el || !GAR.dados) return;
-    const os = garOS(), vencidas = os.filter((o) => o.vencida), noPrazo = os.length - vencidas.length;
+    const os = garOS(), vencidas = os.filter((o) => o.vencida), noPrazo = os.length - vencidas.length, feitas = garOSRealizadas();
     const aba = document.querySelector('[data-gar-aba="resumo"]');
     if (aba) aba.innerHTML = 'Resumo de Ganhos' + (vencidas.length ? ` <span class="gar-badge" title="O.S. com prazo de ${OS_PRAZO_DIAS} dias vencido">${vencidas.length}</span>` : '');
-    if (!os.length) { el.hidden = true; el.innerHTML = ''; return; }
+    if (!os.length && !feitas.length) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
     const motivo = (m) => (m === 'QUEDA' ? 'Queda de consumo' : m === 'AUMENTO' ? 'Aumento de consumo' : '–');
+    const historico = feitas.length ? `<details class="gar-os-hist"${GAR.osHistAberto ? ' open' : ''}><summary>O.S. já marcadas como realizadas (${feitas.length})</summary>`
+        + '<p class="nota-secao">Marcou por engano? Clique em <b>↺ Voltar para o aviso</b>: a O.S. volta para a lista acima (se o prazo já venceu) com os mesmos dados.</p>'
+        + '<div class="tabela-wrap"><table class="tabela-garantia"><thead><tr><th>Matrícula</th><th>Cliente</th><th>Grupo</th><th>SUP</th><th>Motivo</th>'
+        + '<th>Nº O.S.</th><th>Análise</th><th>Marcada como realizada em</th><th></th></tr></thead><tbody>'
+        + feitas.map((o) => `<tr><td><b>${garEsc(o.lig)}</b></td><td class="gar-cli" title="${garEsc(o.d && o.d.nome)}">${garEsc(o.d && o.d.nome)}</td>`
+            + `<td>${garEsc(o.d && o.d.grupo)}</td><td>${garEsc(o.d && o.d.sup)}</td><td>${motivo(o.v.motivo)}</td>`
+            + `<td>${o.v.os_num ? garEsc(o.v.os_num) : '–'}</td><td>${garDataBR(o.data)}</td><td>${garDataBR(o.v.os_realizada)}</td>`
+            + `<td><button type="button" class="btn-just gar-os-voltar" data-k="${garEsc(o.k)}" title="Desfazer: a O.S. volta a ser acompanhada no aviso">↺ Voltar para o aviso</button></td></tr>`).join('')
+        + '</tbody></table></div></details>' : '';
     el.innerHTML = `<h2>⚠ O.S. abertas — prazo de ${OS_PRAZO_DIAS} dias</h2>`
         + `<p class="nota-secao">${vencidas.length ? `<b>${vencidas.length}</b> matrícula(s) com O.S. aberta há ${OS_PRAZO_DIAS} dias ou mais: verifique se foram realizadas ou estão em atraso.` : 'Nenhuma O.S. com prazo vencido.'}`
         + (noPrazo ? ` ${noPrazo} ainda dentro do prazo.` : '') + ' Depois de conferir, marque como realizada.</p>'
@@ -2713,7 +2730,7 @@ function garDesenharOS() {
                 + `<td>${garEsc(o.d && o.d.grupo)}</td><td>${garEsc(o.d && o.d.sup)}</td><td>${motivo(o.v.motivo)}</td><td>${garEsc(o.v.retorno)}</td>`
                 + `<td>${o.v.os_num ? '<b>' + garEsc(o.v.os_num) + '</b>' : '<span class="gar-sit">não informado</span>'}</td><td>${garDataBR(o.data)}</td><td>${o.prazo.toLocaleDateString('pt-BR')}</td><td class="num gar-neg"><b>${o.dias}</b></td>`
                 + `<td><button type="button" class="btn-just gar-os-ok" data-k="${garEsc(o.k)}" title="O.S. conferida e realizada: sai do aviso">✓ Realizada</button></td></tr>`).join('')
-            + '</tbody></table></div>' : '');
+            + '</tbody></table></div>' : '') + historico;
 }
 document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('.gar-os-ok'); if (!b) return;
@@ -2721,6 +2738,13 @@ document.addEventListener('click', (e) => {
     it.os_status = 'Realizada'; it.os_realizada = garHoje();
     garSalvar(); garDesenharOS();
 });
+document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('.gar-os-voltar'); if (!b) return;
+    const it = garItens[b.dataset.k]; if (!it) return;
+    delete it.os_status; delete it.os_realizada;
+    garSalvar(); garDesenharOS();
+});
+document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('gar-os-hist')) GAR.osHistAberto = e.target.open; }, true);
 
 // --- Resumo de Ganhos ---
 function garTotais() {
