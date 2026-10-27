@@ -468,13 +468,19 @@ def gera_aba_dre_html(ctx):
 
 # ---------- Indiretas ----------
 def _indiretas_mes(ctx, sup, ref):
-    """{classe: (qtd, valor)} do serviço avulso no mês (sem as rubricas excluídas)."""
+    """{classe: (qtd, valor)} do serviço avulso no mês (sem as rubricas excluídas). A quantidade (eventos) conta ligações
+    distintas por classe: a mesma ligação com várias rubricas na mesma linha do quadro é um evento só; o valor soma tudo."""
     av = _filtra(ctx.avulso, sup)
     if av is None or not len(av) or "Referencia" not in av.columns:
         return {cl: (0, 0.0) for cl in CLASSES_ORDEM}
     av = av[(av["Referencia"] == ref) & (av["Classe"] != "EXCLUIR")]
-    g = av.groupby("Classe")["Valor Parcela"].agg(["size", "sum"])
-    return {cl: (int(g.loc[cl, "size"]), float(g.loc[cl, "sum"])) if cl in g.index else (0, 0.0) for cl in CLASSES_ORDEM}
+    if "N. da Ligacao" in av.columns:                     # sem número da ligação, cada lançamento conta como um evento
+        lig = _ligacao(av["N. da Ligacao"]).where(av["N. da Ligacao"].notna() & (_ligacao(av["N. da Ligacao"]) != ""))
+        lig = lig.fillna(pd.Series("__linha" + av.index.astype(str), index=av.index))
+    else:
+        lig = pd.Series(av.index.astype(str), index=av.index)
+    g = av.assign(__lig=lig).groupby("Classe").agg(qtd=("__lig", "nunique"), valor=("Valor Parcela", "sum"))
+    return {cl: (int(g.loc[cl, "qtd"]), float(g.loc[cl, "valor"])) if cl in g.index else (0, 0.0) for cl in CLASSES_ORDEM}
 
 
 def grafico_evolucao(ctx, sup, ref, meses):
