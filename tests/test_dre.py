@@ -673,3 +673,17 @@ def test_analitico_por_matricula_bate_com_as_tabelas(sessao):
     q = q[q["queda"] > 0].sort_values("queda", ascending=False)
     top = ctx.resultados["top_agua"]
     assert list(q["queda"].head(len(top)).round(2)) == list(top["Queda_Consumo"].round(2))
+
+
+def test_eventos_indiretas_contam_ligacoes_distintas_por_linha_do_quadro():
+    from types import SimpleNamespace
+    av = pd.DataFrame({
+        "N. da Ligacao": ["101013913", "101013913", "101327038", "101327038", "101327038", None],
+        "Rubrica": ["ACRESCIMOS POR REINCIDENCIA", "VIOLACAO DO CORTE - 3/4\" RES"] * 2 + ["CORTE", "X"],
+        "Classe": ["SANÇÃO"] * 4 + ["CORTE", "SANÇÃO"],
+        "Valor Parcela": [10.0, 20.0, 30.0, 40.0, 5.0, 1.0],
+        "Referencia": ["09/2026"] * 6,
+    })
+    mes = dre._indiretas_mes(SimpleNamespace(avulso=av), dre.TODAS, "09/2026")
+    assert mes["SANÇÃO"] == (3, 101.0)        # 2 ligações + 1 lançamento sem número; o valor soma todas as rubricas
+    assert mes["CORTE"] == (1, 5.0)           # a mesma ligação em outra linha do quadro conta lá também
