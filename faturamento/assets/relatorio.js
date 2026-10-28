@@ -3349,14 +3349,17 @@ const opLig = (v) => String(v == null ? '' : v).trim().replace(/\.0+$/, '');
 function opTop5(D, tipo) {
     const chave = `${tipo}-agua`, d = lerJson('top100-dados');
     const tirar5 = (itens) => itens.sort((a, b) => b.v - a.v).slice(0, 5);
+    const pctFat = (at, ant) => (ant > 0 && at != null && isFinite(at) ? at / ant - 1 : null);   // faturamento do mês contra o anterior
     if (d && d[chave]) {
         // as mesmas linhas da tabela Top 100 da aba Análise (SUP e grupos marcados); com a chave, as em análise saem antes do corte de 100
         const cols = d[chave].columns, ix = (n) => cols.indexOf(n), iSup = ix('Superintendência'), iG = ix('Grupo'), iL = ix('N. Ligação'),
             iN = ix('Nome_Cliente'), iV = ix((tipo === 'aumento' ? 'Aumento' : 'Queda') + '_Valor_R$'), grupos = gruposFiltro();
+        const iVals = cols.map((c, i) => (/^Valor R\$ /.test(c) ? i : -1)).filter((i) => i >= 0), [iAt, iAnt] = iVals;   // atual, anterior
         const liberada = (l) => !opSoLiberadas || !garEmAnalise(GAR.porLig.get(opLig(l[iL])));
         const linhas = d[chave].data.filter((l) => (D.sup === 'TODAS' || iSup < 0 || l[iSup] === D.sup) && (!grupos || grupos.has(normGrupo(l[iG]))) && liberada(l))
             .slice(0, 100);
-        return tirar5(linhas.map((l) => ({ nome: String(l[iN] == null ? '' : l[iN]).trim(), grupo: iG >= 0 ? normGrupo(l[iG]) : '', v: Math.abs(+l[iV] || 0) })));
+        return tirar5(linhas.map((l) => ({ nome: String(l[iN] == null ? '' : l[iN]).trim(), grupo: iG >= 0 ? normGrupo(l[iG]) : '', v: Math.abs(+l[iV] || 0),
+            pct: iAnt === undefined ? null : pctFat(+l[iAt], +l[iAnt]) })));
     }
     const t = document.querySelector(`#view-analise .sup-top-bloco[data-sup="${D.sup}"] table[data-top="${chave}"]`)
         || document.querySelector(`.sup-top-bloco[data-sup="${D.sup}"] table[data-top="${chave}"]`)
@@ -3365,15 +3368,23 @@ function opTop5(D, tipo) {
     const cab = Array.from(t.tHead.rows[0].cells).map((c) => planoNorm(c.textContent));
     const iNome = cab.findIndex((c) => /NOME/.test(c)), iGrupo = cab.findIndex((c) => /^GRUPO/.test(c)), iVal = cab.length - 1,
         iLig = cab.findIndex((c) => /LIGA/.test(c));
+    const iVals = cab.map((c, i) => (/^VALOR R\$ /.test(c) ? i : -1)).filter((i) => i >= 0), [iAt, iAnt] = iVals;
     return tirar5(Array.from(t.tBodies[0].rows).filter((tr) => tr.style.display !== 'none' && tr.cells.length === cab.length)
         .filter((tr) => !opSoLiberadas || iLig < 0 || !garEmAnalise(GAR.porLig.get(opLig(tr.cells[iLig].textContent))))
-        .map((tr) => ({ nome: tr.cells[iNome].textContent.trim(), grupo: iGrupo >= 0 ? tr.cells[iGrupo].textContent.trim() : '', v: Math.abs(opNum(tr.cells[iVal].textContent) || 0) })));
+        .map((tr) => ({ nome: tr.cells[iNome].textContent.trim(), grupo: iGrupo >= 0 ? tr.cells[iGrupo].textContent.trim() : '', v: Math.abs(opNum(tr.cells[iVal].textContent) || 0),
+            pct: iAnt === undefined ? null : pctFat(opNum(tr.cells[iAt].textContent), opNum(tr.cells[iAnt].textContent)) })));
+}
+// % do faturamento do cliente contra o mês anterior, ao lado do valor (sem faturamento no mês anterior: "novo")
+function opTopPct(p) {
+    if (p == null) return '<span class="op-top-pct op-top-novo" title="Sem faturamento no mês anterior">novo</span>';
+    const t = (p > 0 ? '+' : '') + (p * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+    return `<span class="op-top-pct ${p < 0 ? 'neg' : 'pos'}" title="Faturamento do cliente contra o mês anterior">${t}</span>`;
 }
 function opBlocoTop(D) {
     // o nome comprido quebra linha; o grupo e o valor ficam sempre inteiros, em colunas fixas
     const lista = (tit, cls, itens) => `<div class="op-top ${cls}"><div class="op-top-tit">${tit}</div>`
         + (itens.length ? itens.map((x, i) => `<div class="op-top-lin"><span class="op-top-nome" title="${garEsc(x.nome)}">${i + 1}. ${garEsc(x.nome)}</span>`
-            + `<span class="op-top-grupo">${x.grupo ? `Grupo ${garEsc(x.grupo)}` : ''}</span><b>${opMoeda(x.v, 2)}</b></div>`).join('')
+            + `<span class="op-top-grupo">${x.grupo ? `Grupo ${garEsc(x.grupo)}` : ''}</span><b>${opMoeda(x.v, 2)}</b>${opTopPct(x.pct)}</div>`).join('')
             : `<p class="op-vazio">${opSoLiberadas && !GAR.dados ? 'Carregando as matrículas…' : 'Sem clientes.'}</p>`) + '</div>';
     const m = opMesCurto((opEditor() || { dataset: {} }).dataset.ref || '');
     return `<div class="op-tops">${lista('Maiores aumentos de faturamento — ' + garEsc(m), 'op-top-pos', opTop5(D, 'aumento'))}`

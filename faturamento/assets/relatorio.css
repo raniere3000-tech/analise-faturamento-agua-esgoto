@@ -633,7 +633,7 @@ table.op-tab tfoot td { border-top:2px solid var(--op-azul); }
 .op-top-tit { background:var(--op-claro); border-left:5px solid var(--op-neg); font-weight:600; padding:7px 12px; font-size:12px; color:var(--op-azul-esc); text-transform:uppercase; margin-bottom:2px; }
 .op-top-pos .op-top-tit { border-left-color:var(--op-pos); }
 /* três colunas de largura fixa (nome | grupo | valor): grupo e valor ficam alinhados em todas as linhas, qualquer que seja o tamanho do nome */
-.op-top-lin { display:grid; grid-template-columns:minmax(0,1fr) 6em 7.2em; column-gap:10px; align-items:baseline; padding:5px 12px; font-size:12px; border-bottom:1px solid #EEF1F6; }
+.op-top-lin { display:grid; grid-template-columns:minmax(0,1fr) 6em 7.2em 4.6em; column-gap:10px; align-items:baseline; padding:5px 12px; font-size:12px; border-bottom:1px solid #EEF1F6; }
 .op-top-lin:nth-child(odd) { background:#F7F8FC; }
 .op-top-lin span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:uppercase; }
 /* nome comprido quebra em duas linhas (nada cortado); grupo e valor acompanham a primeira linha */
@@ -736,3 +736,8 @@ table.op-mini .num { text-align:right; }
 .btn-prev-linha { margin-left:6px; border:1px solid #C9D3E0; background:#fff; color:#1F4E79; border-radius:4px; cursor:pointer; font-size:11px; line-height:1; padding:1px 5px; vertical-align:middle; }
 .btn-prev-linha:hover { background:#EEF4FB; }
 @media print { .btn-prev-linha { display:none !important; } }
+/* One page, Top 5: % do faturamento contra o mês anterior ao lado do valor */
+.op-top-lin .op-top-pct { text-align:right; font-weight:700; font-size:11.5px; text-transform:none; overflow:visible; }
+.op-top-lin .op-top-pct.pos { color:var(--op-pos); }
+.op-top-lin .op-top-pct.neg { color:var(--op-neg); }
+.op-top-lin .op-top-novo { color:#64748B; font-weight:600; }
