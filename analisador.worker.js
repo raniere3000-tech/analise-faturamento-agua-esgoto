@@ -232,11 +232,12 @@ async function limpaCache() {
 }
 
 // Fase 2: aplica os ajustes (se houver) e gera o relatório
-async function faseContinuar(ajustes) {
+// `ref`: mês escolhido no filtro do painel — refaz a análise inteira daquele mês com a base já lida (sem reler a pasta)
+async function faseContinuar(ajustes, ref) {
   const pyodide = await iniciaPyodide();
   avisa("etapa", { texto: "Processando…" });
   const continuar = pyodide.globals.get("continuar");
-  const refs = continuar(JSON.stringify(ajustes || [])).toJs();
+  const refs = continuar(JSON.stringify(ajustes || []), ref || null).toJs();
   continuar.destroy();
 
   const saidas = [];
@@ -272,6 +273,7 @@ self.onmessage = async (evento) => {
   try {
     if (fase === "limparCache") { await limpaCache(); return; }
     if (fase === "continuar") await faseContinuar(ajustes);
+    else if (fase === "mes") await faseContinuar(null, evento.data.ref);
     else await fasePreparar(arquivos);
   } catch (erro) {
     avisa("erro", mensagemAmigavel(erro));
