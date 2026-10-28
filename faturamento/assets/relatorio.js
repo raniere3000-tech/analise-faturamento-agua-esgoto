@@ -1397,14 +1397,18 @@ function prevLer(txt) {                       // "1.234,56", "R$ (1.234)", "1234
 }
 const prevAttr = (el, a) => { const v = el.getAttribute(a); return v === null || v === '' ? null : parseFloat(v); };
 const prevChave = (tab, k) => `${tab.dataset.mes}|${tab.dataset.prev}|${k}`;
+// Meta 🎯: digitada em "Realizado + Forecast". Fica guardada a meta (não o forecast): a cada leitura nova o forecast vira
+// meta − realizado do dia, e o fechamento continua no valor do plano de ação. Mesma chave da linha + "|meta".
+const prevChaveMeta = (tab, k) => prevChave(tab, k) + '|meta';
+const prevEditavel = (tab) => !!tab.closest('#view-forecast, #view-indiretas');     // não nos clones (Executivo, prints)
 
 function prevRecalcular(tab) {
     const linha = k => tab.querySelector(`tr[data-k="${k}"]`);
     const FC = {}, C = {};                       // FC: forecast (editável) · C: realizado + forecast
     PREV_BASICAS.forEach(k => {
         const tr = linha(k); if (!tr) return;
-        const ed = prevEdicoes[prevChave(tab, k)], real = prevAttr(tr, 'data-real');
-        FC[k] = ed !== undefined ? ed : prevAttr(tr, 'data-auto');
+        const ed = prevEdicoes[prevChave(tab, k)], meta = prevEdicoes[prevChaveMeta(tab, k)], real = prevAttr(tr, 'data-real');
+        FC[k] = meta !== undefined ? meta - (real || 0) : ed !== undefined ? ed : prevAttr(tr, 'data-auto');
         C[k] = (real == null && FC[k] == null) ? null : (real || 0) + (FC[k] || 0);
     });
     const soma = (o, ks) => ks.some(k => o[k] != null) ? ks.reduce((a, k) => a + (o[k] || 0), 0) : null;
@@ -1421,8 +1425,25 @@ function prevRecalcular(tab) {
         const k = tr.dataset.k, formato = tr.dataset.fmt, v = C[k] === undefined ? null : C[k];
         const cel = tr.querySelector('.p-prev');
         if (cel && document.activeElement !== cel) cel.textContent = prevFmt(FC[k] === undefined ? null : FC[k], formato);
-        if (cel) cel.classList.toggle('editado', prevEdicoes[prevChave(tab, k)] !== undefined);
-        const fech = tr.querySelector('.p-fech'); if (fech) fech.textContent = prevFmt(v, formato);
+        const temMeta = prevEdicoes[prevChaveMeta(tab, k)] !== undefined, mexida = temMeta || prevEdicoes[prevChave(tab, k)] !== undefined;
+        if (cel) cel.classList.toggle('editado', mexida);
+        const fech = tr.querySelector('.p-fech');
+        if (fech && document.activeElement !== fech) fech.textContent = prevFmt(v, formato);
+        if (fech && cel && cel.classList.contains('prev-edit') && prevEditavel(tab)) {
+            if (!fech.classList.contains('prev-meta-edit')) {
+                fech.classList.add('prev-meta-edit'); fech.dataset.k = k;
+                fech.setAttribute('contenteditable', 'true'); fech.setAttribute('spellcheck', 'false');
+            }
+            fech.classList.toggle('com-meta', temMeta);
+            fech.title = temMeta ? `Meta 🎯 ${prevFmt(prevEdicoes[prevChaveMeta(tab, k)], formato)}: o forecast acompanha o realizado para fechar nela. Apague o valor para soltar a meta.`
+                                 : 'Digite o valor que quer fechar (meta 🎯): o forecast é calculado sozinho (meta − realizado)';
+            const rot = tr.querySelector('.dre-rotulo');
+            let b = rot && rot.querySelector('.btn-prev-linha');
+            if (mexida && rot && !b) {
+                b = document.createElement('button'); b.type = 'button'; b.className = 'btn-prev-linha'; b.textContent = '↺';
+                b.title = 'Restaurar o forecast automático só desta linha'; b.setAttribute('aria-label', b.title); rot.appendChild(b);
+            } else if (!mexida && b) b.remove();
+        }
         const neg = (x) => x !== null && x < -0.0005 && tr.dataset.canc !== '1';
         tr.querySelectorAll('.p-dorc').forEach(el => {
             const base = prevAttr(el, 'data-orc'), pct = (v != null && base) ? v / base - 1 : null;
@@ -1442,22 +1463,37 @@ function prevRecalcularTodas() {
     document.dispatchEvent(new Event('forecast-recalculado'));       // o One page refaz a tendência com o forecast novo
 }
 
+// valores da linha agora: forecast (com meta, meta − realizado) e fechamento (realizado + forecast)
+function prevLinhaAgora(tab, tr, k) {
+    const ed = prevEdicoes[prevChave(tab, k)], meta = prevEdicoes[prevChaveMeta(tab, k)], real = prevAttr(tr, 'data-real');
+    const fc = meta !== undefined ? meta - (real || 0) : ed !== undefined ? ed : prevAttr(tr, 'data-auto');
+    return { real, fc, meta, fech: meta !== undefined ? meta : (real == null && fc == null) ? null : (real || 0) + (fc || 0) };
+}
 document.addEventListener('focusin', e => {
-    const cel = e.target.closest && e.target.closest('.prev-edit'); if (!cel) return;
-    const tab = cel.closest('table'), k = cel.dataset.k, tr = cel.closest('tr');
-    const ed = prevEdicoes[prevChave(tab, k)], atual = ed !== undefined ? ed : prevAttr(tr, 'data-auto');
+    const cel = e.target.closest && e.target.closest('.prev-edit, .prev-meta-edit'); if (!cel) return;
+    const tab = cel.closest('table'), k = cel.dataset.k, tr = cel.closest('tr'), agora = prevLinhaAgora(tab, tr, k);
+    const atual = cel.classList.contains('prev-meta-edit') ? agora.fech : agora.fc;
     cel.textContent = atual == null ? '' : String(Math.round(atual * 100) / 100).replace('.', ',');
+    cel.dataset.inicial = cel.textContent;
     const r = document.createRange(); r.selectNodeContents(cel); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
 });
 document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && e.target.closest && e.target.closest('.prev-edit')) { e.preventDefault(); e.target.blur(); }
-    if (e.key === 'Escape' && e.target.closest && e.target.closest('.prev-edit')) { e.target.dataset.cancelar = '1'; e.target.blur(); }
+    if (e.key === 'Enter' && e.target.closest && e.target.closest('.prev-edit, .prev-meta-edit')) { e.preventDefault(); e.target.blur(); }
+    if (e.key === 'Escape' && e.target.closest && e.target.closest('.prev-edit, .prev-meta-edit')) { e.target.dataset.cancelar = '1'; e.target.blur(); }
 });
 document.addEventListener('focusout', e => {
-    const cel = e.target.closest && e.target.closest('.prev-edit'); if (!cel) return;
-    const tab = cel.closest('table'), k = cel.dataset.k, tr = cel.closest('tr'), chave = prevChave(tab, k);
-    if (cel.dataset.cancelar) { delete cel.dataset.cancelar; }
+    const cel = e.target.closest && e.target.closest('.prev-edit, .prev-meta-edit'); if (!cel) return;
+    const tab = cel.closest('table'), k = cel.dataset.k, tr = cel.closest('tr'), chave = prevChave(tab, k), chaveMeta = prevChaveMeta(tab, k);
+    const inicial = cel.dataset.inicial; delete cel.dataset.inicial;
+    if (cel.dataset.cancelar || cel.textContent.trim() === (inicial || '').trim()) { delete cel.dataset.cancelar; }   // só passou pela célula
+    else if (cel.classList.contains('prev-meta-edit')) {         // meta 🎯: guarda a meta; vazio solta a meta
+        const txt = cel.textContent.trim(), v = txt === '' ? null : prevLer(txt);
+        if (v === null) delete prevEdicoes[chaveMeta];
+        else { prevEdicoes[chaveMeta] = v; delete prevEdicoes[chave]; }
+        prevSalvar();
+    }
     else {
+        delete prevEdicoes[chaveMeta];                           // forecast digitado à mão: a meta da linha sai
         const txt = cel.textContent.trim(), v = txt === '' ? null : prevLer(txt), auto = prevAttr(tr, 'data-auto');
         if (v === null) delete prevEdicoes[chave];
         else if (auto !== null && Math.abs(v - auto) < 0.005) delete prevEdicoes[chave];
@@ -1467,6 +1503,13 @@ document.addEventListener('focusout', e => {
     prevRecalcularTodas();                       // a mesma linha aparece no Forecast e nas Indiretas
 });
 
+// ↺ de cada linha: volta só aquela linha ao forecast automático (tira o valor digitado e a meta)
+document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('.btn-prev-linha'); if (!b) return;
+    const tab = b.closest('table'), k = b.closest('tr').dataset.k;
+    delete prevEdicoes[prevChave(tab, k)]; delete prevEdicoes[prevChaveMeta(tab, k)];
+    prevSalvar(); prevRecalcularTodas();
+});
 function previsaoRestaurar(botao) {
     const tab = botao.closest('.prev-card').querySelector('table.tabela-previsao');
     Object.keys(prevEdicoes).filter(c => c.startsWith(`${tab.dataset.mes}|${tab.dataset.prev}|`)).forEach(c => delete prevEdicoes[c]);
@@ -1533,7 +1576,8 @@ function gerarExecutivo(libs, modo) {
         c.querySelectorAll('[contenteditable]').forEach(x => x.removeAttribute('contenteditable'));
         c.querySelectorAll('.jg-col').forEach((col) => { const t = col.querySelector('.jg-txt'); if (t && !t.textContent.trim()) col.remove(); });
         c.querySelectorAll('.jg').forEach((b) => { const n = b.querySelectorAll('.jg-col').length; if (!n) b.remove(); else if (n === 1) b.querySelector('.jg-cols').classList.add('um'); });
-        c.querySelectorAll('.btn-remover-item').forEach(x => x.remove());
+        c.querySelectorAll('.btn-remover-item, .btn-prev-linha').forEach(x => x.remove());
+        c.querySelectorAll('.prev-meta-edit').forEach(x => x.classList.remove('prev-meta-edit', 'com-meta'));
         if (el.id === 'plano-card') c.classList.add('exec-plano');      // no A4 é fotografado à parte, numa largura própria
         c.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
         c.removeAttribute('id');
@@ -2089,7 +2133,7 @@ function criaSync(secao, nome, obter, definir, redesenhar, ocupado) {
 var syncForecast = criaSync('forecast', 'Forecast', () => prevEdicoes,
     (m) => { prevEdicoes = m; try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta, ocultaInd: prevOcultaInd })); } catch (e) {} },
     () => prevRecalcularTodas(),
-    () => document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('p-prev'));
+    () => document.activeElement && document.activeElement.classList && (document.activeElement.classList.contains('p-prev') || document.activeElement.classList.contains('p-fech')));
 var syncSituacao = criaSync('situacao', 'Situação do grupo',
     () => { const plano = {}; Object.entries(sitManuais).forEach(([ref, gs]) => Object.entries(gs).forEach(([g, v]) => { plano[ref + '|' + g] = v; })); return plano; },
     (plano) => { sitManuais = {}; Object.entries(plano).forEach(([k, v]) => { const i = k.lastIndexOf('|'); (sitManuais[k.slice(0, i)] = sitManuais[k.slice(0, i)] || {})[k.slice(i + 1)] = v; });
@@ -3486,6 +3530,8 @@ async function printItens(tipo) {
         if (!el) return null;
         const c = el.cloneNode(true);
         c.querySelectorAll('[contenteditable]').forEach((x) => x.removeAttribute('contenteditable'));
+        c.querySelectorAll('.btn-prev-linha').forEach((x) => x.remove());
+        c.querySelectorAll('.prev-meta-edit').forEach((x) => x.classList.remove('prev-meta-edit', 'com-meta'));
         c.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id')); c.removeAttribute('id');
         c.querySelectorAll('[title]').forEach((x) => x.removeAttribute('title'));
         if (cls) c.classList.add(...cls.split(' '));
