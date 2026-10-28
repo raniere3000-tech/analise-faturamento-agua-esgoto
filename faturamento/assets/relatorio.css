@@ -726,3 +726,13 @@ table.op-mini .num { text-align:right; }
 #garTabelaAnalise .gar-os-num { width:84px; }
 #garTabelaAnalise .gar-sit { font-size:10px; }
 #garTabelaAnalise .gar-hist { margin-left:0; }
+/* meta 🎯 em "Realizado + Forecast" (o forecast é calculado: meta − realizado) e ↺ de cada linha */
+.tabela-previsao tbody tr td.prev-meta-edit { cursor:text; }
+.tabela-previsao tbody tr td.prev-meta-edit:hover { outline:1px dashed #9DB7D5; outline-offset:-2px; }
+.tabela-previsao tbody tr td.prev-meta-edit:focus { background:#FFFFFF; outline:2px solid var(--azul-claro); }
+.tabela-previsao tbody tr td.prev-meta-edit.com-meta { background:#E3F0FF; font-weight:700; }
+.tabela-previsao tbody tr td.prev-meta-edit.com-meta::before { content:'🎯 '; font-size:11px; }
+.tabela-previsao tbody tr td.prev-meta-edit.com-meta:focus::before { content:''; }
+.btn-prev-linha { margin-left:6px; border:1px solid #C9D3E0; background:#fff; color:#1F4E79; border-radius:4px; cursor:pointer; font-size:11px; line-height:1; padding:1px 5px; vertical-align:middle; }
+.btn-prev-linha:hover { background:#EEF4FB; }
+@media print { .btn-prev-linha { display:none !important; } }

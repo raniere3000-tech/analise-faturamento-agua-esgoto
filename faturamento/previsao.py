@@ -316,7 +316,8 @@ def previsao_html(ctx, sup):
     faixa = "; ".join(f"{nome}: {_fmt((atual.get(k) or 0) + fx[k][0], 'moeda')} a {_fmt((atual.get(k) or 0) + fx[k][1], 'moeda')}"
                       for k, nome in (("dA", "Diretas Água"), ("dE", "Diretas Esgoto"))) if dados["faltam"] else ""
     nota = ("<b>Fechamento = Realizado + Forecast.</b> Clique em um valor da coluna Forecast ✎ para editar; fechamento, totais e "
-            "comparações com os orçados são refeitos na hora. "
+            "comparações com os orçados são refeitos na hora. Para chegar a um valor, digite-o em <b>Realizado + Forecast</b> "
+            "(meta 🎯): o forecast passa a ser meta − realizado e acompanha as leituras novas. ↺ ao lado da rubrica restaura só a linha. "
             + (f"Fechamento provável (~80%) — {faixa}. " if faixa else "")
             + "Como cada linha é calculada (com os números do mês): aba <b>Dados</b> › <b>4. Forecast</b>.")
     return (f'<div class="card prev-card"><h2 class="prev-titulo">Forecast de fechamento — {nome} — {nome_mes(ctx.ref_atual)}'

@@ -164,6 +164,10 @@ body.relatorio-aberto { overflow: hidden; }
 .tabela-top20 .seta { font-size: .7rem; opacity: .9; }
 .tabela-top20 td { padding: 3px 10px; border-top: 1px solid var(--line); vertical-align: middle; }
 .tabela-top20 tr:nth-child(even) td { background: #F7F8FA; }
+.tabela-top20 td.rest { padding: 2px 4px; text-align: center; }
+.btn-rest-linha { border: 1px solid var(--line); background: #fff; color: var(--azul); border-radius: 4px; cursor: pointer; font-size: .85rem; line-height: 1; padding: 3px 6px; }
+.btn-rest-linha:hover:not(:disabled) { background: #EEF4FB; }
+.btn-rest-linha:disabled { opacity: .25; cursor: default; }
 .tabela-top20 td.cli { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tabela-top20 input {
   width: 110px; padding: 3px 8px; font: inherit; font-size: .82rem; text-align: right; font-variant-numeric: tabular-nums;
@@ -417,7 +421,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v133</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v135</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -530,6 +534,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
           <th class="num ordenavel" data-ordem="consumo" tabindex="0" title="Ordenar">Consumo Faturado (m³) <span class="seta"></span></th>
           <th class="num" id="thValorAnt" title="Valor total no mês anterior">Valor mês ant.</th>
           <th class="num ordenavel" data-ordem="valor" tabindex="0" title="Ordenar">Valor total (R$) <span class="seta"></span></th>
+          <th class="th-rest" title="Restaurar os valores originais só da linha"></th>
         </tr></thead>
         <tbody id="corpoTop20"></tbody>
       </table>
@@ -581,7 +586,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v134-20261028"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v135-20261028"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1248,6 +1253,11 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         td.append(inp, orig);
         tr.appendChild(td);
       });
+      const tdRest = document.createElement("td"); tdRest.className = "rest";
+      const btnRest = document.createElement("button");
+      btnRest.type = "button"; btnRest.className = "btn-rest-linha"; btnRest.dataset.indice = i; btnRest.textContent = "↺"; btnRest.disabled = true;
+      btnRest.title = `Restaurar os valores originais da ligação ${l.ligacao}`; btnRest.setAttribute("aria-label", btnRest.title);
+      tdRest.appendChild(btnRest); tr.appendChild(tdRest);
       tr.dataset.indice = i;
       corpo.appendChild(tr);
     });
@@ -1376,6 +1386,10 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         aj[campo] = n;
         mapa.set(l.ligacao, aj);
       }
+    });
+    document.querySelectorAll("#corpoTop20 .btn-rest-linha").forEach((b) => {
+      const tr = b.closest("tr");
+      b.disabled = !tr.querySelector("input.alterado, input.invalido") && !(tr.querySelector(".chk-min") || {}).checked;
     });
     return { ajustes: Array.from(mapa.values()), invalido };
   }
@@ -1509,6 +1523,15 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     continuaAnalise(ajustes, r.ok ? "Ajustes salvos na pasta do SharePoint." : `Ajustes salvos só neste navegador (${r.motivo}).`);
   });
   $("btnPular").addEventListener("click", () => continuaAnalise([]));
+  // ↺ de cada linha: volta só aquela ligação aos valores originais (consumo, valor e a caixa do mínimo)
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest && e.target.closest("#corpoTop20 .btn-rest-linha");
+    if (!btn) return;
+    const tr = btn.closest("tr"), l = linhasTop20[+btn.dataset.indice];
+    tr.querySelectorAll("input[data-campo]").forEach((inp) => { inp.value = fmtNum(l[inp.dataset.campo], +inp.dataset.dec); inp.title = "original: " + fmtNum(l[inp.dataset.campo], +inp.dataset.dec); });
+    const chk = tr.querySelector(".chk-min"); if (chk) chk.checked = false;
+    atualizaContador();
+  });
   $("btnRestaurar").addEventListener("click", () => {
     document.querySelectorAll("#corpoTop20 input[data-campo]").forEach((inp) => {
       const l = linhasTop20[+inp.dataset.indice];

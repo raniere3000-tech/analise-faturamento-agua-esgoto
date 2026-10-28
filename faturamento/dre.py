@@ -549,7 +549,8 @@ def gera_aba_indiretas_html(ctx):
                      'onclick="previsaoRestaurar(this)">↺ Restaurar automático</button>'
                      '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar(this)">Ocultar forecast</button>'
                      '</span>') if no_mes else ""
-            fc = (" <b>Clique em um valor da coluna Forecast ✎ para editar.</b>" if no_mes
+            fc = ((" <b>Clique em um valor da coluna Forecast ✎ para editar</b>, ou digite em Realizado + Forecast o valor que quer "
+                   "fechar (meta 🎯): o forecast é calculado sozinho. ↺ ao lado da rubrica restaura só a linha.") if no_mes
                   else " Mês fechado: o fechamento é o próprio realizado (sem forecast).")
             meses_tk = ", ".join(nome_mes(m) for m in ev["meses_ticket"])
             arq_ev = sorted(set(ctx.orcado_eventos.loc[ctx.orcado_eventos["Referencia"] == ref, "Arquivo"])) \
