@@ -9,6 +9,7 @@ Orçado: planilhas "RF" e "RF SUP" (colunas Sup, Rubrica e um mês por coluna).
 A SUP vem da cidade (Nome da Localidade) -> relação em `regras.json`.
 """
 import html
+import re
 import json
 
 import numpy as np
@@ -303,12 +304,42 @@ def _sup_orcado(valor):
     return ALIAS_SUP.get(k, k)
 
 
+def _ordem_rf(nome):
+    """RF01T26 -> (2026, 1): o RF mais recente é o de maior (ano, número); nomes fora do padrão ficam por último."""
+    m = re.search(r"RF\s*0*(\d+)\s*T\s*(\d{2,4})", str(nome).upper())
+    if not m:
+        return (0, 0, str(nome))
+    ano = int(m.group(2))
+    return (ano + 2000 if ano < 100 else ano, int(m.group(1)), str(nome))
+
+
+def fonte_substituta(ctx, fonte, ref=None):
+    """Orçado SUP sem nenhum valor no mês: devolve o RF mais recente que tem o mês (a comparação usa ele). Senão None."""
+    ref = ref or ctx.ref_atual
+    info = ctx.orcado.get(fonte)
+    if not info or info["tipo"] != "sup" or (info["dados"]["Referencia"] == ref).any():
+        return None
+    com_mes = [n for n in fontes_rf(ctx) if (ctx.orcado[n]["dados"]["Referencia"] == ref).any()]
+    return max(com_mes, key=_ordem_rf) if com_mes else None
+
+
+def rotulo_fonte(ctx, fonte, ref=None):
+    """Nome da coluna de orçado (HTML): o SUP sem o mês avisa qual RF está no lugar."""
+    sub = fonte_substituta(ctx, fonte, ref)
+    return html.escape(fonte) + (f' <small class="orc-sub" title="Sem orçado SUP neste mês: comparação com o {html.escape(sub)}">'
+                                 f'(= {html.escape(sub)})</small>' if sub else "")
+
+
 def orcado(ctx, fonte, sup, ref=None):
-    """Valores da planilha de orçado `fonte` (ex.: "RF01T26") no mês, por linha. {} se não houver dados."""
+    """Valores da planilha de orçado `fonte` (ex.: "RF01T26") no mês, por linha. {} se não houver dados.
+    O orçado SUP sem o mês usa o RF mais recente que tem o mês (fonte_substituta)."""
     ref = ref or ctx.ref_atual
     info = ctx.orcado.get(fonte)
     if not info:
         return {}
+    sub = fonte_substituta(ctx, fonte, ref)
+    if sub:
+        return orcado(ctx, sub, sup, ref)
     d = info["dados"]
     d = d[d["Referencia"] == ref]
     if sup != TODAS:                       # TODAS soma todas as superintendências da planilha
@@ -401,10 +432,10 @@ def _linha_dre(rotulo, formato, negrito, orc, real, eh_canc, fontes, combos, cla
     return f'<tr class="{"dre-forte" if negrito else classe}">' + "".join(cels) + "</tr>"
 
 
-def _cabecalho(ctx, primeira, fontes, combos):
+def _cabecalho(ctx, primeira, fontes, combos, ref=None):
     e = lambda v: html.escape(v, quote=True)
     ths = [f"<th>{primeira}</th>"]
-    ths += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{html.escape(f)}</th>' for f in fontes]
+    ths += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{rotulo_fonte(ctx, f, ref)}</th>' for f in fontes]
     ths.append('<th class="col-real" data-real="1">Realizado</th>')
     for f in fontes:
         ths.append(f'<th data-src="{e(f)}" data-tipo="dreal">Δ %<br>vs {html.escape(f)}</th>'
@@ -431,7 +462,7 @@ def tabela_dre(ctx, sup, ref):
         else:
             linhas.append(_linha_dre(rotulo, formato, negrito, {f: orc[f].get(chave) for f in fontes}, real.get(chave),
                                      chave == "canc", fontes, combos))
-    return ('<div class="tabela-wrap"><table class="tabela-dre">' + _cabecalho(ctx, "Projeto/Linha", fontes, combos)
+    return ('<div class="tabela-wrap"><table class="tabela-dre">' + _cabecalho(ctx, "Projeto/Linha", fontes, combos, ref)
             + "<tbody>" + "".join(linhas) + "</tbody></table></div>")
 
 

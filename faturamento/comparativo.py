@@ -124,6 +124,44 @@ def limita_ao_ultimo_grupo(ctx):
           f"({removidas} linhas de grupos posteriores desconsideradas)")
 
 
+def _chave_ref(r):
+    """"09/2026" -> (2026, 9); vazio/inválido -> None."""
+    try:
+        t = str(r)
+        return int(t[3:7]), int(t[:2])
+    except (TypeError, ValueError):
+        return None
+
+
+def limita_ao_mes(ctx, ref):
+    """Filtro de mês do painel: a análise inteira passa a ser de `ref` (MM/AAAA), como se fosse rodada naquele mês.
+    Saem as linhas dos meses posteriores (fatura, avulso, cancelamento...) — o comparativo fica `ref` × mês anterior —
+    e a data de corte vai para o último dia do mês, que já fechou (forecast zerado: o fechamento é o realizado).
+    Orçados não são cortados (são consultados por mês)."""
+    import calendar
+    import datetime as dt
+    limite = _chave_ref(ref)
+    if limite is None:
+        return
+    for nome, df in list(ctx.__dict__.items()):
+        if not isinstance(df, pd.DataFrame) or nome.startswith("orcado"):
+            continue
+        for col in ("Referencia de Leitura", "Referencia"):          # o avulso tem as duas
+            if col not in df.columns:
+                continue
+            refs = df[col].dropna().unique()
+            fora = [r for r in refs if (_chave_ref(r) or (0, 0)) > limite]
+            if fora:
+                df = df[~df[col].isin(fora)]
+        setattr(ctx, nome, df)
+    ano, mes = limite
+    fim = dt.date(ano, mes, calendar.monthrange(ano, mes)[1])
+    corte = getattr(ctx, "data_corte", None)
+    if corte is None or corte > fim:
+        ctx.data_corte = fim
+    ctx.mes_filtrado = ref
+
+
 def define_referencias(ctx):
     """Define o mês atual (maior referência da base) e o anterior, e separa a base nos dois meses."""
     ctx.ref_atual = ref_mais_recente(ctx.base_final["Referencia de Leitura"].dropna().unique())

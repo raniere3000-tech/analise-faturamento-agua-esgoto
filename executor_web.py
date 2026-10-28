@@ -28,10 +28,11 @@ def preparar(pasta, progresso):
     return json.dumps(sessao.preparar(), ensure_ascii=False)
 
 
-def continuar(ajustes_json):
-    """Fase 2. Devolve (referência atual, referência anterior)."""
+def continuar(ajustes_json, ref=None):
+    """Fase 2. Devolve (referência atual, referência anterior). `ref`: mês escolhido no filtro do painel (refaz a
+    análise daquele mês com a base já lida)."""
     ajustes = json.loads(ajustes_json or "[]")
-    return _estado["sessao"].continuar(ajustes)
+    return _estado["sessao"].continuar(ajustes, ref=ref or None)
 
 
 def acompanhamento(sup, fotos_json, caminho):

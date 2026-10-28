@@ -48,11 +48,22 @@ class Sessao:
         return resultado
 
     # ---- fase 2 ----
-    def continuar(self, ajustes=None, texto_justificativa=None):
+    def continuar(self, ajustes=None, texto_justificativa=None, ref=None):
+        """`ref` (MM/AAAA): gera a análise daquele mês (filtro de mês do painel). Pode ser chamada de novo na mesma
+        sessão: cada chamada parte do estado de depois dos ajustes da etapa 2 (os arquivos não são relidos)."""
+        import copy
         ctx = self.ctx
         progresso = ctx.progresso
-        if ajustes:
-            aplica_ajustes_top20(ctx, ajustes)
+        if getattr(self, "_inicial", None) is None:
+            if ajustes:
+                aplica_ajustes_top20(ctx, ajustes)
+            self._inicial = {k: copy.copy(v) if isinstance(v, (dict, list, set)) else v for k, v in ctx.__dict__.items()}
+        else:                                          # nova chamada: volta ao estado inicial (sem o que a anterior calculou)
+            ctx.__dict__.clear()
+            ctx.__dict__.update({k: copy.copy(v) if isinstance(v, (dict, list, set)) else v for k, v in self._inicial.items()})
+        if ref:
+            from .comparativo import limita_ao_mes
+            limita_ao_mes(ctx, ref)
 
         print("Colunas relacionadas à situação de leitura/lançamento:",
               [c for c in ctx.base_final.columns if "situa" in c.lower() or "lanc" in c.lower() or "lanç" in c.lower()])

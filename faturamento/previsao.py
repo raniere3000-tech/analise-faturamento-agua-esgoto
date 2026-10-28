@@ -18,7 +18,7 @@ import html
 import pandas as pd
 
 from .config import REGRAS
-from .dre import LINHAS, TODAS, _fmt, _fontes, _nome_sup, _orcados_do_mes, realizado
+from .dre import LINHAS, TODAS, _fmt, _fontes, _nome_sup, _orcados_do_mes, realizado, rotulo_fonte
 from .formatacao import fmt_num, nome_mes
 from .projecao_grupos import backtest, projeta
 
@@ -270,7 +270,7 @@ def tabela_previsao_html(ctx, sup, ref, linhas_def, atual, falta, editavel=True,
     cab = [f"<th>{primeira}</th>"] + [f"<th>{t}</th>" for t, _ in colunas_extra]
     cab += ["<th>Realizado</th>", '<th class="prev-col-prev p-col-forecast">Forecast' + (" ✎" if editavel else "") + "</th>",
             "<th>Realizado<br>+ Forecast</th>"]
-    cab += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{html.escape(f)}</th>' for f in fontes]
+    cab += [f'<th data-src="{e(f)}" data-tipo="orc">Orçado<br>{rotulo_fonte(ctx, f, ref)}</th>' for f in fontes]
     cab += [f'<th data-src="{e(f)}" data-tipo="dreal">Δ %<br>vs {html.escape(f)}</th>' for f in fontes]
     linhas = []
     # linhas ocultas: entram no recálculo do navegador (ex.: aberturas RI para o Total indiretas) mas não aparecem
@@ -407,6 +407,8 @@ def eventos_indiretas(ctx, sup, ref):
 def mes_com_forecast(ctx, ref):
     """Mês em andamento: o mês da fatura (ref_atual) e, se o serviço avulso já tiver um mês mais novo, esse também."""
     from .dre import lista_meses
+    if getattr(ctx, "mes_filtrado", None):          # mês passado escolhido no filtro: já fechou, sem forecast
+        return False
     meses = lista_meses(ctx)
     return ref == ctx.ref_atual or (bool(meses) and ref == meses[-1])
 
