@@ -741,3 +741,5 @@ table.op-mini .num { text-align:right; }
 .op-top-lin .op-top-pct.pos { color:var(--op-pos); }
 .op-top-lin .op-top-pct.neg { color:var(--op-neg); }
 .op-top-lin .op-top-novo { color:#64748B; font-weight:600; }
+/* Plano de ação: célula mesclada na planilha (rowspan/colspan) centralizada na vertical, como no Excel */
+table.tabela-plano td.pl-mescla { vertical-align:middle; }
