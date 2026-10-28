@@ -707,3 +707,22 @@ table.op-mini .num { text-align:right; }
 .gar-os-hist { margin-top:12px; }
 .gar-os-hist > summary { cursor:pointer; font-weight:600; color:var(--marinho); font-size:13px; }
 .gar-os-hist[open] > summary { margin-bottom:8px; }
+
+/* Controle de O.S.: situação (Realizada / EXOC / Retramitada) e Obs.: */
+.gar-os-sit { max-width:210px; }
+.gar-os-obs-td { min-width:180px; }
+.gar-os-obs { width:100%; min-width:160px; }
+.gar-os-retram { display:block; color:#9a3412; font-size:10.5px; }
+/* Análise de Garantia: tabela inteira na tela, sem rolagem lateral (títulos e textos quebram linha, campos mais estreitos) */
+#garTabelaAnalise { font-size:11px; }
+#garTabelaAnalise th, #garTabelaAnalise th[data-ord-an] { white-space:normal; padding:5px 4px; font-size:10.5px; line-height:1.2; vertical-align:bottom; }
+#garTabelaAnalise td { padding:3px 4px; }
+#garTabelaAnalise td:first-child, #garTabelaAnalise td:nth-child(3), #garTabelaAnalise td:nth-child(4) { white-space:normal; }
+#garTabelaAnalise td.gar-cli { white-space:normal; max-width:170px; min-width:110px; line-height:1.25; }
+#garTabelaAnalise .gar-in { font-size:11px; padding:2px 3px; }
+#garTabelaAnalise .gar-media { width:54px; }
+#garTabelaAnalise .gar-texto { width:100%; min-width:110px; }
+#garTabelaAnalise select.gar-in { max-width:118px; }
+#garTabelaAnalise .gar-os-num { width:84px; }
+#garTabelaAnalise .gar-sit { font-size:10px; }
+#garTabelaAnalise .gar-hist { margin-left:0; }
