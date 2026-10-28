@@ -19,6 +19,7 @@ def gera_aba_plano_html(ctx):
     <button type="button" class="btn-just" id="planoLimpar" style="color:#C2560C;" title="Apagar o plano de ação deste mês">Limpar</button>
   </div>
   <p class="nota-secao">Na planilha, selecione as linhas do plano <b>com o cabeçalho</b>, copie (Ctrl+C) e cole no campo abaixo (Ctrl+V).
+  Células <b>mescladas</b> no Excel são reconhecidas (ficam mescladas aqui também).
   O plano colado substitui o do mês, fica salvo na pasta para todos e entra no <b>PDF executivo</b>. Colunas de
   <b>Status</b> ganham cor; <b>Prazo</b> vencido fica em destaque; colunas <b>SUP</b> e <b>Grupo</b> seguem os filtros do cabeçalho.</p>
   <textarea id="planoColar" class="plano-colar" rows="2" placeholder="Clique aqui e cole (Ctrl+V) as linhas copiadas da planilha, com o cabeçalho"></textarea>

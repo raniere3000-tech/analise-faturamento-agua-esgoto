@@ -2960,14 +2960,20 @@ function planoDesenhar() {
         return true;
     });
     tab.tHead.innerHTML = '<tr>' + cols.map((c) => `<th>${garEsc(c)}</th>`).join('') + '</tr>';
-    tab.tBodies[0].innerHTML = linhas.map((l) => {
+    planoVisiveis = linhas;
+    const span = planoSpans(plano, linhas);              // células mescladas na planilha (só entre as linhas que aparecem)
+    tab.tBodies[0].innerHTML = linhas.map((l, r) => {
         const st = iStatus >= 0 ? planoClasseStatus(l[iStatus]) : '';
         const prazo = iPrazo >= 0 ? planoDataDe(l[iPrazo]) : null, vencido = prazo && prazo < hoje && st !== 'pl-ok' && st !== 'pl-cancel';
         return '<tr>' + cols.map((c, i) => {
+            const sp = span[r][i];
+            if (sp === 0) return '';                     // coberta por uma célula mesclada
+            const at = (sp && sp.rs > 1 ? ` rowspan="${sp.rs}"` : '') + (sp && sp.cs > 1 ? ` colspan="${sp.cs}"` : '')
+                + (sp && (sp.rs > 1 || sp.cs > 1) ? ' class="pl-mescla"' : '');
             const v = l[i] == null ? '' : String(l[i]);
-            if (i === iStatus && v) return `<td><span class="pl-status ${st}">${garEsc(v)}</span></td>`;
-            if (i === iPrazo && vencido) return `<td class="pl-vencido" title="Prazo vencido">${garEsc(v)}</td>`;
-            return `<td>${garEsc(v).replace(/\n/g, '<br>')}</td>`;
+            if (i === iStatus && v) return `<td${at}><span class="pl-status ${st}">${garEsc(v)}</span></td>`;
+            if (i === iPrazo && vencido) return `<td${at.replace(' class="pl-mescla"', '')} class="pl-vencido${at.includes('pl-mescla') ? ' pl-mescla' : ''}" title="Prazo vencido">${garEsc(v)}</td>`;
+            return `<td${at}>${garEsc(v).replace(/\n/g, '<br>')}</td>`;
         }).join('') + '</tr>';
     }).join('') || `<tr><td colspan="${cols.length}" class="gar-vazio">Nenhuma ação para os filtros escolhidos.</td></tr>`;
     const quando = plano.atualizado ? new Date(plano.atualizado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -2983,25 +2989,76 @@ function planoDesenhar() {
         + (quando ? ` · colado em ${quando}` : '') + (outro ? ` · <b>plano de ${garEsc(ref)}</b> (o mês atual ainda não tem plano colado)` : '');
     card.classList.toggle('tem-dados', linhas.length > 0);
 }
-function planoImportar(texto) {
-    const tab = garLerTSV(texto).map((l) => l.map((c) => String(c == null ? '' : c).trim()));
-    const linhas = tab.filter((l) => l.some((c) => c !== ''));
+// Células mescladas: o Excel copia junto uma versão HTML da seleção, com rowspan/colspan. Dela sai a grade com o valor da
+// célula mesclada repetido em todas as linhas que ela cobre (filtros e PDF continuam certos) e a lista das mesclas
+// [linha, coluna, linhas, colunas], refeita na tela (planoSpans). Sem HTML (outro programa), vale o texto (TSV).
+function planoLerHtml(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html'), t = doc.querySelector('table');
+    if (!t) return null;
+    const grade = [], mesclas = [], texto = (td) => {
+        const c = td.cloneNode(true); c.querySelectorAll('br').forEach((b) => b.replaceWith('\n'));
+        return c.textContent.replace(/\u00a0/g, ' ').split('\n').map((x) => x.replace(/[ \t\r]+/g, ' ').trim()).filter(Boolean).join('\n');
+    };
+    const visivel = (el) => !/display\s*:\s*none/i.test(el.getAttribute('style') || '');
+    Array.from(t.rows).filter(visivel).forEach((tr, r) => {
+        grade[r] = grade[r] || [];
+        let c = 0;
+        Array.from(tr.cells).filter(visivel).forEach((td) => {
+            while (grade[r][c] !== undefined) c++;
+            const rs = Math.max(1, +td.rowSpan || 1), cs = Math.max(1, +td.colSpan || 1), v = texto(td);
+            for (let i = 0; i < rs; i++) for (let j = 0; j < cs; j++) (grade[r + i] = grade[r + i] || [])[c + j] = v;
+            if (rs > 1 || cs > 1) mesclas.push([r, c, rs, cs]);
+            c += cs;
+        });
+    });
+    const n = Math.max(0, ...grade.map((l) => l.length));
+    return { grade: grade.map((l) => Array.from({ length: n }, (_, i) => (l[i] == null ? '' : l[i]))), mesclas };
+}
+// spans para desenhar: {rs, cs} na célula que começa a mescla, 0 nas cobertas, null nas normais — só entre as linhas visíveis
+function planoSpans(plano, linhas) {
+    const pos = new Map(linhas.map((l, r) => [l, r])), sp = linhas.map((l) => l.map(() => null));
+    (plano.mesclas || []).forEach(([r0, c0, rs, cs]) => {
+        const vis = []; for (let r = r0; r < r0 + rs; r++) { const l = plano.linhas[r]; if (l && pos.has(l)) vis.push(pos.get(l)); }
+        if (!vis.length || (vis.length < 2 && cs < 2)) return;
+        vis.forEach((r, k) => { for (let j = 0; j < cs; j++) if (c0 + j < sp[r].length) sp[r][c0 + j] = 0; });
+        sp[vis[0]][c0] = { rs: vis.length, cs: Math.min(cs, sp[vis[0]].length - c0) };
+    });
+    return sp;
+}
+let planoVisiveis = [];
+function planoImportar(texto, html) {
+    const lido = html ? planoLerHtml(html) : null;
+    const tab = (lido ? lido.grade : garLerTSV(texto)).map((l) => l.map((c) => String(c == null ? '' : c).trim()));
+    const idxLinhas = tab.map((l, i) => (l.some((c) => c !== '') ? i : -1)).filter((i) => i >= 0);
+    const linhas = idxLinhas.map((i) => tab[i]);
     if (linhas.length < 2) { avisoNuvem('Cole as linhas da planilha com o cabeçalho (pelo menos o cabeçalho e uma linha).', true); return; }
     let cab = linhas[0];
     const usadas = cab.map((c, i) => c !== '' || linhas.slice(1).some((l) => (l[i] || '') !== ''));   // tira colunas vazias
     const pega = (l) => cab.map((_, i) => l[i] || '').filter((_, i) => usadas[i]);
     const colunas = pega(cab).map((c, i) => c || `Coluna ${i + 1}`), corpo = linhas.slice(1).map(pega);
+    // mesclas no corpo, com linhas e colunas renumeradas (sem o cabeçalho, as linhas vazias e as colunas vazias)
+    const novaLinha = new Map(idxLinhas.slice(1).map((i, k) => [i, k])), novaCol = [];
+    usadas.forEach((u, i) => { novaCol[i] = u ? novaCol.filter((x) => x >= 0).length : -1; });
+    const mesclas = [];
+    (lido ? lido.mesclas : []).forEach(([r, c, rs, cs]) => {
+        const rsN = Array.from({ length: rs }, (_, k) => novaLinha.get(r + k)).filter((x) => x !== undefined);
+        const csN = Array.from({ length: cs }, (_, k) => novaCol[c + k]).filter((x) => x !== undefined && x >= 0);
+        if (rsN.length && csN.length && (rsN.length > 1 || csN.length > 1)) mesclas.push([rsN[0], csN[0], rsN.length, csN.length]);
+    });
     const inf = planoInfo();
     const ja = planoMapa[inf.ref] && (planoMapa[inf.ref].linhas || []).length;
-    if (!confirm(`${ja ? 'Substituir' : 'Salvar'} o plano de ação de ${inf.mes} por ${corpo.length} linha(s) e ${colunas.length} coluna(s)?\n\nColunas: ${colunas.join(' · ')}`)) return;
+    if (!confirm(`${ja ? 'Substituir' : 'Salvar'} o plano de ação de ${inf.mes} por ${corpo.length} linha(s) e ${colunas.length} coluna(s)?`
+        + (mesclas.length ? `\n${mesclas.length} célula(s) mesclada(s) reconhecida(s).` : '') + `\n\nColunas: ${colunas.join(' · ')}`)) return;
     planoMapa[inf.ref] = { colunas, linhas: corpo, atualizado: new Date().toISOString() };
+    if (mesclas.length) planoMapa[inf.ref].mesclas = mesclas;
     planoSalvar(); planoDesenhar();
     const msg = document.getElementById('planoMsg'); if (msg) msg.textContent = `${corpo.length} linha(s) coladas.`;
 }
 document.addEventListener('paste', (e) => {
     if (e.target.id !== 'planoColar') return;
     e.preventDefault();
-    planoImportar((e.clipboardData || window.clipboardData).getData('text'));
+    const cb = e.clipboardData || window.clipboardData;
+    planoImportar(cb.getData('text'), cb.getData && /<table/i.test(cb.getData('text/html') || '') ? cb.getData('text/html') : null);
     e.target.value = '';
 });
 document.addEventListener('click', (e) => {
@@ -3013,9 +3070,8 @@ document.addEventListener('click', (e) => {
     }
     if (e.target.id === 'planoBaixar') {
         const [ref, plano] = planoAtual(); if (!plano) return;
-        const t = document.getElementById('planoTabela');
-        const linhas = Array.from(t.tBodies[0].rows).filter((r) => !r.querySelector('.gar-vazio')).map((r) => Array.from(r.cells).map((c) => c.innerText));
-        baixarPlanilha(plano.colunas, linhas, `Plano_de_acao_${String(ref).replace('/', '-')}.csv`);
+        // as linhas na tela, com o valor da célula mesclada em cada linha que ela cobre
+        baixarPlanilha(plano.colunas, planoVisiveis.map((l) => plano.colunas.map((_, i) => (l[i] == null ? '' : String(l[i])))), `Plano_de_acao_${String(ref).replace('/', '-')}.csv`);
     }
 });
 var syncPlano = criaSync('plano', 'Plano de ação', () => planoMapa,
