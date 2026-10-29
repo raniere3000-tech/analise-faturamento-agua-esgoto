@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 
 from . import cache_arquivos
-from .config import COLUNAS_ECONOMIA_TODAS, COLUNAS_ECONOMIA_TOTAIS
+from .config import COLUNAS_ECONOMIA_TODAS, COLUNAS_ECONOMIA_TOTAIS, REGRAS
 from .leitura import (chave_grupo, classifica_arquivos, compacta_textos, nome_relativo, processa_avulso, processa_consumo, processa_cronograma,
                       processa_fatura_completa, processa_orcado)
 
 
 COLUNAS_DESCARTADAS = ["Leitura Atual", "Total Economias", "Qtd. Tipos de Economia", "Mes Lancamento",
-                       "Ano Lancamento", "Data de Vencimento", "Aba/Mês Cronograma"]
+                       "Ano Lancamento", "Aba/Mês Cronograma"]      # Data de Vencimento fica: Excel de Grandes Clientes
 
 
 def localidade_por_grupo(crono):
@@ -65,6 +65,19 @@ def _padroniza_sup(longo):
     unicos = longo["Sup"].dropna().unique()
     mapa = {v: ALIAS_SUP[chave_texto(v)] for v in unicos if chave_texto(v) in ALIAS_SUP}
     return longo.assign(Sup=longo["Sup"].replace(mapa)) if mapa else longo
+
+
+def _so_sup_do_painel(crono):
+    """Linhas do cronograma da superintendência do painel (regras.json "sup_do_painel"), pela coluna Localidade
+    (cidade ou nome da SUP: "Leste", "Interior"). Linhas sem Localidade reconhecida ficam. Devolve (tabela, removidas)."""
+    from .config import sup_da_localidade
+    sup = str(REGRAS.get("sup_do_painel") or "").strip().upper()
+    if not sup or crono is None or not len(crono) or "Localidade" not in crono.columns:
+        return crono, 0
+    unicas = crono["Localidade"].dropna().unique()
+    da_linha = crono["Localidade"].map({l: sup_da_localidade(l) for l in unicas})
+    fora = da_linha.notna() & (da_linha != sup)
+    return crono[~fora].reset_index(drop=True), int(fora.sum())
 
 
 def _cruza_cronograma(base, crono):
@@ -165,6 +178,8 @@ def monta_base(ctx):
     if lida:
         ctx.bases_info_extra = [{"tipo": "Estrutura tarifária", "arquivo": arq_tarifa, "linhas": len(lida["faixas"]), "periodo": "",
                                  "extra": f"{len(lida['minimos'])} mínimos por economia"}]
+    from .grandes_clientes import carrega_lista
+    carrega_lista(ctx)                             # lista de matrículas GC da pasta (Excel de Grandes Clientes, aba Dados)
     print(f"✅ Fatura: {len(fatura_total)} linhas")
     if len(fatura_total) and "Referencia de Leitura" in fatura_total.columns:
         sem_ref = int(fatura_total["Referencia de Leitura"].isna().sum())
@@ -185,6 +200,7 @@ def monta_base(ctx):
     )
 
     cronogramas = _processa_lista(progresso, ctx.classificacao["cronograma"], processa_cronograma, 40, 45, "Processando cronogramas")
+    cronogramas, fora_sup = zip(*[_so_sup_do_painel(d) for d in cronogramas]) if cronogramas else ([], [])
     cronograma_total = (
         pd.concat(cronogramas, ignore_index=True)
         if cronogramas else pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma"])
@@ -196,14 +212,16 @@ def monta_base(ctx):
     ctx.grupo_localidade = localidade_por_grupo(cronograma_total)
     if ctx.classificacao["cronograma"] and not len(cronograma_total):
         ctx.avisos_base.append("O cronograma foi encontrado, mas nenhuma linha válida foi lida (são necessárias as colunas Grupo, "
-                               "Data da Leitura e Qts. Dias): os dias de leitura ficaram vazios.")
+                               "Data da Leitura)" + (f" da {REGRAS.get('sup_do_painel')}" if sum(fora_sup) else "")
+                               + ": os dias de leitura ficaram vazios.")
     elif not ctx.classificacao["cronograma"]:
-        ctx.avisos_base.append("Nenhum cronograma de leitura reconhecido na pasta (colunas Grupo, Data da Leitura e Qts. Dias): "
+        ctx.avisos_base.append("Nenhum cronograma de leitura reconhecido na pasta (colunas Grupo e Data da Leitura): "
                                "os dias de leitura ficaram vazios.")
     ctx.bases_info += [{"tipo": "Cronograma", "arquivo": nome_relativo(c, ctx.pasta), "linhas": len(d),
                         "periodo": periodo(d["Referencia Cronograma"]) if "Referencia Cronograma" in d else "",
-                        "extra": f"{d['Grupo'].nunique()} grupos" if len(d) else "nenhuma linha válida"}
-                       for c, d in zip(ctx.classificacao["cronograma"], cronogramas)]
+                        "extra": (f"{d['Grupo'].nunique()} grupos" if len(d) else "nenhuma linha válida")
+                                 + (f"; {n} linha(s) de outras superintendências fora (só {REGRAS.get('sup_do_painel')})" if n else "")}
+                       for c, d, n in zip(ctx.classificacao["cronograma"], cronogramas, fora_sup)]
     ctx.bases_info += getattr(ctx, "bases_info_extra", [])
     if ctx.orcado_eventos is not None:
         for arq, d in ctx.orcado_eventos.groupby("Arquivo"):

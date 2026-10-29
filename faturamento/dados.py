@@ -5,6 +5,7 @@ import html
 from .config import chave_texto
 from .formatacao import nome_mes
 from .dre import linha_do_orcado, prepara
+from .grandes_clientes import gera_card_gc_html
 from .validacao import gera_validacao_html
 
 NOME_LINHA_DRE = {
@@ -106,7 +107,7 @@ def gera_aba_dados_html(ctx):
     orcado = ('<p class="nota-secao">Como cada linha da planilha de orçado entra na DRE (ex.: "Fat. Bruto de água - Direto" = DIRETAS ÁGUA). '
               'O orçado das linhas "RI" só existe se a planilha tiver linhas com esses nomes.</p>'
               + (_mapeamento_orcado(ctx) or '<p class="nota-secao">Nenhuma planilha de orçado carregada.</p>'))
-    return ('<div class="card val-card"><h2>Dados e validação dos cálculos</h2>'
+    return (gera_card_gc_html(ctx) + '<div class="card val-card"><h2>Dados e validação dos cálculos</h2>'
             '<p class="nota-secao">Clique em um tópico para abrir. Em 1 a 7, cada tabela e gráfico do relatório, aba por aba: o que mostra, '
             'quais bases e colunas entram, o cálculo passo a passo, como foi montado, uma amostra e botões para baixar a tabela (Excel) '
             'e a base usada (Excel).</p>'

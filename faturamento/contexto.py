@@ -19,7 +19,8 @@ class Contexto:
     avulso: pd.DataFrame = None            # serviços avulsos (receita indireta)
     orcado: dict = field(default_factory=dict)   # {"rf": {arquivo, dados}, "sup": {...}} (None se não houver)
     tarifa: dict = None                    # estrutura tarifária da análise (faixas, minimos, fonte) — tarifa.define_tarifa
-    orcado_eventos: pd.DataFrame = None    # eventos faturados do orçado SUP: Sup, Rubrica, Referencia, Valor (quantidade), Arquivo
+    orcado_eventos: pd.DataFrame = None
+    gc_lista: list = field(default_factory=list)   # matrículas GC da planilha da pasta: [{mat, tipo, arquivo}]    # eventos faturados do orçado SUP: Sup, Rubrica, Referencia, Valor (quantidade), Arquivo
 
     # Meses comparados (preenchidos em `define_referencias`)
     ref_atual: str = ""

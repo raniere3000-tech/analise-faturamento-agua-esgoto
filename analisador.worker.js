@@ -10,7 +10,7 @@ const ARQUIVOS_PY = [
   "faturamento/dre.py", "faturamento/dados.py",
   "faturamento/config.py", "faturamento/contexto.py", "faturamento/formatacao.py", "faturamento/leitura.py",
   "faturamento/origem.py", "faturamento/orcado_ciclo.py", "faturamento/previsao.py", "faturamento/projecao_grupos.py", "faturamento/validacao.py", "faturamento/painel_html.py", "faturamento/pipeline.py", "faturamento/progresso.py",
-  "faturamento/relatorio.py", "faturamento/situacao_grupo.py", "faturamento/tarifa.py", "faturamento/garantia.py", "faturamento/plano_acao.py", "faturamento/one_page.py", "faturamento/acompanhamento.py", "faturamento/situacao_lancamento.py", "faturamento/tabelas_html.py", "faturamento/top20.py",
+  "faturamento/relatorio.py", "faturamento/situacao_grupo.py", "faturamento/tarifa.py", "faturamento/garantia.py", "faturamento/plano_acao.py", "faturamento/one_page.py", "faturamento/acompanhamento.py", "faturamento/grandes_clientes.py", "faturamento/situacao_lancamento.py", "faturamento/tabelas_html.py", "faturamento/top20.py",
   "faturamento/regras.json", "faturamento/assets/relatorio.css", "faturamento/assets/relatorio.js", "faturamento/assets/tarifa.js",
 ];
 const SAIDAS = [
@@ -55,6 +55,9 @@ async function preparaPython() {
     FS.mkdirTree(destino.substring(0, destino.lastIndexOf("/")));
     FS.writeFile(destino, new Uint8Array(await resp.arrayBuffer()));
   }
+  // painel deste site (nome do repositório no endereço): o Python escolhe a SUP do painel em regras.json ("paineis")
+  const painel = new URL(self.location.href).searchParams.get("painel") || "";
+  pyodide.runPython(`import os; os.environ["FATURAMENTO_PAINEL"] = ${JSON.stringify(painel)}`);
   const executor = await (await fetch("executor_web.py", { cache: "no-cache" })).text();
   pyodide.runPython(executor);
   return pyodide;
@@ -95,7 +98,9 @@ async function iniciaPyodide() {
 // Para cada arquivo da pasta guarda o resultado já processado da leitura; na próxima análise, arquivo com o mesmo
 // caminho, tamanho e data de alteração não é lido de novo (o Python recebe o resultado guardado — cache_arquivos.py).
 const CACHE = "/cache";
-const BANCO = "faturamento_cache";
+// prefixo do site (vem do index.html): sites do mesmo endereço não dividem os arquivos já lidos
+const ESCOPO = new URL(self.location.href).searchParams.get("escopo") || "";
+const BANCO = (ESCOPO ? ESCOPO + ":" : "") + "faturamento_cache";
 const LIMITE_MB = 1500;                            // acima disso, apaga o que não é da pasta atual
 
 function abreBanco() {
@@ -146,6 +151,23 @@ function limpaDir(FS, caminho) {
   FS.mkdirTree(caminho);
 }
 
+// Lê o conteúdo de um arquivo da pasta. Em pastas do SharePoint/OneDrive o arquivo pode mudar entre a listagem e a
+// leitura (baixado sob demanda, sincronizado ou aberto no Excel) e o navegador dá "The requested file could not be
+// read": pega o arquivo de novo pela pasta e tenta mais algumas vezes antes de desistir.
+async function leConteudo(arq) {
+  let ultimo;
+  try { return await arq.arquivo.arrayBuffer(); } catch (e) { ultimo = e; }
+  if (arq.handle) {
+    for (let tentativa = 1; tentativa <= 3; tentativa++) {
+      await new Promise((ok) => setTimeout(ok, 1500 * tentativa));
+      try { return await (await arq.handle.getFile()).arrayBuffer(); } catch (e) { ultimo = e; }
+    }
+  }
+  throw new Error(`Não foi possível ler o arquivo "${arq.nome}" (${ultimo && ultimo.name || "erro de leitura"}). ` +
+    "Se a pasta é do SharePoint/OneDrive, clique com o botão direito nela e escolha \"Sempre manter neste dispositivo\", " +
+    "espere a sincronização terminar e feche o arquivo no Excel; depois analise de novo.");
+}
+
 // Fase 1: lê a pasta e devolve o Top 20 para o usuário conferir
 async function fasePreparar(arquivos) {
   const pyodide = await iniciaPyodide();
@@ -175,7 +197,7 @@ async function fasePreparar(arquivos) {
       meta[rel] = { id, tamanho, em_cache: true };
       reaproveitados++;
     } else {
-      const conteudo = arq.conteudo || await arq.arquivo.arrayBuffer();
+      const conteudo = arq.conteudo || await leConteudo(arq);
       FS.writeFile(`${PASTA}/${rel}`, new Uint8Array(conteudo));
       meta[rel] = { id, tamanho, em_cache: false, modificado: arq.modificado || 0 };
     }
@@ -263,11 +285,40 @@ async function faseAcompanhamento(sup, fotos, ref, orcados) {
   avisa("acompanhamento", { info, conteudo: bytes.buffer }, [bytes.buffer]);
 }
 
+// Excel de Grandes Clientes (botão "GC" da aba Dados): usa a análise que já está carregada aqui
+async function faseGC(lista) {
+  const pyodide = await iniciaPyodide();
+  const caminho = "/tmp/grandes_clientes.xlsx";
+  const gc = pyodide.globals.get("grandes_clientes");
+  const info = JSON.parse(gc(JSON.stringify(lista || []), caminho));
+  gc.destroy();
+  const bytes = pyodide.FS.readFile(caminho);
+  avisa("gc", { info, conteudo: bytes.buffer }, [bytes.buffer]);
+}
+
+async function faseGCDados(lista) {
+  const pyodide = await iniciaPyodide();
+  const f = pyodide.globals.get("grandes_clientes_dados");
+  const dados = JSON.parse(f(JSON.stringify(lista || [])));
+  f.destroy();
+  avisa("gcDados", { dados });
+}
+
 self.onmessage = async (evento) => {
   const { fase, arquivos, ajustes } = evento.data;
   if (fase === "acompanhamento") {
     try { await faseAcompanhamento(evento.data.sup, evento.data.fotos, evento.data.ref, evento.data.orcados); }
     catch (erro) { avisa("acompanhamentoErro", { motivo: String((erro && erro.message) || erro).split("\n").slice(-3).join(" ") }); }
+    return;
+  }
+  if (fase === "gcDados") {
+    try { await faseGCDados(evento.data.lista); }
+    catch (erro) { avisa("gcDadosErro", { motivo: String((erro && erro.message) || erro).split("\n").slice(-3).join(" ") }); }
+    return;
+  }
+  if (fase === "gc") {
+    try { await faseGC(evento.data.lista); }
+    catch (erro) { avisa("gcErro", { motivo: String((erro && erro.message) || erro).split("\n").slice(-3).join(" ") }); }
     return;
   }
   try {
