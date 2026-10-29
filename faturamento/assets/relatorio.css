@@ -747,3 +747,12 @@ table.tabela-plano td.pl-mescla { vertical-align:middle; }
 table.tabela-plano th, table.tabela-plano td, table.tabela-plano td.pl-mescla { text-align:center; vertical-align:middle; }
 table.tabela-plano tbody tr.pl-z1 td { background-color:#FFFFFF; }
 table.tabela-plano tbody tr.pl-z2 td { background-color:#EEF3F8; }
+/* Aba Dados: cada matrícula GC é um tópico que abre (mesma cara de Avisos / Bases carregadas) */
+#gcLista .gc-mat > summary { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+#gcLista .gc-mat > summary::before { content:"▶"; font-size:11px; }
+#gcLista .gc-mat[open] > summary::before { content:"▼"; }
+#gcLista .gc-mat > summary { list-style:none; }
+#gcLista .gc-mat > summary::-webkit-details-marker { display:none; }
+#gcLista .gc-sub { font-weight:500; color:#4a5a6a; font-size:13px; }
+#gcLista .gc-falta { color:#b42318; }
+#gcLista .gc-tirar { margin-left:auto; }
