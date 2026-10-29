@@ -303,7 +303,22 @@ def test_sincronizacao_continua_entre_versoes_abertas(analise):
     html = open(analise.caminho_html, encoding="utf-8").read()
     assert "window.puxarTudoDaPasta = function" in html and "atualizado com alterações salvas por outra pessoa" in html
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
-    assert "setInterval(verificaPasta, 2000)" in site and 'new BroadcastChannel("faturamento_ajustes")' in site
+    assert "setInterval(verificaPasta, 2000)" in site and 'new BroadcastChannel(PFX + "faturamento_ajustes")' in site
+
+
+def test_armazenamento_do_navegador_separado_por_site():
+    """Sites do mesmo endereço (raniere3000-tech.github.io) não dividem pasta conectada, arquivos lidos nem edições."""
+    raiz = os.path.join(os.path.dirname(__file__), "..")
+    site = open(os.path.join(raiz, "index.html"), encoding="utf-8").read()
+    worker = open(os.path.join(raiz, "analisador.worker.js"), encoding="utf-8").read()
+    rel = open(os.path.join(raiz, "faturamento", "assets", "relatorio.js"), encoding="utf-8").read()
+    assert 'const PAINEIS_COM_ESCOPO = ["previa_de_fat_leste"];' in site and 'indexedDB.open(PFX + "faturamento", 1)' in site
+    assert 'const PFX = ESCOPO ? ESCOPO + ":" : "";' in site      # original sem prefixo: mantém o que já estava guardado
+    assert '"&escopo=" + encodeURIComponent(ESCOPO)' in site and 'searchParams.get("escopo")' in worker
+    assert 'searchParams.get("painel")' in worker and "FATURAMENTO_PAINEL" in worker
+    assert 'const PICKER_LS = PFX + "faturamento_picker_seguro";' in site and '{ id: ESCOPO || "faturamento", mode: "read" }' in site
+    assert rel.count("localStorage.getItem(") == rel.count("localStorage.getItem(LS_PREFIXO + ")
+    assert rel.count("localStorage.setItem(") == rel.count("localStorage.setItem(LS_PREFIXO + ")
 
 
 def test_preferencias_de_visualizacao_por_pessoa(analise):
@@ -317,7 +332,7 @@ def test_preferencias_de_visualizacao_por_pessoa(analise):
     for secao in ("criaSync('forecast'", "criaSync('situacao'", "criaSync('garantia'", "criaSync('plano'"):
         assert secao in html, secao
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
-    assert 'const FILTROS_LS = "faturamento_filtros_pessoais";' in site and "configAlterada" not in site
+    assert 'const FILTROS_LS = PFX + "faturamento_filtros_pessoais";' in site and "configAlterada" not in site
 
 
 def test_cortadas_com_consumo(analise):

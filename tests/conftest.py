@@ -11,6 +11,11 @@ sys.path.insert(0, os.path.join(RAIZ, "tests"))
 
 from dados_sinteticos import gera_pasta  # noqa: E402
 from faturamento import Sessao           # noqa: E402
+from faturamento.config import REGRAS    # noqa: E402
+
+# Os testes usam dados das duas superintendências: o filtro do painel (regras.json "sup_do_painel") fica desligado.
+# O teste do filtro liga de novo (test_cronograma.py).
+REGRAS["sup_do_painel"] = ""
 
 
 @pytest.fixture(scope="session")
@@ -38,3 +43,4 @@ def pasta_pequena(tmp_path):
     destino = tmp_path / "dados"
     gera_pasta(str(destino), n_ligacoes=120, n_grupos=4)
     return str(destino)
+
