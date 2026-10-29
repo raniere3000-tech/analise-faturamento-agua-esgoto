@@ -87,6 +87,53 @@ def comparativo_orcado(ctx, rotulo_rubrica, rubrica_txt, k_fat, k_vol, k_eco, or
     return pd.DataFrame(linhas)
 
 
+def dados_orcados_por_grupo(ctx):
+    """Todos os orçados da pasta × peso dos grupos: para o mês da análise e os meses seguintes que estiverem nas planilhas.
+    Vai embutido (JSON) e a tabela é montada no navegador (relatorio.js, orcGruposDesenhar), com os filtros de SUP e grupos.
+    O orçado SUP sem o mês fica vazio aqui (não usa o RF no lugar, para mostrar o que cada arquivo tem)."""
+    from .dre import _fontes, fonte_substituta
+    from .comparativo import _chave_ref
+    fontes, _ = _fontes(ctx)
+    fontes = [f for f in fontes if "SUP" not in f.upper()] + [f for f in fontes if "SUP" in f.upper()]
+    atual = _chave_ref(ctx.ref_atual) or (0, 0)
+    meses = sorted({r for f in fontes for r in ctx.orcado[f]["dados"]["Referencia"].dropna().unique()
+                    if (_chave_ref(r) or (0, 0)) >= atual}, key=lambda r: _chave_ref(r))
+    orc = {}
+    for f in fontes:
+        for r in meses:
+            if fonte_substituta(ctx, f, r) or not (ctx.orcado[f]["dados"]["Referencia"] == r).any():
+                continue
+            v = orcado(ctx, f, TODAS, r)
+            orc.setdefault(f, {})[r] = {k: v.get(k) for k in ("dA", "dE", "volA", "volE", "ecoA", "ecoE")}
+    pesos = {s: pesos_por_ciclo(ctx, rub) for s, rub in (("A", "AGUA"), ("E", "ESGOTO"))}
+    return {"mesAtual": ctx.ref_atual, "meses": meses, "fontes": [f for f in fontes if f in orc], "orc": orc, "pesos": pesos,
+            "refsPeso": _refs_base(ctx)}
+
+
+def orcados_por_grupo_html(ctx):
+    import json
+    from .formatacao import nome_mes
+    d = dados_orcados_por_grupo(ctx)
+    if not d["fontes"] or not d["meses"]:
+        return ""
+    refs = ", ".join(nome_mes(r) for r in d["refsPeso"]) or "sem meses anteriores na base"
+    return ('<div class="card orc-grupos-card" id="orcGruposCard">'
+            '<h2 class="prev-titulo">Orçados por grupo — todos os arquivos'
+            '<span class="prev-acoes"><button type="button" class="btn-just" id="orcGruposBaixar" title="Baixar a tabela (Excel)" '
+            'aria-label="Baixar a tabela (Excel)">&#11015;</button></span></h2>'
+            '<p class="nota-secao">Orçado de cada grupo = orçado do mês (todas as superintendências) × peso do grupo. O peso é a média da '
+            'participação do grupo no faturamento, no volume ou nas economias faturadas (separado para água e esgoto) nos 3 meses '
+            f'anteriores ao mês da análise (<b>{html.escape(refs)}</b>); os meses seguintes usam o mesmo peso. '
+            'Os filtros de Superintendência e Grupo do cabeçalho escolhem as linhas.</p>'
+            '<div class="orc-grupos-filtros"><label>Mês <select id="orcGruposMes"></select></label>'
+            '<label>Serviço <select id="orcGruposServ"><option value="A">Água</option><option value="E">Esgoto</option>'
+            '<option value="AE">Água + esgoto</option></select></label>'
+            '<label>Métrica <select id="orcGruposMetrica"><option value="valor">Faturamento (R$)</option>'
+            '<option value="volume">Volume (m³)</option><option value="economias">Economias</option></select></label></div>'
+            '<div class="tabela-wrap"><table class="tabela-dre orc-grupos-tabela" id="orcGruposTabela"><thead></thead><tbody></tbody></table></div>'
+            '<script type="application/json" id="orc-grupos-dados">' + json.dumps(d, ensure_ascii=False).replace("</", "<\\/") + '</script></div>')
+
+
 def gera_tabelas_orcado_ciclo_html(ctx):
     """Duas tabelas (Água e Esgoto por ciclo) contra o orçado escolhido no seletor da própria seção.
     Cada planilha gera seu par de tabelas; o seletor mostra só o par da planilha escolhida."""
@@ -121,4 +168,4 @@ def gera_tabelas_orcado_ciclo_html(ctx):
                'economias pela participação nas economias (média dos últimos 3 meses).</p></div>')
     corpo = "".join(f'<div class="orc-ciclo-bloco" data-orc-ciclo="{e(f)}"{"" if i == 0 else " hidden"}>{t}</div>'
                     for i, (f, t) in enumerate(blocos))
-    return seletor + corpo
+    return seletor + corpo + orcados_por_grupo_html(ctx)

@@ -10,7 +10,7 @@ const ARQUIVOS_PY = [
   "faturamento/dre.py", "faturamento/dados.py",
   "faturamento/config.py", "faturamento/contexto.py", "faturamento/formatacao.py", "faturamento/leitura.py",
   "faturamento/origem.py", "faturamento/orcado_ciclo.py", "faturamento/previsao.py", "faturamento/projecao_grupos.py", "faturamento/validacao.py", "faturamento/painel_html.py", "faturamento/pipeline.py", "faturamento/progresso.py",
-  "faturamento/relatorio.py", "faturamento/situacao_grupo.py", "faturamento/tarifa.py", "faturamento/garantia.py", "faturamento/plano_acao.py", "faturamento/one_page.py", "faturamento/acompanhamento.py", "faturamento/situacao_lancamento.py", "faturamento/tabelas_html.py", "faturamento/top20.py",
+  "faturamento/relatorio.py", "faturamento/situacao_grupo.py", "faturamento/tarifa.py", "faturamento/garantia.py", "faturamento/plano_acao.py", "faturamento/one_page.py", "faturamento/acompanhamento.py", "faturamento/extrair_base.py", "faturamento/situacao_lancamento.py", "faturamento/tabelas_html.py", "faturamento/top20.py",
   "faturamento/regras.json", "faturamento/assets/relatorio.css", "faturamento/assets/relatorio.js", "faturamento/assets/tarifa.js",
 ];
 const SAIDAS = [
@@ -263,8 +263,25 @@ async function faseAcompanhamento(sup, fotos, ref, orcados) {
   avisa("acompanhamento", { info, conteudo: bytes.buffer }, [bytes.buffer]);
 }
 
+// Extração de bases por matrículas e meses (botão "Bases analíticas" do site): usa a base já carregada aqui
+async function faseExtrair(params, arquivo) {
+  const pyodide = await iniciaPyodide();
+  const caminho = "/tmp/extracao.bin";
+  const extrair = pyodide.globals.get("extrair");
+  try {
+    const info = JSON.parse(extrair(JSON.stringify(params || {}), arquivo ? new Uint8Array(arquivo) : null, caminho));
+    const saida = pyodide.FS.readFile(caminho);
+    avisa("extracao", { info, conteudo: saida.buffer }, [saida.buffer]);
+  } finally { extrair.destroy(); }
+}
+
 self.onmessage = async (evento) => {
   const { fase, arquivos, ajustes } = evento.data;
+  if (fase === "extrair") {
+    try { await faseExtrair(evento.data.params, evento.data.arquivo); }
+    catch (erro) { avisa("extracaoErro", { motivo: String((erro && erro.message) || erro).split("\n").filter(Boolean).slice(-1).join(" ") }); }
+    return;
+  }
   if (fase === "acompanhamento") {
     try { await faseAcompanhamento(evento.data.sup, evento.data.fotos, evento.data.ref, evento.data.orcados); }
     catch (erro) { avisa("acompanhamentoErro", { motivo: String((erro && erro.message) || erro).split("\n").slice(-3).join(" ") }); }

@@ -46,3 +46,25 @@ def acompanhamento(sup, fotos_json, caminho, ref=None, orcados_json=None):
     with open(caminho, "wb") as f:
         f.write(conteudo)
     return json.dumps({"nome": nome_arquivo(dados), "foto": foto, "ref": dados["ref"], "sup": dados["sup"]}, ensure_ascii=False)
+
+
+def extrair(params_json, arquivo, caminho):
+    """Extração de bases (site: Dados › Bases analíticas › Por matrículas e meses). params: {modo: "lista"|"todas",
+    texto, nomeArquivo, meses, formato}; `arquivo`: bytes do arquivo de matrículas (ou None). Grava em `caminho` e
+    devolve JSON com o nome do arquivo e o resumo."""
+    from faturamento.extrair_base import extrai_base, ligacoes_do_arquivo, ligacoes_do_texto
+    p = json.loads(params_json or "{}")
+    ctx = _estado["sessao"].contexto_do_mes(None)              # todos os meses da pasta (não só até o mês da tela)
+    ligs = None
+    if p.get("modo") != "todas":
+        ligs = ligacoes_do_texto(p.get("texto") or "")
+        if arquivo is not None:
+            vistos = set(ligs)
+            dados = arquivo.to_bytes() if hasattr(arquivo, "to_bytes") else bytes(arquivo)   # Uint8Array do navegador
+            ligs += [l for l in ligacoes_do_arquivo(p.get("nomeArquivo") or "", dados) if l not in vistos]
+        if not ligs:
+            raise ValueError("Nenhuma matrícula informada (cole a lista ou escolha um arquivo).")
+    r = extrai_base(ctx, ligs, p.get("meses") or [], p.get("formato") or "matricula")
+    with open(caminho, "wb") as f:
+        f.write(r.pop("conteudo"))
+    return json.dumps(r, ensure_ascii=False)

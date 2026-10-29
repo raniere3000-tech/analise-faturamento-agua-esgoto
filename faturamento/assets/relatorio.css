@@ -747,3 +747,8 @@ table.tabela-plano td.pl-mescla { vertical-align:middle; }
 table.tabela-plano th, table.tabela-plano td, table.tabela-plano td.pl-mescla { text-align:center; vertical-align:middle; }
 table.tabela-plano tbody tr.pl-z1 td { background-color:#FFFFFF; }
 table.tabela-plano tbody tr.pl-z2 td { background-color:#EEF3F8; }
+/* Diretas: orçados por grupo (todos os arquivos) */
+.orc-grupos-filtros { display:flex; flex-wrap:wrap; gap:14px; margin:6px 0 10px; font-size:13px; }
+.orc-grupos-filtros label { display:flex; align-items:center; gap:6px; font-weight:600; }
+.orc-grupos-filtros select { font:inherit; font-weight:400; padding:4px 6px; border:1px solid #C9D3E0; border-radius:6px; }
+.orc-grupos-tabela td:first-child, .orc-grupos-tabela th:first-child { text-align:left; }
