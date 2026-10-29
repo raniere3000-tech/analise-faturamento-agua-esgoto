@@ -254,6 +254,32 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 .menu-pdf-lista[hidden] { display: none; }
 #menuBases { min-width: 340px; left: 0; right: auto; }
 #menuAcomp { min-width: 330px; }
+.dlg-extrair { border: 0; border-radius: 14px; padding: 0; width: min(920px, calc(100vw - 32px)); box-shadow: 0 18px 50px rgba(17,42,66,.35); color: var(--ink); }
+.dlg-extrair::backdrop { background: rgba(10,25,45,.45); }
+.dlg-corpo { padding: 20px 22px; max-height: calc(100vh - 60px); overflow: auto; }
+.dlg-corpo h2 { margin: 0 0 6px; font-size: 1.15rem; }
+.dlg-corpo h3 { margin: 10px 0 6px; font-size: .92rem; }
+.dlg-nota { margin: 0 0 8px; font-size: .84rem; color: #5b6b80; }
+.dlg-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+@media (max-width: 700px) { .dlg-grade { grid-template-columns: 1fr; } }
+.dlg-op { display: block; font-size: .86rem; margin: 3px 0; }
+.dlg-op small { display: block; margin-left: 22px; color: #5b6b80; font-size: .76rem; }
+.dlg-corpo textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: .85rem; padding: 8px; border: 1px solid var(--line); border-radius: 8px; margin-top: 6px; }
+.dlg-corpo textarea:disabled { background: #f2f4f7; color: #8a96a8; }
+.dlg-acoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.dlg-rodape { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 14px; }
+.dlg-qtd { font-size: .82rem; color: #5b6b80; }
+.dlg-btn { display: inline-flex; align-items: center; width: auto; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink); font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
+.dlg-btn:hover { background: #f2f8fc; }
+.dlg-btn:disabled { opacity: .6; cursor: default; }
+.dlg-prim { background: var(--marinho); color: #fff; border-color: var(--marinho); }
+.dlg-prim:hover { background: var(--azul); }
+.dlg-arq { cursor: pointer; }
+.dlg-meses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 10px; max-height: 190px; overflow: auto; font-size: .85rem; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.dlg-meses .futuro { color: #8a96a8; }
+#extResultado table { border-collapse: collapse; margin-top: 10px; font-size: .84rem; }
+#extResultado td, #extResultado th { padding: 4px 10px; border-bottom: 1px solid var(--line); text-align: right; }
+#extResultado td:first-child, #extResultado th:first-child { text-align: left; }
 .acomp-opcoes { display: block; padding: 6px 14px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 .acomp-opcoes label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
 .acomp-opcoes select { font: inherit; font-weight: 400; font-size: 13px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; color: #111; background: #fff; }
@@ -425,7 +451,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v142</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v143</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -510,6 +536,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       <span class="menu-pdf-lista" id="menuBases" role="menu" hidden>
         <button type="button" role="menuitem" data-base="completa-atual">Base completa por matrícula — mês atual<small>Dados da matrícula, consumo medido e faturado (água e esgoto) e faturamento água, esgoto e total</small></button>
         <button type="button" role="menuitem" data-base="completa-anterior">Base completa por matrícula — mês anterior<small>As mesmas colunas, para o mês anterior</small></button>
+        <button type="button" role="menuitem" id="btnExtrairAbrir">Por matrículas e meses…<small>Só as matrículas que você informar (colar ou arquivo) ou todas, nos meses que marcar</small></button>
       </span></span>
     <span class="menu-pdf" id="menuAcompWrap"><button type="button" class="btn-top" id="btnAcomp" hidden aria-haspopup="true" aria-expanded="false" aria-controls="menuAcomp" title="Tabelas da planilha de Acompanhamento Mensal (Excel, uma aba por tabela) da Superintendência e do mês escolhidos">📥 Acompanhamento ▾</button>
       <span class="menu-pdf-lista" id="menuAcomp" hidden>
@@ -522,6 +549,34 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         <button type="button" id="btnAcompZerar">↺ Zerar contagem semanal<small>Apaga as "fotos" guardadas das indiretas: o próximo arquivo começa do zero</small></button>
       </span></span>
   </div>
+  <dialog id="dlgExtrair" class="dlg-extrair" aria-labelledby="dlgExtrairTit">
+    <form method="dialog" class="dlg-corpo" id="frmExtrair">
+      <h2 id="dlgExtrairTit">Extrair base por matrículas e meses</h2>
+      <p class="dlg-nota">Gera a base só das matrículas informadas, ou de todas, nos meses marcados (todos os grupos, sem os filtros do cabeçalho).
+        Até 150 mil linhas sai em Excel (uma aba por mês); acima disso, em CSV, que abre no Excel.</p>
+      <div class="dlg-grade">
+        <div>
+          <h3>1. Matrículas</h3>
+          <label class="dlg-op"><input type="radio" name="extModo" value="lista" checked> Só as matrículas abaixo</label>
+          <label class="dlg-op"><input type="radio" name="extModo" value="todas"> Todas as matrículas (base completa)</label>
+          <textarea id="extLigs" rows="8" placeholder="Cole aqui as matrículas (uma por linha, ou separadas por espaço, vírgula ou ponto e vírgula). Pode colar direto de uma coluna do Excel."></textarea>
+          <div class="dlg-acoes"><label class="dlg-btn dlg-arq">Carregar de arquivo (Excel, CSV ou TXT)<input type="file" id="extArquivo" accept=".xlsx,.xls,.csv,.txt" hidden></label>
+            <button type="button" class="dlg-btn" id="extLimpar">Limpar</button><span id="extQtd" class="dlg-qtd">0 matrículas</span></div>
+        </div>
+        <div>
+          <h3>2. Meses</h3>
+          <div id="extMeses" class="dlg-meses"></div>
+          <div class="dlg-acoes"><button type="button" class="dlg-btn" id="extTodosMeses">Marcar todos</button><button type="button" class="dlg-btn" id="extNenhumMes">Desmarcar</button></div>
+          <h3>3. Formato</h3>
+          <label class="dlg-op"><input type="radio" name="extFormato" value="matricula" checked> Uma linha por matrícula e mês<small>Dados da matrícula, consumos e faturamento água, esgoto e total</small></label>
+          <label class="dlg-op"><input type="radio" name="extFormato" value="linhas"> Linhas da base (todas as colunas)<small>Uma linha por rubrica, como vem da fatura</small></label>
+        </div>
+      </div>
+      <div class="dlg-acoes dlg-rodape"><button type="button" class="dlg-btn dlg-prim" id="extGerar">📥 Extrair base</button>
+        <button type="button" class="dlg-btn" id="extFechar">Fechar</button><span id="extStatus" class="dlg-qtd"></span></div>
+      <div id="extResultado"></div>
+    </form>
+  </dialog>
   <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto" hidden></iframe>
 </main>
 
@@ -599,7 +654,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v142-20261029"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v143-20261029"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -917,6 +972,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
     trocandoMes = null;
     if (esperaAcomp) { esperaAcomp({ tipo: "acompanhamentoErro", motivo: "carregamento cancelado" }); esperaAcomp = null; }
+    if (esperaExtrair) { esperaExtrair({ tipo: "extracaoErro", motivo: "carregamento cancelado" }); esperaExtrair = null; }
     fechaRelatorio();
     progresso.hidden = false;
     progresso.classList.add("erro");
@@ -964,6 +1020,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     else if (msg.tipo === "cacheLimpo") { $("statusNota").textContent = "Arquivos guardados apagados: a próxima análise lê todos os arquivos de novo."; }
     else if (msg.tipo === "concluido") { salvaEta(); abreRelatorio(msg); }
     else if (msg.tipo === "acompanhamento" || msg.tipo === "acompanhamentoErro") { if (esperaAcomp) { esperaAcomp(msg); esperaAcomp = null; } }
+    else if (msg.tipo === "extracao" || msg.tipo === "extracaoErro") { if (esperaExtrair) { esperaExtrair(msg); esperaExtrair = null; } }
   }
 
   function abreRelatorio({ saidas, refAtual, refAnterior }) {
@@ -1819,6 +1876,78 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     if (!w.baixarBaseAnalitica) { alert("Este relatório foi gerado por uma versão anterior do painel: atualize a análise para baixar as bases analíticas."); return; }
     w.baixarBaseAnalitica(b.dataset.base);
   }));
+  // ===== Extrair base por matrículas e meses (como a aba Base do painel da arrecadação) =====
+  // O Python monta a base a partir do que já leu da pasta (todos os meses e grupos); a lista de matrículas fica neste navegador.
+  const EXT_LS = "faturamento_extrair_ligs";
+  let extArquivo = null, esperaExtrair = null, extUltimo = null;
+  const extLigsDoTexto = (t) => Array.from(new Set(String(t || "").split(/[\s,;|]+/).map((x) => x.replace(/\.0+$/, "").replace(/\D/g, "").replace(/^0+/, "")).filter(Boolean)));
+  function extAtualizaQtd() {
+    const n = extLigsDoTexto($("extLigs").value).length;
+    $("extQtd").textContent = `${n.toLocaleString("pt-BR")} matrícula(s)` + (extArquivo ? ` + arquivo ${extArquivo.nome}` : "");
+    try { localStorage.setItem(EXT_LS, $("extLigs").value.slice(0, 2e6)); } catch (e) {}
+  }
+  const extModo = () => (document.querySelector('input[name="extModo"]:checked') || {}).value;
+  function extAbre() {
+    const meses = (mesesTodos || (infoFiltros && infoFiltros.meses) || []).map((m) => m.ref);
+    const atual = (infoFiltros && infoFiltros.mesAtual) || meses[meses.length - 1];
+    const marcados = new Set(Array.from($("extMeses").querySelectorAll("input:checked")).map((i) => i.value));
+    $("extMeses").innerHTML = meses.slice().reverse().map((m) => `<label><input type="checkbox" value="${escapa(m)}" ${(marcados.size ? marcados.has(m) : m === atual) ? "checked" : ""}> ${escapa(nomeMes(m))}</label>`).join("")
+      || '<span class="dlg-qtd">Sem meses na base.</span>';
+    if (!$("extLigs").value) { try { $("extLigs").value = localStorage.getItem(EXT_LS) || ""; } catch (e) {} }
+    $("extLigs").disabled = extModo() === "todas";
+    extAtualizaQtd();
+    $("dlgExtrair").showModal();
+  }
+  $("btnExtrairAbrir").addEventListener("click", () => {
+    fechaMenuBases();
+    if (!worker || !relPorMes.size) { window.avisoSite("Para extrair bases, conecte a pasta e carregue a análise (o relatório aberto de arquivo não tem a base).", true); return; }
+    extAbre();
+  });
+  $("extFechar").addEventListener("click", () => $("dlgExtrair").close());
+  document.querySelectorAll('input[name="extModo"]').forEach((r) => r.addEventListener("change", () => { $("extLigs").disabled = extModo() === "todas"; }));
+  $("extLigs").addEventListener("input", extAtualizaQtd);
+  $("extLimpar").addEventListener("click", () => { $("extLigs").value = ""; extArquivo = null; extAtualizaQtd(); });
+  $("extArquivo").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    extArquivo = { nome: f.name, conteudo: await f.arrayBuffer() };
+    document.querySelector('input[name="extModo"][value="lista"]').checked = true; $("extLigs").disabled = false;
+    extAtualizaQtd();
+  });
+  $("extTodosMeses").addEventListener("click", () => $("extMeses").querySelectorAll("input").forEach((i) => { i.checked = true; }));
+  $("extNenhumMes").addEventListener("click", () => $("extMeses").querySelectorAll("input").forEach((i) => { i.checked = false; }));
+  const extBaixa = (nome, conteudo, tipo) => {
+    const url = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
+    const a = document.createElement("a"); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+  $("extGerar").addEventListener("click", async () => {
+    if (!worker || esperaExtrair) return;
+    const todas = extModo() === "todas", meses = Array.from($("extMeses").querySelectorAll("input:checked")).map((i) => i.value);
+    if (!todas && !extLigsDoTexto($("extLigs").value).length && !extArquivo) { $("extStatus").textContent = "Informe as matrículas (cole a lista ou carregue um arquivo) ou escolha Todas as matrículas."; return; }
+    if (!meses.length) { $("extStatus").textContent = "Marque pelo menos um mês."; return; }
+    const formato = (document.querySelector('input[name="extFormato"]:checked') || {}).value || "matricula";
+    $("extGerar").disabled = true; $("extStatus").textContent = "⏳ Montando a base…"; $("extResultado").innerHTML = "";
+    try {
+      const params = { modo: todas ? "todas" : "lista", texto: todas ? "" : $("extLigs").value, nomeArquivo: extArquivo && !todas ? extArquivo.nome : "", meses, formato };
+      const arquivo = extArquivo && !todas ? extArquivo.conteudo.slice(0) : null;
+      const msg = await new Promise((ok) => { esperaExtrair = ok; worker.postMessage({ fase: "extrair", params, arquivo }, arquivo ? [arquivo] : []); });
+      if (msg.tipo === "extracaoErro") { $("extStatus").textContent = "Não foi possível extrair: " + msg.motivo; return; }
+      const i = msg.info, xlsx = /\.xlsx$/i.test(i.nome);
+      extUltimo = { nome: i.nome, conteudo: msg.conteudo, tipo: xlsx ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "text/csv;charset=utf-8" };
+      extBaixa(extUltimo.nome, extUltimo.conteudo, extUltimo.tipo);
+      $("extStatus").textContent = `${i.linhas.toLocaleString("pt-BR")} linha(s) · ${i.nome}`;
+      const porMes = Object.entries(i.porMes);
+      $("extResultado").innerHTML = '<table><thead><tr><th>Mês</th><th>Linhas</th></tr></thead><tbody>'
+        + porMes.map(([m, n]) => `<tr><td>${escapa(nomeMes(m))}</td><td>${n.toLocaleString("pt-BR")}</td></tr>`).join("")
+        + `<tr><th>Total</th><th>${i.linhas.toLocaleString("pt-BR")}</th></tr></tbody></table>`
+        + '<div class="dlg-acoes"><button type="button" class="dlg-btn" id="extDeNovo">Baixar de novo</button>'
+        + (i.naoEncontradas.length ? `<button type="button" class="dlg-btn" id="extNao">Baixar matrículas não encontradas (${i.naoEncontradas.length.toLocaleString("pt-BR")})</button>` : "") + "</div>"
+        + (i.naoEncontradas.length ? `<p class="dlg-nota">${i.naoEncontradas.length.toLocaleString("pt-BR")} de ${i.matriculas.toLocaleString("pt-BR")} matrícula(s) não aparecem na base nos meses marcados.</p>` : "");
+      $("extDeNovo").onclick = () => extBaixa(extUltimo.nome, extUltimo.conteudo, extUltimo.tipo);
+      if ($("extNao")) $("extNao").onclick = () => extBaixa("Matriculas_nao_encontradas.csv", "\ufeffMatrícula\r\n" + i.naoEncontradas.join("\r\n"), "text/csv;charset=utf-8");
+    } finally { $("extGerar").disabled = false; esperaExtrair = null; }
+  });
   $("btnCortadas").addEventListener("click", () => {
     const w = janela();
     if (!w.baixarCortadasConsumo) { alert("Este relatório foi gerado por uma versão anterior do painel: atualize a análise para baixar as cortadas com consumo."); return; }

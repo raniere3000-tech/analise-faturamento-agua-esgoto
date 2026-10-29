@@ -39,6 +39,7 @@ function definirFiltros(parcial) {
     desenharGraficosIndiretas();
     if (typeof garRedesenhar === 'function') garRedesenhar();
     if (typeof planoDesenhar === 'function') planoDesenhar();
+    if (typeof orcGruposDesenhar === 'function') orcGruposDesenhar();
     if (typeof opDesenhar === 'function') opDesenhar();
 }
 
@@ -220,6 +221,7 @@ function filtrarPorGrupo() {
     cortRecalcular(); cort3Recalcular();                    // cortadas com consumo (mês e 3 meses)
     if (typeof garRedesenhar === 'function') garRedesenhar();   // aba Garantia (Top 1000, análise e resumo)
     if (typeof planoDesenhar === 'function') planoDesenhar();   // aba Plano de ação
+    if (typeof orcGruposDesenhar === 'function') orcGruposDesenhar();   // aba Diretas: orçados por grupo
     if (typeof opDesenhar === 'function') opDesenhar();         // aba One page
 }
 
@@ -3775,4 +3777,54 @@ document.addEventListener('click', async function (e) {
         .map(tr => Array.from(tr.children).map((td, i) => { const s = td.textContent.trim(); return [6, 7, 9, 10, 11].includes(i) ? num(s) : s; }));   // Economias, medidos, faturado e valor
     const sup = ESTADO.sup !== 'TODAS' ? '_' + ESTADO.sup.replace(/[^A-Za-z0-9]/g, '') : '';
     await baixarPlanilha(cols, linhas, `Cortadas_com_consumo_${b.dataset.mes}${sup}.xlsx`);
+});
+
+
+// ===== Aba Diretas: orçados por grupo — todos os arquivos de orçado × peso dos grupos (dados de orcado_ciclo.py) =====
+// Mês da análise e os seguintes que estiverem nas planilhas; serviço, métrica e mês escolhidos aqui; linhas pelos filtros do cabeçalho.
+let orcGruposLinhas = null;
+function orcGruposDesenhar() {
+    const d = lerJson('orc-grupos-dados'), tab = document.getElementById('orcGruposTabela');
+    if (!d || !tab) return;
+    const selMes = document.getElementById('orcGruposMes');
+    if (!selMes.options.length) {
+        const nome = (r) => { const [m, a] = String(r).split('/'); return ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][+m - 1] + '/' + a; };
+        selMes.innerHTML = d.meses.map((r) => `<option value="${garEsc(r)}">${garEsc(nome(r))}${r === d.mesAtual ? ' (mês da análise)' : ''}</option>`).join('');
+        selMes.value = d.meses.includes(d.mesAtual) ? d.mesAtual : d.meses[0];
+    }
+    const ref = selMes.value, serv = document.getElementById('orcGruposServ').value, met = document.getElementById('orcGruposMetrica').value;
+    const chave = { valor: 'd', volume: 'vol', economias: 'eco' }[met], servs = serv === 'AE' ? ['A', 'E'] : [serv];
+    let mapaSup = {};
+    try { mapaSup = JSON.parse(document.getElementById('info-filtros').textContent).grupoSup || {}; } catch (e) { mapaSup = {}; }
+    const supDe = {}; Object.entries(mapaSup).forEach(([g, sp]) => { supDe[normGrupo(g)] = sp; });
+    const todos = Array.from(new Set(servs.flatMap((sv) => Object.keys((d.pesos[sv] || {})[met] || {})).map(normGrupo)))
+        .sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+    const grupos = gruposFiltro();
+    const visiveis = todos.filter((g) => (ESTADO.sup === 'TODAS' || supDe[g] === ESTADO.sup) && (!grupos || grupos.has(g)));
+    const peso = (sv, g) => { const p = (d.pesos[sv] || {})[met] || {}; let t = 0; Object.entries(p).forEach(([k, v]) => { if (normGrupo(k) === g) t += v; }); return t; };
+    const valor = (f, sv, g) => { const o = (d.orc[f] || {})[ref]; const v = o ? o[chave + sv] : null; return v == null ? null : v * peso(sv, g); };
+    const fontes = d.fontes.filter((f) => (d.orc[f] || {})[ref]);
+    const dec = met === 'valor' ? 2 : 0, fmt = (v) => (v == null ? '–' : (met === 'valor' ? 'R$ ' : '') + v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec }));
+    const pct = (v) => (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+    const colPeso = servs.map((sv) => `<th class="num">Peso ${sv === 'A' ? 'água' : 'esgoto'}</th>`).join('');
+    tab.tHead.innerHTML = `<tr><th>Grupo</th><th>SUP</th>${colPeso}${fontes.map((f) => `<th class="num">Orçado<br>${garEsc(f)}</th>`).join('')}</tr>`;
+    const linhas = visiveis.map((g) => {
+        const vals = fontes.map((f) => { const xs = servs.map((sv) => valor(f, sv, g)); return xs.every((x) => x == null) ? null : xs.reduce((a, x) => a + (x || 0), 0); });
+        return { g, sup: supDe[g] || '', pesos: servs.map((sv) => peso(sv, g)), vals };
+    });
+    const tot = fontes.map((_, i) => linhas.reduce((a, l) => a + (l.vals[i] || 0), 0));
+    const totPeso = servs.map((_, j) => linhas.reduce((a, l) => a + l.pesos[j], 0));
+    tab.tBodies[0].innerHTML = linhas.map((l) => `<tr><td>Grupo ${garEsc(l.g)}</td><td>${garEsc(l.sup)}</td>${l.pesos.map((p) => `<td class="num">${pct(p)}</td>`).join('')}`
+        + l.vals.map((v) => `<td class="num">${fmt(v)}</td>`).join('') + '</tr>').join('')
+        + (linhas.length ? `<tr class="dre-forte"><td>Total${visiveis.length < todos.length ? ` (${visiveis.length} de ${todos.length} grupos)` : ''}</td><td></td>${totPeso.map((p) => `<td class="num">${pct(p)}</td>`).join('')}`
+            + tot.map((v) => `<td class="num">${fmt(v)}</td>`).join('') + '</tr>' : `<tr><td colspan="${2 + servs.length + fontes.length}">Nenhum grupo para os filtros escolhidos.</td></tr>`);
+    const rotServ = { A: 'Água', E: 'Esgoto', AE: 'Água + esgoto' }[serv], rotMet = { valor: 'Faturamento (R$)', volume: 'Volume (m³)', economias: 'Economias' }[met];
+    orcGruposLinhas = { ref, rotServ, rotMet, cab: ['Grupo', 'SUP'].concat(servs.map((sv) => `Peso ${sv === 'A' ? 'água' : 'esgoto'}`), fontes.map((f) => `Orçado ${f}`)),
+        linhas: linhas.map((l) => [l.g, l.sup].concat(l.pesos.map((p) => Math.round(p * 1e6) / 1e6), l.vals.map((v) => (v == null ? '' : Math.round(v * 100) / 100)))) };
+}
+document.addEventListener('change', (e) => { if (e.target.closest && e.target.closest('.orc-grupos-filtros')) orcGruposDesenhar(); });
+document.addEventListener('click', (e) => {
+    if (!e.target.closest || !e.target.closest('#orcGruposBaixar') || !orcGruposLinhas) return;
+    const o = orcGruposLinhas;
+    baixarPlanilha(o.cab, o.linhas, `Orcados_por_grupo_${o.rotServ}_${o.rotMet}_${o.ref}`.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_') + '.xlsx');
 });
