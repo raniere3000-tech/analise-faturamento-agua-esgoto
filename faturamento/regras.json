@@ -5,6 +5,12 @@
     "VALOR DE ESGOTO"
   ],
   "situacao_conta_em_analise": "EM ANALISE",
+  "_comentario_paineis": "Superintendência de cada painel (nome do repositório / endereço do site): as linhas do cronograma de outras SUPs (pela coluna Localidade) ficam de fora. Painel fora da lista = todas as SUPs. Os dois repositórios têm este mesmo arquivo.",
+  "paineis": {
+    "previa_de_fat_leste": {"sup_do_painel": "LESTE"},
+    "analise-faturamento-agua-esgoto": {"sup_do_painel": ""}
+  },
+  "sup_do_painel": "",
   "consumo_minimo_por_categoria": {
     "COMERCIAL": 20,
     "PEQ. COMERCIO": 10,

@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from . import cache_arquivos
-from .config import (COLUNAS_CONSUMO, COLUNAS_CRONOGRAMA, COLUNAS_ECONOMIA_TODAS, COLUNAS_FATURA,
+from .config import (COLUNAS_CONSUMO, COLUNAS_CRONOGRAMA, COLUNAS_CRONOGRAMA_MIN, COLUNAS_ECONOMIA_TODAS, COLUNAS_FATURA,
                      NOMES_LIGACAO, NOMES_SAIDA_LEGADOS, NOME_RELATORIO_HTML,
                      NOME_TOP100_XLSX, RUBRICAS_VALIDAS, CHAVES_CANCELAMENTO,
                      CLASSE_INDIRETA_POR_RUBRICA, chave_texto)
@@ -24,7 +24,7 @@ CABECALHOS_CONHECIDOS = COLUNAS_CONSUMO | COLUNAS_FATURA | COLUNAS_CRONOGRAMA
 NOMES_CRONOGRAMA = {"GRUPO": "Grupo", "DATADALEITURA": "Data da Leitura", "DATALEITURA": "Data da Leitura",
                     "QTSDIAS": "Qts. Dias", "QTDDIAS": "Qts. Dias", "QTDEDIAS": "Qts. Dias", "QTDIAS": "Qts. Dias",
                     "QUANTIDADEDIAS": "Qts. Dias", "QUANTIDADEDEDIAS": "Qts. Dias", "DIASDELEITURA": "Qts. Dias"}
-_CHAVES_CONHECIDAS = {chave_texto(c) for c in CABECALHOS_CONHECIDOS} | set(NOMES_CRONOGRAMA)
+_CHAVES_CONHECIDAS = {chave_texto(c) for c in CABECALHOS_CONHECIDOS} | set(NOMES_CRONOGRAMA) | {"MATRICULA", "TIPO"}   # + lista GC
 
 
 def _texto_csv(caminho, limite=None):
@@ -79,6 +79,8 @@ def _linha_cabecalho(df_raw):
         valores_linha = {chave_texto(v) for v in df_raw.iloc[i].tolist() if v is not None and str(v).strip()}
         if len(valores_linha & _CHAVES_CONHECIDAS) >= 2:
             return i
+        if len(colunas_de_mes([str(v).strip() for v in df_raw.iloc[i].tolist() if v is not None])) >= 3:
+            return i                               # orçado: linha com os meses (o título pode vir acima)
     return None
 
 
@@ -187,12 +189,42 @@ def padroniza_colunas_cronograma(df):
 
 MES_ABREV = {"jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
              "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12}
-_RE_COL_MES = re.compile(r"^([a-zç]{3}/\d{2}|soma de \d{2}/\d{2}/\d{4})$", re.I)
+# coluna de mês do orçado: "jan/26", "janeiro/2026", "JAN-26", "01/2026", "Soma de 01/01/2026" ou a data que o Excel
+# devolve no cabeçalho ("2026-01-01 00:00:00")
+_RE_COL_MES = re.compile(r"^(soma de \d{2}/\d{2}/\d{4}|(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç]*[/\-. ](\d{2}|\d{4})"
+                         r"|\d{2}/\d{4}|\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2}( 00:00:00)?)$", re.I)
 _RE_PREFIXO_NUM = re.compile(r"^\d+(?:\.\d+)*\.?\s+")
 
 
 def colunas_de_mes(colunas):
     return [c for c in colunas if _RE_COL_MES.match(str(c).strip())]
+
+
+def _sup_do_texto(texto):
+    """SUP citada num texto (cabeçalho, aba ou nome de arquivo: "Leste", "RF2T26 Leste.xlsx"), ou None."""
+    from .config import ALIAS_SUP, REGRAS
+    k = chave_texto(texto)
+    for nome in list(REGRAS["superintendencias"]) + list(ALIAS_SUP):
+        if chave_texto(nome) in k:
+            return ALIAS_SUP.get(chave_texto(nome), nome)
+    return None
+
+
+def coluna_rubrica_orcado(colunas):
+    """Coluna com as linhas do orçado: "Rubrica"; ou, nos modelos sem ela, a primeira coluna que não é mês e cujo
+    cabeçalho é o nome de uma SUP ("Leste", no RF2T26) ou o título do RF ("RF3T | 2025"). None se não houver."""
+    colunas = list(colunas)
+    if "Rubrica" in colunas:
+        return "Rubrica"
+    meses = set(colunas_de_mes(colunas))
+    for c in colunas:
+        if c in meses or str(c).startswith("Unnamed"):
+            continue
+        k = chave_texto(c)
+        if k in ("SUP", "SUPERINTENDENCIA"):
+            continue
+        return c if (_sup_do_texto(c) or k.startswith("RF") or k in ("DESCRICAO", "CONTA", "LINHA")) else None
+    return None
 
 
 def identifica_tipo(colunas, nome=""):
@@ -202,6 +234,9 @@ def identifica_tipo(colunas, nome=""):
         return "orcado_eventos"
     if {"Sup", "Rubrica"}.issubset(colunas) and len(colunas_de_mes(colunas)) >= 3:
         return "orcado"
+    # modelos sem a coluna Sup (RF1T26: "Rubrica"; RF2T26: "Leste"; RF3T: "RF3T | 2025") + um mês por coluna
+    if len(colunas_de_mes(colunas)) >= 3 and coluna_rubrica_orcado(colunas) and not COLUNAS_FATURA.issubset(colunas):
+        return "orcado"
     # O serviço avulso tem as mesmas colunas da fatura (inclusive endereço e localidade),
     # então só o nome do arquivo o diferencia.
     if "avulso" in chave_texto(nome).lower() and COLUNAS_FATURA.issubset(colunas):
@@ -210,21 +245,25 @@ def identifica_tipo(colunas, nome=""):
         return "consumo"
     if COLUNAS_FATURA.issubset(colunas):
         return "fatura"
-    if COLUNAS_CRONOGRAMA.issubset(colunas):
+    if COLUNAS_CRONOGRAMA_MIN.issubset(colunas):     # com ou sem Qts. Dias (ex.: Grupo, Localidade, Rio 01, Total Lig., Data da Leitura)
         return "cronograma"
+    from .grandes_clientes import eh_lista_gc
+    if eh_lista_gc(colunas):                       # lista de matrículas (Matricula, TIPO) para o Excel de Grandes Clientes
+        return "matriculas_gc"
     return "desconhecido"
 
 
 def referencia_mes(valor):
     """'ago/26', '08/2026', '15/08/2026' ou data -> 'MM/AAAA' (ou None)."""
     t = re.sub(r"^soma de\s+", "", str(valor).strip().lower())
-    m = re.match(r"^([a-zç]{3})[a-z]*[/\-. ](\d{2}|\d{4})$", t)
+    m = re.match(r"^([a-zç]{3})[a-zç]*[/\-. ](\d{2}|\d{4})$", t)
     if m and m.group(1) in MES_ABREV:
         ano = m.group(2) if len(m.group(2)) == 4 else "20" + m.group(2)
         return f"{MES_ABREV[m.group(1)]:02d}/{ano}"
     dt = pd.to_datetime(t, format="%d/%m/%Y", errors="coerce")
-    if pd.isna(dt):
-        dt = pd.to_datetime(t, format="%m/%Y", errors="coerce")
+    for formato in ("%m/%Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+        if pd.isna(dt):
+            dt = pd.to_datetime(t, format=formato, errors="coerce")
     return None if pd.isna(dt) else dt.strftime("%m/%Y")
 
 
@@ -348,6 +387,16 @@ def processa_fatura_completa(caminho):
         .astype(float)
     )
     df_filter = df[df["Rubrica"].isin(RUBRICAS_VALIDAS)].copy()
+    # Data de Vencimento vazia nas linhas de água/esgoto: usa a de outra linha da mesma ligação e mês (a fatura pode
+    # trazer o vencimento só em algumas rubricas) — Excel de Grandes Clientes
+    if "Data de Vencimento" in df.columns:
+        tem = lambda s: s.notna() & (s.astype(str).str.strip() != "")
+        falta = ~tem(df_filter["Data de Vencimento"])
+        if falta.any():
+            com = df[tem(df["Data de Vencimento"])]
+            chave = lambda d: d["N. da Ligacao"] + "|" + d["Referencia de Leitura"].astype(str)
+            venc = dict(zip(chave(com), com["Data de Vencimento"]))
+            df_filter.loc[falta, "Data de Vencimento"] = chave(df_filter[falta]).map(venc).values
     compacta_textos(df_filter)
     df_filter["Grupo"] = df_filter["Grupo"].astype(str).str.strip()
     df_filter["Referencia de Leitura"] = padroniza_referencia(df_filter["Referencia de Leitura"])
@@ -385,11 +434,20 @@ def _numero_orcado(v):
 
 
 def processa_orcado(caminho, aba=0):
-    """Planilha de orçado (RF / RF SUP): colunas Sup, Rubrica e um mês por coluna.
+    """Planilha de orçado (RF / RF SUP): coluna das linhas (Rubrica, ou o nome da SUP / título do RF no cabeçalho),
+    Sup (opcional) e um mês por coluna. Sem a coluna Sup, a SUP vem do cabeçalho das linhas ("Leste"), do nome da aba
+    ou do nome do arquivo; se nada disso disser, fica vazia (base.py usa a SUP da análise, quando há uma só).
     Devolve formato longo: Sup, Rubrica, Referencia (MM/AAAA), Valor."""
     print(f"   ⚙️ Processando ORÇADO: {os.path.basename(caminho)}")
     df = le_dataframe(caminho, sheet_name=aba)
     meses = colunas_de_mes(df.columns)
+    col_rub = coluna_rubrica_orcado(df.columns)
+    df = df.rename(columns={col_rub: "Rubrica"}) if col_rub and col_rub != "Rubrica" else df
+    if "Sup" not in df.columns:
+        sup = (_sup_do_texto(col_rub or "") or (_sup_do_texto(aba) if isinstance(aba, str) else None)
+               or _sup_do_texto(os.path.basename(caminho)) or "")
+        df = df.assign(Sup=sup)
+    df = df[df["Rubrica"].notna() & (df["Rubrica"].astype(str).str.strip() != "")]
     longo = df.melt(id_vars=["Sup", "Rubrica"], value_vars=meses, var_name="Mes", value_name="Valor")
     longo["Valor"] = longo["Valor"].map(_numero_orcado)
     longo = longo.dropna(subset=["Valor"])
@@ -418,23 +476,34 @@ def processa_cronograma(caminho):
             except Exception as exc:
                 print(f"   ⚠️ Aba '{aba}' de {nome} ignorada ({exc}).")
                 continue
-            if df is not None and COLUNAS_CRONOGRAMA.issubset(set(df.columns)):
+            if df is not None and COLUNAS_CRONOGRAMA_MIN.issubset(set(df.columns)):
                 df["Aba/Mês Cronograma"] = str(aba)
                 frames.append(df)
     else:
         df = le_dataframe(caminho)
-        if df is not None and COLUNAS_CRONOGRAMA.issubset(set(df.columns)):
+        if df is not None and COLUNAS_CRONOGRAMA_MIN.issubset(set(df.columns)):
             df["Aba/Mês Cronograma"] = nome
             frames.append(df)
     if not frames:
-        print(f"   ⚠️ {nome}: nenhuma aba com as colunas Grupo, Data da Leitura e Qts. Dias.")
+        print(f"   ⚠️ {nome}: nenhuma aba com as colunas Grupo e Data da Leitura.")
         return pd.DataFrame(columns=["Grupo", "Data da Leitura", "Qts. Dias", "Aba/Mês Cronograma", "Referencia Cronograma", "Localidade"])
     df_final = pd.concat(frames, ignore_index=True)
+    if "Qts. Dias" not in df_final.columns:
+        df_final["Qts. Dias"] = np.nan
     df_final["Grupo"] = df_final["Grupo"].astype(str).str.strip()
     df_final = df_final[df_final["Grupo"] != ""]
     df_final["Grupo"] = df_final["Grupo"].map(chave_grupo)
     df_final["Qts. Dias"] = pd.to_numeric(df_final["Qts. Dias"].astype(str).str.replace(",", ".", regex=False), errors="coerce")
     df_final = df_final[df_final["Grupo"].str.fullmatch(r"\d+") | df_final["Qts. Dias"].notna()]   # tira linhas de título/total
+    # sem Qts. Dias (ou vazio): dias = Data da Leitura do mês − Data da Leitura anterior do mesmo grupo
+    falta = df_final["Qts. Dias"].isna()
+    if falta.any():
+        dt = converte_datas(df_final["Data da Leitura"])
+        u = pd.DataFrame({"g": df_final["Grupo"].values, "d": dt.values}).dropna().drop_duplicates().sort_values(["g", "d"])
+        u["dias"] = u.groupby("g")["d"].diff().dt.days
+        dias = dict(zip(zip(u["g"], u["d"]), u["dias"]))
+        calc = pd.Series([dias.get((g, d)) for g, d in zip(df_final["Grupo"], dt)], index=df_final.index, dtype=float)
+        df_final["Qts. Dias"] = df_final["Qts. Dias"].where(~falta, calc.where(calc > 0))
     # mês da leitura: permite cruzar o cronograma com a fatura por grupo E mês (dias de leitura de cada mês)
     df_final["Referencia Cronograma"] = padroniza_referencia(df_final["Data da Leitura"])
     # cidade do grupo (coluna Localidade): define a superintendência de cada grupo (Interior, Leste...)
@@ -570,6 +639,7 @@ def classifica_arquivos(pasta, progresso=None):
     resultado["orcado"] = [(c["caminho"], c["aba"]) for c in classificados if c["tipo"] == "orcado"]
     resultado["orcado_eventos"] = [(c["caminho"], c["aba"]) for c in classificados if c["tipo"] == "orcado_eventos"]
     resultado["tarifa"] = [(c["caminho"], c["aba"]) for c in classificados if c["tipo"] == "tarifa"]
+    resultado["matriculas_gc"] = [(c["caminho"], c["aba"]) for c in classificados if c["tipo"] == "matriculas_gc"]
     resultado["ignorados"] = ignorados
     print(f"📁 Consumo: {len(resultado['consumo'])} | Fatura: {len(resultado['fatura'])} | "
           f"Cronograma: {len(resultado['cronograma'])} | "

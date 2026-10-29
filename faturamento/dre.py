@@ -125,6 +125,19 @@ def prepara(ctx):
     for nome in ("base_final", "base_completa", "df_atual", "df_anterior", "cancelamento", "avulso"):
         setattr(ctx, nome, _preenche_sup_pelo_grupo(getattr(ctx, nome, None), ctx.grupo_sup))
 
+    # orçado sem SUP (planilha sem a coluna Sup e sem SUP no cabeçalho, na aba ou no nome do arquivo): é a SUP da
+    # análise quando ela tem uma só (ex.: painel da Leste); senão fica sem SUP e só entra no total
+    sups = sorted({s for s in ctx.base_final["__sup"].dropna().unique() if s != SEM_SUP}) if "__sup" in ctx.base_final.columns else []
+    for nome, info in getattr(ctx, "orcado", {}).items():
+        d = info["dados"]
+        vazias = d["Sup"].astype(str).str.strip().isin(["", "nan", "None"])
+        if not vazias.any():
+            continue
+        if len(sups) == 1:
+            info["dados"] = d.assign(Sup=d["Sup"].where(~vazias, sups[0].title()))
+        else:
+            avisos.append(f"Orçado {info['arquivo']}: a planilha não diz a superintendência (coluna Sup, cabeçalho, aba ou nome do "
+                          "arquivo) — os valores entram só no total (Todas).")
     if not len(avu):
         avisos.append("Nenhum arquivo de serviço avulso encontrado na pasta (o nome precisa conter \"avulso\"): as indiretas ficaram zeradas.")
     else:
@@ -138,7 +151,8 @@ def prepara(ctx):
     if ctx.cancelamento is None or not len(ctx.cancelamento):
         avisos.append("Nenhuma rubrica de cancelamento encontrada na fatura: cancelamento zerado.")
     if not fontes_rf(ctx):
-        avisos.append("Orçado RF não encontrado (planilha com colunas Sup, Rubrica e meses, ex.: RF01T26.xlsx).")
+        avisos.append("Orçado RF não encontrado (planilha com as linhas do RF — coluna Rubrica, o nome da SUP ou o título do RF — "
+                      "e um mês por coluna, ex.: RF01T26.xlsx).")
     if not fontes_sup(ctx):
         avisos.append("Orçado SUP não encontrado (mesmo modelo do RF, com \"SUP\" no nome, ex.: RF SUP.xlsx).")
     sem_sup = ctx.df_atual[ctx.df_atual["__sup"] == SEM_SUP]
