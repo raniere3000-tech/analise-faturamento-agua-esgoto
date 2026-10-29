@@ -1573,6 +1573,8 @@ function gerarExecutivo(libs, modo) {
         });
         c.querySelectorAll('script').forEach(x => x.remove());          // só o conteúdo: nada roda no documento do PDF
         c.querySelectorAll('.dias-uteis').forEach(x => x.remove());     // no PDF vai só a tabela do forecast (sem o painel de dias úteis)
+        // no PDF a coluna Forecast sai sempre (DRE - Forecast e Indiretas): fica Realizado + Forecast, como no "Ocultar forecast"
+        c.querySelectorAll('table.tabela-previsao').forEach(t => t.classList.add('prev-sem-forecast'));
         c.querySelectorAll('[contenteditable]').forEach(x => x.removeAttribute('contenteditable'));
         c.querySelectorAll('.jg-col').forEach((col) => { const t = col.querySelector('.jg-txt'); if (t && !t.textContent.trim()) col.remove(); });
         c.querySelectorAll('.jg').forEach((b) => { const n = b.querySelectorAll('.jg-col').length; if (!n) b.remove(); else if (n === 1) b.querySelector('.jg-cols').classList.add('um'); });
