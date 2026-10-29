@@ -253,6 +253,10 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 .menu-pdf-lista { position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 40; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 22px rgba(17,42,66,.18); padding: 6px 0; min-width: 250px; }
 .menu-pdf-lista[hidden] { display: none; }
 #menuBases { min-width: 340px; left: 0; right: auto; }
+#menuAcomp { min-width: 330px; }
+.acomp-opcoes { display: block; padding: 6px 14px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.acomp-opcoes label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+.acomp-opcoes select { font: inherit; font-weight: 400; font-size: 13px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; color: #111; background: #fff; }
 .menu-pdf-lista button { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; padding: 9px 14px; cursor: pointer; }
 .menu-pdf-lista button:hover, .menu-pdf-lista button:focus-visible { background: #f2f8fc; outline: none; }
 .menu-pdf-lista small { display: block; font-weight: 400; font-size: 11.5px; color: #5b6b80; margin-top: 2px; }
@@ -421,7 +425,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v140</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v141</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -507,7 +511,16 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         <button type="button" role="menuitem" data-base="completa-atual">Base completa por matrícula — mês atual<small>Dados da matrícula, consumo medido e faturado (água e esgoto) e faturamento água, esgoto e total</small></button>
         <button type="button" role="menuitem" data-base="completa-anterior">Base completa por matrícula — mês anterior<small>As mesmas colunas, para o mês anterior</small></button>
       </span></span>
-    <button type="button" class="btn-top" id="btnAcomp" hidden title="Baixar as tabelas da planilha de Acompanhamento Mensal (Excel, uma aba por tabela) da Superintendência escolhida">📥 Acompanhamento</button>
+    <span class="menu-pdf" id="menuAcompWrap"><button type="button" class="btn-top" id="btnAcomp" hidden aria-haspopup="true" aria-expanded="false" aria-controls="menuAcomp" title="Tabelas da planilha de Acompanhamento Mensal (Excel, uma aba por tabela) da Superintendência e do mês escolhidos">📥 Acompanhamento ▾</button>
+      <span class="menu-pdf-lista" id="menuAcomp" hidden>
+        <span class="acomp-opcoes">
+          <label>Orçado do faturamento por ciclo <select id="acompOrcCiclo"></select></label>
+          <label>Orçado das indiretas <select id="acompOrcInd"></select></label>
+          <small>Vale só para este arquivo (não muda os orçados filtrados no painel). A escolha fica guardada neste navegador.</small>
+        </span>
+        <button type="button" id="btnAcompGerar">📥 Gerar Acompanhamento<small>Excel da Superintendência e do mês escolhidos no cabeçalho</small></button>
+        <button type="button" id="btnAcompZerar">↺ Zerar contagem semanal<small>Apaga as "fotos" guardadas das indiretas: o próximo arquivo começa do zero</small></button>
+      </span></span>
   </div>
   <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto" hidden></iframe>
 </main>
@@ -586,7 +599,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v140-20261029"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v141-20261029"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1824,18 +1837,56 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   // de cada semana pelos dias úteis da semana: cada export guarda o realizado acumulado ("foto") no ajustes_relatorio.json,
   // seção "acompanhamento", e o próximo usa a diferença.
   let esperaAcomp = null;
-  $("btnAcomp").addEventListener("click", async () => {
+  // Orçados do arquivo: escolhidos aqui, só para ele (vazio = padrão: RF mais recente no faturamento por ciclo, SUP nas indiretas)
+  const ACOMP_ORC_LS = "faturamento_acomp_orcados";
+  // contagem semanal zerada em 29/10/2026: as fotos guardadas antes disso são apagadas no primeiro export
+  const ACOMP_ZERADO = "2026-10-29";
+  const zeradoAntes = (d) => !d || !d.acompanhamento_zerado || d.acompanhamento_zerado < ACOMP_ZERADO;
+  const lerOrcAcomp = () => { try { return JSON.parse(localStorage.getItem(ACOMP_ORC_LS) || "{}") || {}; } catch (e) { return {}; } };
+  function montaMenuAcomp() {
+    const fontes = (infoFiltros && infoFiltros.fontes) || [], salvo = lerOrcAcomp();
+    const ordemRf = (n) => { const m = /RF\s*0*(\d+)\s*T\s*(\d{2,4})/i.exec(n); return m ? (+m[2] < 100 ? +m[2] + 2000 : +m[2]) * 100 + +m[1] : -1; };
+    const rfs = fontes.filter((f) => !/SUP/i.test(f)), rfNovo = rfs.slice().sort((a, b) => ordemRf(b) - ordemRf(a))[0], sup = fontes.find((f) => /SUP/i.test(f));
+    const preenche = (sel, padrao, valor) => {
+      sel.innerHTML = `<option value="">Padrão${padrao ? ` (${escapa(padrao)})` : ""}</option>` + fontes.map((f) => `<option value="${escapa(f)}">${escapa(f)}</option>`).join("");
+      sel.value = fontes.includes(valor) ? valor : "";
+    };
+    preenche($("acompOrcCiclo"), rfNovo, salvo.ciclo);
+    preenche($("acompOrcInd"), sup, salvo.indiretas);
+  }
+  const menuAcomp = $("menuAcomp");
+  const fechaMenuAcomp = () => { menuAcomp.hidden = true; $("btnAcomp").setAttribute("aria-expanded", "false"); };
+  $("btnAcomp").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (menuAcomp.hidden) montaMenuAcomp();
+    menuAcomp.hidden = !menuAcomp.hidden; $("btnAcomp").setAttribute("aria-expanded", String(!menuAcomp.hidden));
+  });
+  document.addEventListener("click", (e) => { if (!menuAcomp.hidden && !e.target.closest("#menuAcompWrap")) fechaMenuAcomp(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menuAcomp.hidden) fechaMenuAcomp(); });
+  ["acompOrcCiclo", "acompOrcInd"].forEach((id) => $(id).addEventListener("change", () => {
+    try { localStorage.setItem(ACOMP_ORC_LS, JSON.stringify({ ciclo: $("acompOrcCiclo").value, indiretas: $("acompOrcInd").value })); } catch (e) {}
+  }));
+  $("btnAcompZerar").addEventListener("click", async () => {
+    if (!pastaHandle) { window.avisoSite("Sem pasta conectada não há contagem guardada.", true); return; }
+    if (!confirm("Zerar a contagem semanal do Acompanhamento?\n\nApaga as \"fotos\" guardadas das indiretas (todas as superintendências e meses). O próximo arquivo começa do zero e passa a ser a primeira foto.")) return;
+    const res = await window.arquivoCompartilhado.atualizar((d) => { d.acompanhamento = {}; d.acompanhamento_zerado = new Date().toISOString().slice(0, 10); });
+    fechaMenuAcomp();
+    window.avisoSite(res.ok ? "Contagem semanal do Acompanhamento zerada." : `Não foi possível zerar (${res.motivo}).`, !res.ok);
+  });
+  $("btnAcompGerar").addEventListener("click", async () => {
     if (!worker || esperaAcomp) return;
+    fechaMenuAcomp();
     const b = $("btnAcomp"), texto = b.textContent;
+    const orcados = { ciclo: $("acompOrcCiclo").value, indiretas: $("acompOrcInd").value };
     b.disabled = true; b.textContent = "⏳ Gerando…";
     try {
       const sup = filtrosEstado.sup || "TODAS", ref = infoFiltros ? infoFiltros.mesAtual : "";
       let fotos = [];
       if (pastaHandle) {
         const d = await window.arquivoCompartilhado.ler();
-        fotos = (d && d.acompanhamento && d.acompanhamento[ref] && d.acompanhamento[ref][sup]) || [];
+        fotos = zeradoAntes(d) ? [] : (d && d.acompanhamento && d.acompanhamento[ref] && d.acompanhamento[ref][sup]) || [];
       }
-      const msg = await new Promise((ok) => { esperaAcomp = ok; worker.postMessage({ fase: "acompanhamento", sup, fotos, ref: ref === mesUltimo ? null : ref }); });   // o mês da tela
+      const msg = await new Promise((ok) => { esperaAcomp = ok; worker.postMessage({ fase: "acompanhamento", sup, fotos, orcados, ref: ref === mesUltimo ? null : ref }); });   // o mês da tela
       if (msg.tipo === "acompanhamentoErro") { window.avisoSite("Não foi possível gerar o Acompanhamento: " + msg.motivo, true); return; }
       const url = URL.createObjectURL(new Blob([msg.conteudo], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
       const a = document.createElement("a"); a.href = url; a.download = msg.info.nome; document.body.appendChild(a); a.click(); a.remove();
@@ -1843,6 +1894,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       if (pastaHandle) {                          // guarda a foto desta data (substitui a do mesmo dia)
         const foto = msg.info.foto, r = msg.info.ref, sp = msg.info.sup;
         const res = await window.arquivoCompartilhado.atualizar((d) => {
+          if (zeradoAntes(d)) { d.acompanhamento = {}; d.acompanhamento_zerado = ACOMP_ZERADO; }   // começa do zero
           const m = (d.acompanhamento = d.acompanhamento || {}), mr = (m[r] = m[r] || {});
           mr[sp] = (mr[sp] || []).filter((f) => f.ate !== foto.ate).concat([foto]).sort((x, y) => (x.ate < y.ate ? -1 : 1));
         });

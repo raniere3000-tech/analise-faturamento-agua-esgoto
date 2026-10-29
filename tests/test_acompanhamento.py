@@ -70,3 +70,16 @@ def test_faturamento_por_ciclo_usa_o_rf_mais_recente(sessao):
     rf = orcado(sessao.ctx, "RF01T26", "INTERIOR")
     assert sum(l["orcA"] for l in dados["linhas"]) == pytest.approx(rf["dA"])
     assert sum(l["orcE"] for l in dados["linhas"]) == pytest.approx(rf["dE"])
+
+
+def test_orcado_escolhido_no_botao(sessao):
+    """O botão do site escolhe o orçado de cada parte, sem depender dos orçados filtrados no painel."""
+    from faturamento.dre import orcado
+    dados = dados_acompanhamento(sessao.ctx, "INTERIOR", fonte_ciclo="RF3T25", fonte_indiretas="RF01T26")
+    assert dados["fonte_rf"] == "RF3T25" and dados["fonte"] == "RF01T26"
+    rf = orcado(sessao.ctx, "RF3T25", "INTERIOR")
+    assert sum(l["orcA"] for l in dados["linhas"]) == pytest.approx(rf["dA"])
+    ind = orcado(sessao.ctx, "RF01T26", "INTERIOR")
+    assert dados["indiretas"]["LNE"]["orc_valor"] == pytest.approx(ind.get("iE") or 0.0)
+    padrao = dados_acompanhamento(sessao.ctx, "INTERIOR", fonte_ciclo="NAO EXISTE", fonte_indiretas="")
+    assert padrao["fonte_rf"] == "RF01T26" and padrao["fonte"] == "RF SUP"      # vazio/desconhecido = os padrões

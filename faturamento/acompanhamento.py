@@ -122,8 +122,9 @@ def _por_grupo(df, valores, grupo="Grupo"):
     return valores.groupby(g.values).sum().to_dict()
 
 
-def dados_acompanhamento(ctx, sup):
-    """Tudo o que o arquivo precisa, para a superintendência `sup` (ou TODAS) no mês vigente."""
+def dados_acompanhamento(ctx, sup, fonte_ciclo=None, fonte_indiretas=None):
+    """Tudo o que o arquivo precisa, para a superintendência `sup` (ou TODAS) no mês vigente.
+    fonte_ciclo / fonte_indiretas: planilha de orçado escolhida no botão do site (vazio ou desconhecida = a padrão)."""
     from .dre import _indiretas_mes, fontes_rf, fontes_sup, orcado
     from .orcado_ciclo import pesos_por_ciclo
     from .previsao import data_corte, eventos_indiretas
@@ -144,10 +145,11 @@ def dados_acompanhamento(ctx, sup):
         return _por_grupo(b[mascara], serie[mascara])
 
     # orçado das indiretas = orçado SUP; orçado das diretas por ciclo (aba Faturamento) = RF mais recente (ex.: RF02T26)
+    # (a escolha do botão vale só aqui: não depende dos orçados filtrados no painel)
     fontes = fontes_sup(ctx)
-    fonte = fontes[0] if fontes else None
+    fonte = fonte_indiretas if fonte_indiretas in ctx.orcado else (fontes[0] if fontes else None)
     orc = orcado(ctx, fonte, sup, ra) if fonte else {}
-    fonte_rf = rf_mais_recente(fontes_rf(ctx))
+    fonte_rf = fonte_ciclo if fonte_ciclo in ctx.orcado else rf_mais_recente(fontes_rf(ctx))
     orc_rf = orcado(ctx, fonte_rf, sup, ra) if fonte_rf else {}
     orc_ciclo = {}
     for s, k, rub in (("A", "dA", "AGUA"), ("E", "dE", "ESGOTO")):
