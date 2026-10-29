@@ -743,3 +743,7 @@ table.op-mini .num { text-align:right; }
 .op-top-lin .op-top-novo { color:#64748B; font-weight:600; }
 /* Plano de ação: célula mesclada na planilha (rowspan/colspan) centralizada na vertical, como no Excel */
 table.tabela-plano td.pl-mescla { vertical-align:middle; }
+/* Plano de ação: tudo centralizado (na horizontal e na vertical) e cor alternada por bloco de linhas mescladas */
+table.tabela-plano th, table.tabela-plano td, table.tabela-plano td.pl-mescla { text-align:center; vertical-align:middle; }
+table.tabela-plano tbody tr.pl-z1 td { background-color:#FFFFFF; }
+table.tabela-plano tbody tr.pl-z2 td { background-color:#EEF3F8; }

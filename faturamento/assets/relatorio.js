@@ -2964,10 +2964,15 @@ function planoDesenhar() {
     tab.tHead.innerHTML = '<tr>' + cols.map((c) => `<th>${garEsc(c)}</th>`).join('') + '</tr>';
     planoVisiveis = linhas;
     const span = planoSpans(plano, linhas);              // células mescladas na planilha (só entre as linhas que aparecem)
+    // cor alternada por bloco: as linhas ligadas por uma célula mesclada (rowspan) ficam todas com a mesma cor
+    const fimBloco = linhas.map((_, r) => r);
+    span.forEach((lin, r) => lin.forEach((sp) => { if (sp && sp.rs > 1) fimBloco[r] = Math.max(fimBloco[r], r + sp.rs - 1); }));
+    const zebra = []; let cor = 0, ate = -1;
+    linhas.forEach((_, r) => { if (r > ate) { cor = 1 - cor; } ate = Math.max(ate, fimBloco[r]); zebra[r] = cor ? 'pl-z1' : 'pl-z2'; });
     tab.tBodies[0].innerHTML = linhas.map((l, r) => {
         const st = iStatus >= 0 ? planoClasseStatus(l[iStatus]) : '';
         const prazo = iPrazo >= 0 ? planoDataDe(l[iPrazo]) : null, vencido = prazo && prazo < hoje && st !== 'pl-ok' && st !== 'pl-cancel';
-        return '<tr>' + cols.map((c, i) => {
+        return `<tr class="${zebra[r]}">` + cols.map((c, i) => {
             const sp = span[r][i];
             if (sp === 0) return '';                     // coberta por uma célula mesclada
             const at = (sp && sp.rs > 1 ? ` rowspan="${sp.rs}"` : '') + (sp && sp.cs > 1 ? ` colspan="${sp.cs}"` : '')
@@ -3333,7 +3338,8 @@ function opGrupos(D) {
 }
 function opBlocoGrupos(D, G) {
     if (!G.grupos.length) return '<p class="op-vazio">Nenhum grupo marcado.</p>';
-    if (opSemanasAbertas === null) { const ult = G.semanas.filter((s) => s.n !== 99).pop(); opSemanasAbertas = new Set(ult ? [ult.n] : []); }
+    // ao abrir: as duas últimas semanas já vêm abertas (o clique na semana abre/fecha as outras)
+    if (opSemanasAbertas === null) opSemanasAbertas = new Set(G.semanas.filter((s) => s.n !== 99).slice(-2).map((s) => s.n));
     const v = (x) => opMoeda(x, 2);
     const cols = (o) => `<td class="num op-forte">${v(o.r)}</td>`
         + `<td class="num op-col-val op-apagado">${o.o != null ? v(o.o) : '–'}</td><td class="num">${o.o != null ? opSeta(opVar(o.r, o.o), '') : '–'}</td>`
