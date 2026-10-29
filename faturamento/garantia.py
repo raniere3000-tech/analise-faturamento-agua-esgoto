@@ -140,6 +140,7 @@ def gera_aba_garantia_html(ctx):
     meses = ", ".join(nome_mes(r) for r in fechados) or "nenhum mês fechado na pasta"
     e = lambda v: html.escape(str(v))
     fonte_tarifa = e(tarifa.get("fonte", "padrão"))
+    tarifa_json = json.dumps(tarifa, ensure_ascii=False).replace("</", "<\\/")   # fora da f-string: Python 3.11
     return f"""
 <div class="card gar-cabecalho">
   <div class="gar-topo">
@@ -215,5 +216,5 @@ def gera_aba_garantia_html(ctx):
   </div>
 </div>
 <script type="application/octet-stream" id="garantia-dados" data-gz="1">{b64}</script>
-<script type="application/json" id="tarifa-dados">{json.dumps(tarifa, ensure_ascii=False).replace("</", "<\\/")}</script>
+<script type="application/json" id="tarifa-dados">{tarifa_json}</script>
 """
