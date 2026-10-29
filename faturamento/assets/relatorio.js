@@ -3781,8 +3781,11 @@ document.addEventListener('click', async function (e) {
 
 
 // ===== Aba Diretas: orçados por grupo — todos os arquivos de orçado × peso dos grupos (dados de orcado_ciclo.py) =====
-// Mês da análise e os seguintes que estiverem nas planilhas; serviço, métrica e mês escolhidos aqui; linhas pelos filtros do cabeçalho.
-let orcGruposLinhas = null;
+// Mês da análise e os seguintes que estiverem nas planilhas; serviço, métrica, mês e grupos escolhidos aqui (o filtro de grupos
+// do cabeçalho não vale nesta tabela); a Superintendência do cabeçalho escolhe quais grupos aparecem na lista.
+let orcGruposLinhas = null, orcGruposFora = new Set();             // grupos desmarcados no filtro próprio (os novos vêm marcados)
+try { orcGruposFora = new Set(JSON.parse(localStorage.getItem('faturamento_orc_grupos_fora') || '[]')); } catch (e) { orcGruposFora = new Set(); }
+const orcGruposGuarda = () => { try { localStorage.setItem('faturamento_orc_grupos_fora', JSON.stringify([...orcGruposFora])); } catch (e) { /* sem armazenamento */ } };
 function orcGruposDesenhar() {
     const d = lerJson('orc-grupos-dados'), tab = document.getElementById('orcGruposTabela');
     if (!d || !tab) return;
@@ -3799,8 +3802,14 @@ function orcGruposDesenhar() {
     const supDe = {}; Object.entries(mapaSup).forEach(([g, sp]) => { supDe[normGrupo(g)] = sp; });
     const todos = Array.from(new Set(servs.flatMap((sv) => Object.keys((d.pesos[sv] || {})[met] || {})).map(normGrupo)))
         .sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
-    const grupos = gruposFiltro();
-    const visiveis = todos.filter((g) => (ESTADO.sup === 'TODAS' || supDe[g] === ESTADO.sup) && (!grupos || grupos.has(g)));
+    const daSup = todos.filter((g) => ESTADO.sup === 'TODAS' || supDe[g] === ESTADO.sup);
+    const visiveis = daSup.filter((g) => !orcGruposFora.has(g));
+    const lista = document.getElementById('orcGruposLista'), btn = document.getElementById('orcGruposBtnGrupos');
+    if (lista && btn) {
+        lista.innerHTML = `<label><input type="checkbox" data-orc-g="*" ${visiveis.length === daSup.length ? 'checked' : ''}> <b>Selecionar todos</b></label><hr>`
+            + daSup.map((g) => `<label><input type="checkbox" data-orc-g="${garEsc(g)}" ${orcGruposFora.has(g) ? '' : 'checked'}> Grupo ${garEsc(g)}</label>`).join('');
+        btn.textContent = `Grupos: ${visiveis.length === daSup.length ? 'todos' : `${visiveis.length} de ${daSup.length}`} ▾`;
+    }
     const peso = (sv, g) => { const p = (d.pesos[sv] || {})[met] || {}; let t = 0; Object.entries(p).forEach(([k, v]) => { if (normGrupo(k) === g) t += v; }); return t; };
     const valor = (f, sv, g) => { const o = (d.orc[f] || {})[ref]; const v = o ? o[chave + sv] : null; return v == null ? null : v * peso(sv, g); };
     const fontes = d.fontes.filter((f) => (d.orc[f] || {})[ref]);
@@ -3816,13 +3825,26 @@ function orcGruposDesenhar() {
     const totPeso = servs.map((_, j) => linhas.reduce((a, l) => a + l.pesos[j], 0));
     tab.tBodies[0].innerHTML = linhas.map((l) => `<tr><td>Grupo ${garEsc(l.g)}</td><td>${garEsc(l.sup)}</td>${l.pesos.map((p) => `<td class="num">${pct(p)}</td>`).join('')}`
         + l.vals.map((v) => `<td class="num">${fmt(v)}</td>`).join('') + '</tr>').join('')
-        + (linhas.length ? `<tr class="dre-forte"><td>Total${visiveis.length < todos.length ? ` (${visiveis.length} de ${todos.length} grupos)` : ''}</td><td></td>${totPeso.map((p) => `<td class="num">${pct(p)}</td>`).join('')}`
-            + tot.map((v) => `<td class="num">${fmt(v)}</td>`).join('') + '</tr>' : `<tr><td colspan="${2 + servs.length + fontes.length}">Nenhum grupo para os filtros escolhidos.</td></tr>`);
+        + (linhas.length ? `<tr class="dre-forte"><td>Total${visiveis.length < daSup.length ? ` (${visiveis.length} de ${daSup.length} grupos)` : ''}</td><td></td>${totPeso.map((p) => `<td class="num">${pct(p)}</td>`).join('')}`
+            + tot.map((v) => `<td class="num">${fmt(v)}</td>`).join('') + '</tr>' : `<tr><td colspan="${2 + servs.length + fontes.length}">Nenhum grupo marcado no filtro Grupos.</td></tr>`);
     const rotServ = { A: 'Água', E: 'Esgoto', AE: 'Água + esgoto' }[serv], rotMet = { valor: 'Faturamento (R$)', volume: 'Volume (m³)', economias: 'Economias' }[met];
     orcGruposLinhas = { ref, rotServ, rotMet, cab: ['Grupo', 'SUP'].concat(servs.map((sv) => `Peso ${sv === 'A' ? 'água' : 'esgoto'}`), fontes.map((f) => `Orçado ${f}`)),
         linhas: linhas.map((l) => [l.g, l.sup].concat(l.pesos.map((p) => Math.round(p * 1e6) / 1e6), l.vals.map((v) => (v == null ? '' : Math.round(v * 100) / 100)))) };
 }
-document.addEventListener('change', (e) => { if (e.target.closest && e.target.closest('.orc-grupos-filtros')) orcGruposDesenhar(); });
+document.addEventListener('change', (e) => {
+    if (!e.target.closest || !e.target.closest('.orc-grupos-filtros')) return;
+    const g = e.target.dataset && e.target.dataset.orcG;
+    if (g === '*') {                                     // Selecionar todos: marca/desmarca os grupos da lista (da SUP escolhida)
+        document.querySelectorAll('#orcGruposLista input[data-orc-g]').forEach((c) => { if (c.dataset.orcG !== '*') { if (e.target.checked) orcGruposFora.delete(c.dataset.orcG); else orcGruposFora.add(c.dataset.orcG); } });
+        orcGruposGuarda();
+    } else if (g) { if (e.target.checked) orcGruposFora.delete(g); else orcGruposFora.add(g); orcGruposGuarda(); }
+    orcGruposDesenhar();
+});
+document.addEventListener('click', (e) => {
+    const lista = document.getElementById('orcGruposLista'); if (!lista || !e.target.closest) return;
+    if (e.target.closest('#orcGruposBtnGrupos')) { lista.hidden = !lista.hidden; document.getElementById('orcGruposBtnGrupos').setAttribute('aria-expanded', String(!lista.hidden)); return; }
+    if (!lista.hidden && !e.target.closest('.orc-grupos-dd')) { lista.hidden = true; document.getElementById('orcGruposBtnGrupos').setAttribute('aria-expanded', 'false'); }
+});
 document.addEventListener('click', (e) => {
     if (!e.target.closest || !e.target.closest('#orcGruposBaixar') || !orcGruposLinhas) return;
     const o = orcGruposLinhas;

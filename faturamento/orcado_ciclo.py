@@ -124,12 +124,14 @@ def orcados_por_grupo_html(ctx):
             '<p class="nota-secao">Orçado de cada grupo = orçado do mês (todas as superintendências) × peso do grupo. O peso é a média da '
             'participação do grupo no faturamento, no volume ou nas economias faturadas (separado para água e esgoto) nos 3 meses '
             f'anteriores ao mês da análise (<b>{html.escape(refs)}</b>); os meses seguintes usam o mesmo peso. '
-            'Os filtros de Superintendência e Grupo do cabeçalho escolhem as linhas.</p>'
+            'A Superintendência do cabeçalho vale aqui; os grupos são escolhidos no filtro <b>Grupos</b> desta tabela.</p>'
             '<div class="orc-grupos-filtros"><label>Mês <select id="orcGruposMes"></select></label>'
             '<label>Serviço <select id="orcGruposServ"><option value="A">Água</option><option value="E">Esgoto</option>'
             '<option value="AE">Água + esgoto</option></select></label>'
             '<label>Métrica <select id="orcGruposMetrica"><option value="valor">Faturamento (R$)</option>'
-            '<option value="volume">Volume (m³)</option><option value="economias">Economias</option></select></label></div>'
+            '<option value="volume">Volume (m³)</option><option value="economias">Economias</option></select></label>'
+            '<span class="orc-grupos-dd"><button type="button" id="orcGruposBtnGrupos" aria-haspopup="true" aria-expanded="false">Grupos: todos ▾</button>'
+            '<span class="orc-grupos-lista" id="orcGruposLista" hidden></span></span></div>'
             '<div class="tabela-wrap"><table class="tabela-dre orc-grupos-tabela" id="orcGruposTabela"><thead></thead><tbody></tbody></table></div>'
             '<script type="application/json" id="orc-grupos-dados">' + json.dumps(d, ensure_ascii=False).replace("</", "<\\/") + '</script></div>')
 

@@ -752,3 +752,12 @@ table.tabela-plano tbody tr.pl-z2 td { background-color:#EEF3F8; }
 .orc-grupos-filtros label { display:flex; align-items:center; gap:6px; font-weight:600; }
 .orc-grupos-filtros select { font:inherit; font-weight:400; padding:4px 6px; border:1px solid #C9D3E0; border-radius:6px; }
 .orc-grupos-tabela td:first-child, .orc-grupos-tabela th:first-child { text-align:left; }
+/* filtro próprio de grupos da tabela de orçados por grupo */
+.orc-grupos-dd { position:relative; display:inline-flex; align-items:center; }
+#orcGruposBtnGrupos { font:inherit; font-size:13px; padding:4px 10px; border:1px solid #C9D3E0; border-radius:6px; background:#fff; cursor:pointer; }
+.orc-grupos-lista { position:absolute; top:100%; left:0; margin-top:4px; z-index:30; background:#fff; border:1px solid #C9D3E0; border-radius:8px;
+    box-shadow:0 8px 22px rgba(17,42,66,.18); padding:8px 12px; min-width:180px; max-height:320px; overflow:auto; font-weight:400; }
+.orc-grupos-lista[hidden] { display:none; }
+.orc-grupos-lista label { display:block; padding:2px 0; white-space:nowrap; font-weight:400; }
+.orc-grupos-lista hr { border:0; border-top:1px solid #E3E8EF; margin:4px 0; }
+.card.orc-grupos-card { overflow:visible; }       /* a lista de grupos abre por cima, sem ser cortada pelo card */
