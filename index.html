@@ -425,7 +425,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v142</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v2.0</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -599,7 +599,17 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v142-20261029"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  // Os dois repositórios (analise-faturamento-agua-esgoto e previa_de_fat_leste) têm os MESMOS arquivos: o painel é
+  // reconhecido pelo endereço do site. Painel com escopo (Leste) guarda tudo no navegador com prefixo próprio — sites do
+  // mesmo endereço (raniere3000-tech.github.io) não misturam pasta conectada, arquivos já lidos nem edições. O original
+  // fica sem prefixo (mantém o que já estava guardado). A SUP de cada painel fica em regras.json ("paineis").
+  const PAINEIS_COM_ESCOPO = ["previa_de_fat_leste"];
+  const PAINEL = (location.pathname.split("/").filter(Boolean)[0] || "").toLowerCase();
+  const ESCOPO = PAINEIS_COM_ESCOPO.includes(PAINEL) ? PAINEL : "";
+  const PFX = ESCOPO ? ESCOPO + ":" : "";
+  window.ESCOPO_ARMAZENAMENTO = ESCOPO;            // o relatório (quadro) usa o mesmo prefixo
+  // Versão: v2.0, v2.1, v2.2 … v2.9, v2.10 … (mesma versão nos dois repositórios; ver CLAUDE.md)
+  const VERSAO_SITE = "v2.0-20261029"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -767,7 +777,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   // A cada 2 s o site olha a data do ajustes_relatorio.json: se outra pessoa salvou (o OneDrive trouxe o arquivo novo),
   // o relatório aberto relê a pasta e aplica. Ao voltar para a aba também confere na hora.
   let ultimaModificacao = null, canalAjustes = null;
-  try { canalAjustes = new BroadcastChannel("faturamento_ajustes"); canalAjustes.onmessage = () => avisaRelatorio(); } catch (e) { /* sem BroadcastChannel */ }
+  try { canalAjustes = new BroadcastChannel(PFX + "faturamento_ajustes"); canalAjustes.onmessage = () => avisaRelatorio(); } catch (e) { /* sem BroadcastChannel */ }
   function avisaRelatorio() {
     try { const w = quadro().hidden ? null : janela(); if (w && w.puxarTudoDaPasta) w.puxarTudoDaPasta(); } catch (e) {}
   }
@@ -797,7 +807,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 
   function pegaWorker() {
     if (!worker) {
-      worker = new Worker("analisador.worker.js?v=" + VERSAO_SITE);
+      worker = new Worker("analisador.worker.js?v=" + VERSAO_SITE + "&escopo=" + encodeURIComponent(ESCOPO) + "&painel=" + encodeURIComponent(PAINEL));
       worker.onmessage = (e) => trataMensagem(e.data);
       worker.onerror = (e) => {
         worker = null;
@@ -826,7 +836,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   // Fase 1: ler a pasta até a conferência do Top 20 (0–52%). Fase 2: gerar o relatório (52–100%).
   // Usa o tempo da última execução neste navegador (quanto cada faixa da barra levou), ajustado ao ritmo de agora;
   // na primeira vez, sem histórico, projeta pelo ritmo da própria barra. O valor conta os segundos entre as mensagens.
-  const ETA_LS = "faturamento_eta_v1";
+  const ETA_LS = PFX + "faturamento_eta_v1";
   let eta = { fase: null, t0: null, pontos: [], fim: null, timer: null };
   const etaHistorico = () => { try { return JSON.parse(localStorage.getItem(ETA_LS) || "{}"); } catch (e) { return {}; } };
   function iniciaEta(fase) {
@@ -964,6 +974,8 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     else if (msg.tipo === "cacheLimpo") { $("statusNota").textContent = "Arquivos guardados apagados: a próxima análise lê todos os arquivos de novo."; }
     else if (msg.tipo === "concluido") { salvaEta(); abreRelatorio(msg); }
     else if (msg.tipo === "acompanhamento" || msg.tipo === "acompanhamentoErro") { if (esperaAcomp) { esperaAcomp(msg); esperaAcomp = null; } }
+    else if (msg.tipo === "gc" || msg.tipo === "gcErro") { if (esperaGC) { esperaGC(msg); esperaGC = null; } }
+    else if (msg.tipo === "gcDados" || msg.tipo === "gcDadosErro") { const f = filaGCDados.shift(); if (f) f(msg); }
   }
 
   function abreRelatorio({ saidas, refAtual, refAnterior }) {
@@ -1087,7 +1099,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       if (entrada.kind === "file" && ehEntrada(entrada.name)) {
         const arq = await entrada.getFile();
         // o conteúdo só é lido no worker, e só para arquivos novos/alterados (os já lidos antes vêm do navegador)
-        lidos.push({ nome: prefixo + arq.name, arquivo: arq, tamanho: arq.size, modificado: arq.lastModified });
+        lidos.push({ nome: prefixo + arq.name, arquivo: arq, handle: entrada, tamanho: arq.size, modificado: arq.lastModified });
       } else if (entrada.kind === "directory" && nivel < MAX_NIVEIS) {
         lidos.push(...await lerPastaHandle(entrada, prefixo + entrada.name + "/", nivel + 1));
       }
@@ -1141,7 +1153,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 
   // Guarda a pasta conectada no navegador (IndexedDB) para reabri-la sozinho nas próximas visitas
   const idb = {
-    open() { return new Promise((res, rej) => { const r = indexedDB.open("faturamento", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+    open() { return new Promise((res, rej) => { const r = indexedDB.open(PFX + "faturamento", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
     async get(k) { try { const db = await this.open(); return await new Promise((res) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); } catch (e) { return null; } },
     async set(k, v) { try { const db = await this.open(); await new Promise((res) => { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = res; t.onerror = res; }); } catch (e) {} },
   };
@@ -1174,7 +1186,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   // Janela de escolha da pasta. Normalmente abre na última pasta usada (id "faturamento"); depois de um cancelamento ou
   // de erro ("modo seguro") abre na Área de Trabalho: se a pasta antiga mudou de nome no OneDrive, o Chrome tentava abrir
   // nela e a janela travava sem aparecer ("File picker already active" nas tentativas seguintes).
-  const PICKER_LS = "faturamento_picker_seguro";
+  const PICKER_LS = PFX + "faturamento_picker_seguro";
   const pickerSeguro = (sim) => { try { if (sim) localStorage.setItem(PICKER_LS, "1"); else localStorage.removeItem(PICKER_LS); } catch (e) {} };
   let escolhendo = false, tentativasPasta = 0;
   // ajuda quando a janela de escolha não aparece (OneDrive travado, pasta renomeada): explica e oferece o modo alternativo
@@ -1211,7 +1223,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         if (escolhendo && !abriu && tentativa === tentativasPasta) { pickerSeguro(true); ajudaPasta(TEXTO_SEM_JANELA); }
       }, 4000);
       try {
-        const handle = await window.showDirectoryPicker(seguro ? { mode: "read", startIn: "desktop" } : { id: "faturamento", mode: "read" });
+        const handle = await window.showDirectoryPicker(seguro ? { mode: "read", startIn: "desktop" } : { id: ESCOPO || "faturamento", mode: "read" });
         escolhendo = false;
         pickerSeguro(false);
         pastaHandle = handle;
@@ -1337,7 +1349,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   // ===== Ajustes da etapa 2 guardados (pasta do SharePoint; sem pasta, só neste navegador) =====
   // A etapa 2 só abre quando algum arquivo foi lido agora (novo ou alterado desde a última análise neste navegador) ou pelo
   // botão "Etapa 2". Sem arquivo novo, a análise segue sozinha com os ajustes salvos — os mesmos para todos.
-  const LS_AJUSTES = "faturamento_ajustes_etapa2";
+  const LS_AJUSTES = PFX + "faturamento_ajustes_etapa2";
   let forcarEtapa2 = false, refTop20 = "";
   async function ajustesSalvos(ref) {
     const comp = window.arquivoCompartilhado;
@@ -1699,7 +1711,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   }
 
   // ===== Filtros de cada pessoa: guardados só neste navegador (não mudam a tela de mais ninguém) =====
-  const FILTROS_LS = "faturamento_filtros_pessoais";
+  const FILTROS_LS = PFX + "faturamento_filtros_pessoais";
   function lerFiltrosSalvos() { try { return JSON.parse(localStorage.getItem(FILTROS_LS) || "{}") || {}; } catch (e) { return {}; } }
   function salvaFiltros(extra) {
     const atual = Object.assign(lerFiltrosSalvos(), { sup: filtrosEstado.sup, ref: filtrosEstado.ref, mes: filtrosEstado.mes,
@@ -1902,6 +1914,28 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       } else window.avisoSite(`Acompanhamento baixado (${msg.info.nome}). Sem pasta conectada, as indiretas dividem o realizado do mês pelos dias que já passaram.`);
     } finally { b.disabled = false; b.textContent = texto; esperaAcomp = null; }
   });
+  // ===== Excel de Grandes Clientes (botão "GC" da aba Dados do relatório) =====
+  // O relatório manda a lista (planilha da pasta + adicionadas); o Python, com a análise já carregada, monta o Excel com
+  // todos os meses. Devolve { ok, info | motivo } para o relatório mostrar a mensagem.
+  let esperaGC = null;
+  window.baixarGC = async (lista) => {
+    if (!worker || !$("btnAcomp") || $("btnAcomp").hidden)
+      return { ok: false, motivo: "a análise não está carregada neste site: clique em Selecionar pasta e analisar (ou Atualizar) e tente de novo" };
+    if (esperaGC) return { ok: false, motivo: "o Excel de GC ainda está sendo gerado" };
+    const msg = await new Promise((ok) => { esperaGC = ok; worker.postMessage({ fase: "gc", lista }); });
+    if (msg.tipo === "gcErro") return { ok: false, motivo: msg.motivo };
+    const url = URL.createObjectURL(new Blob([msg.conteudo], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const a = document.createElement("a"); a.href = url; a.download = msg.info.nome; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return { ok: true, info: msg.info };
+  };
+  // Dados das matrículas GC para a tela (as adicionadas no relatório): null se a análise não está carregada
+  const filaGCDados = [];
+  window.dadosGC = async (lista) => {
+    if (!worker || !$("btnAcomp") || $("btnAcomp").hidden) return null;
+    const msg = await new Promise((ok) => { filaGCDados.push(ok); worker.postMessage({ fase: "gcDados", lista }); });
+    return msg.tipo === "gcDados" ? msg.dados : null;
+  };
   // Abrir um relatório já gerado (no celular: Relatorio_Faturamento.html da pasta). Escolher junto o ajustes_relatorio.json
   // usa os ajustes mais recentes do arquivo no lugar dos que vieram embutidos.
   $("btnAbrirRel").addEventListener("click", () => $("inputRelatorio").click());
