@@ -59,3 +59,19 @@ def test_orcado_sup_sem_o_mes_usa_o_rf_mais_recente(pasta):
     assert "(= RF01T26)" in dre.rotulo_fonte(ctx, sup, "09/2026")
     assert dre.fonte_substituta(ctx, sup, "08/2026") is None           # mês com orçado SUP: continua o dele
     assert dre.fonte_substituta(ctx, "RF01T26", "09/2026") is None
+
+
+def test_acompanhamento_segue_o_mes_da_tela(pasta):
+    """O painel troca entre meses já gerados sem chamar o Python: o export pede o mês da tela e o contexto se ajusta."""
+    from faturamento.acompanhamento import dados_acompanhamento
+    foto = lambda ctx: repr(dados_acompanhamento(ctx, "TODAS"))
+    s = _sessao(pasta)
+    s.continuar()
+    set_ = foto(s.ctx)
+    s.continuar(ref="07/2026")
+    jul = foto(s.ctx)
+    assert "07/2026" in jul and set_ != jul
+    assert foto(s.contexto_do_mes(None)) == set_          # voltou a setembro na tela (mês guardado): o export é de setembro
+    assert s.ctx.ref_atual == "09/2026"
+    assert foto(s.contexto_do_mes("07/2026")) == jul
+    assert foto(s.contexto_do_mes("07/2026")) == jul      # já no mês: não refaz

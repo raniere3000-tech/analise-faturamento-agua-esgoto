@@ -47,6 +47,27 @@ class Sessao:
         resultado["leitura"] = cache_arquivos.resumo()          # o site mostra quantos arquivos foram lidos / reaproveitados
         return resultado
 
+    def _restaura(self):
+        import copy
+        self.ctx.__dict__.clear()
+        self.ctx.__dict__.update({k: copy.copy(v) if isinstance(v, (dict, list, set)) else v for k, v in self._inicial.items()})
+
+    def contexto_do_mes(self, ref=None):
+        """Contexto no mês `ref` (None = o mais recente) para os exports do site (Acompanhamento): o painel guarda os
+        meses já gerados e troca entre eles sem chamar o Python, então o contexto pode estar em outro mês. Aqui só as
+        etapas de que os exports precisam (mês, referências e marca de SUP/serviço) — sem gerar o relatório."""
+        if getattr(self, "_inicial", None) is None or getattr(self, "_mes", None) == (ref or None):
+            return self.ctx
+        from .comparativo import limita_ao_mes
+        from .dre import prepara
+        self._restaura()
+        self._mes = ref or None
+        if ref:
+            limita_ao_mes(self.ctx, ref)
+        define_referencias(self.ctx)
+        prepara(self.ctx)
+        return self.ctx
+
     # ---- fase 2 ----
     def continuar(self, ajustes=None, texto_justificativa=None, ref=None):
         """`ref` (MM/AAAA): gera a análise daquele mês (filtro de mês do painel). Pode ser chamada de novo na mesma
@@ -59,8 +80,8 @@ class Sessao:
                 aplica_ajustes_top20(ctx, ajustes)
             self._inicial = {k: copy.copy(v) if isinstance(v, (dict, list, set)) else v for k, v in ctx.__dict__.items()}
         else:                                          # nova chamada: volta ao estado inicial (sem o que a anterior calculou)
-            ctx.__dict__.clear()
-            ctx.__dict__.update({k: copy.copy(v) if isinstance(v, (dict, list, set)) else v for k, v in self._inicial.items()})
+            self._restaura()
+        self._mes = ref or None
         if ref:
             from .comparativo import limita_ao_mes
             limita_ao_mes(ctx, ref)

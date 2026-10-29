@@ -253,11 +253,11 @@ async function faseContinuar(ajustes, ref) {
 }
 
 // Export "Acompanhamento Mensal" (botão do site): usa a análise que já está carregada aqui
-async function faseAcompanhamento(sup, fotos) {
+async function faseAcompanhamento(sup, fotos, ref) {
   const pyodide = await iniciaPyodide();
   const caminho = "/tmp/acompanhamento.xlsx";
   const acomp = pyodide.globals.get("acompanhamento");
-  const info = JSON.parse(acomp(sup || "TODAS", JSON.stringify(fotos || []), caminho));
+  const info = JSON.parse(acomp(sup || "TODAS", JSON.stringify(fotos || []), caminho, ref || null));
   acomp.destroy();
   const bytes = pyodide.FS.readFile(caminho);
   avisa("acompanhamento", { info, conteudo: bytes.buffer }, [bytes.buffer]);
@@ -266,7 +266,7 @@ async function faseAcompanhamento(sup, fotos) {
 self.onmessage = async (evento) => {
   const { fase, arquivos, ajustes } = evento.data;
   if (fase === "acompanhamento") {
-    try { await faseAcompanhamento(evento.data.sup, evento.data.fotos); }
+    try { await faseAcompanhamento(evento.data.sup, evento.data.fotos, evento.data.ref); }
     catch (erro) { avisa("acompanhamentoErro", { motivo: String((erro && erro.message) || erro).split("\n").slice(-3).join(" ") }); }
     return;
   }
