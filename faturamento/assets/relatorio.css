@@ -761,3 +761,7 @@ table.tabela-plano tbody tr.pl-z2 td { background-color:#EEF3F8; }
 .orc-grupos-lista label { display:block; padding:2px 0; white-space:nowrap; font-weight:400; }
 .orc-grupos-lista hr { border:0; border-top:1px solid #E3E8EF; margin:4px 0; }
 .card.orc-grupos-card { overflow:visible; }       /* a lista de grupos abre por cima, sem ser cortada pelo card */
+/* Análise: variação do faturamento direto por categoria / cidade */
+.var-cat-tabela th.ordenavel { cursor:pointer; user-select:none; }
+.var-cat-tabela td:first-child, .var-cat-tabela th:first-child { text-align:left; }
+.var-cat-tabela td.var-neg { color:#C2560C; }
