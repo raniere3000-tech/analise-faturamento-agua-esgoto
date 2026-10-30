@@ -2212,7 +2212,12 @@ try { garItens = JSON.parse(localStorage.getItem(GAR_LS) || '{}') || {}; } catch
 const garEsc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const garR = (v) => (v == null || isNaN(v) ? '–' : 'R$ ' + fmtBR(v, 2));
 const garN = (v, d) => (v == null || isNaN(v) ? '–' : fmtBR(v, d || 0));
-const garEmAnalise = (d) => !!d && (d.sit || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim() === 'EM ANALISE';
+// Em análise = Situação Conta EM ANALISE ou (teste) Situação Lançamento com "RETIDA" no nome: muitas contas aparecem como
+// liberadas na Situação Conta e ainda estão retidas no lançamento.
+const garNormSit = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+const garRetida = (d) => !!d && /RETID/.test(garNormSit(d.lanc));
+const garEmAnalise = (d) => !!d && (garNormSit(d.sit) === 'EM ANALISE' || garRetida(d));
+const garRotSit = (d) => (garNormSit(d.sit) === 'EM ANALISE' ? 'Em análise' : garRetida(d) ? 'Em análise (retida)' : (d.sit || ''));
 const garVar = (atual, media) => (atual == null || !media ? null : (atual - media) / media);
 
 function garCarregar() {
@@ -2323,7 +2328,7 @@ function garDesenharTop() {
     tab.tBodies[0].innerHTML = ls.map((d) => {
         const dc = garVar(d.cons, d.mCons), dv = garVar(d.val, d.mVal);
         const forte = (dc != null && Math.abs(dc) > 0.3) || (dv != null && Math.abs(dv) > 0.3);
-        const sit = d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? 'Em análise' : d.sit)}</span>` : '<span class="gar-sit">sem fatura no mês</span>';
+        const sit = d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? garRotSit(d) : d.sit)}</span>` : '<span class="gar-sit">sem fatura no mês</span>';
         const lig = String(d.lig);
         return `<tr class="${forte ? 'gar-linha-forte' : ''}"><td class="num">${d.rank}</td><td class="${forte ? 'gar-forte' : ''}">${garEsc(lig)}</td>`
             + `<td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td><td>${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td>${garEsc(d.sup)}</td>`
@@ -2368,7 +2373,7 @@ function garVarValor(d, r, c) {
     if (c === 'dc') return d.cons != null && d.cAnt != null ? d.cons - d.cAnt : null;
     if (c === 'dv') return garDifVal(d);
     if (c === 'pv') return d.vAnt ? garDifVal(d) / d.vAnt : null;
-    if (c === 'sit') return garEmAnalise(d) ? 'Em análise' : d.sit;
+    if (c === 'sit') return garEmAnalise(d) ? garRotSit(d) : d.sit;
     if (c === 'grupo') return parseInt(normGrupo(d.grupo), 10) || 0;
     return d[c];
 }
@@ -2396,7 +2401,7 @@ function garDesenharVar() {
             + `title="Clique para ordenar">${t}${c === campo ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '<th></th></tr>';
         tab.tBodies[0].innerHTML = vis.map(([d, r]) => {
             const dc = (d.cons != null && d.cAnt != null) ? d.cons - d.cAnt : null, dv = garDifVal(d), pv = d.vAnt ? dv / d.vAnt : null;
-            const sit = d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? 'Em análise' : d.sit)}</span>` : '';
+            const sit = d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? garRotSit(d) : d.sit)}</span>` : '';
             const lig = String(d.lig), cls = dv < 0 ? 'gar-queda' : 'gar-aumento';
             return `<tr><td class="num">${r}</td><td>${garEsc(lig)}</td><td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td>`
                 + `<td>${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td>${garEsc(d.sup)}</td><td class="num">${garN(garValorCol(d, 'eco'))}</td>`
@@ -2502,7 +2507,7 @@ function garValorAnalise(it, c) {
     switch (c) {
         case 'lig': return it.lig;
         case 'tot': return d ? (d.res || 0) + (d.com || 0) + (d.ind || 0) + (d.pub || 0) : null;
-        case 'sit': return d ? (garEmAnalise(d) ? 'Em análise' : (d.sit || '')) : '';
+        case 'sit': return d ? (garEmAnalise(d) ? garRotSit(d) : (d.sit || '')) : '';
         case 'media': return it.media; case 'calc': return calc; case 'anterior': return it.anterior;
         case 'atual': return atual; case 'dif': return dif;
         case 'motivo': return it.motivo === 'QUEDA' ? 'Queda de consumo' : it.motivo === 'AUMENTO' ? 'Aumento de consumo' : '';
@@ -2543,7 +2548,7 @@ function garDesenharAnalise() {
         const { d, calc, atual, dif } = garCalcItem(it);
         if (it.anterior == null && atual != null) { garItens[garChave(it.lig)].anterior = atual; garItens[garChave(it.lig)].foto = new Date().toISOString(); it.anterior = atual; mudouFoto = true; }
         const tot = d ? (d.res || 0) + (d.com || 0) + (d.ind || 0) + (d.pub || 0) : null;
-        const sit = !d ? '<span class="gar-sit">não encontrada</span>' : d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? 'Em análise' : d.sit)}</span>` : '<span class="gar-sit">sem fatura no mês</span>';
+        const sit = !d ? '<span class="gar-sit">não encontrada</span>' : d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? garRotSit(d) : d.sit)}</span>` : '<span class="gar-sit">sem fatura no mês</span>';
         const opt = (v, t) => `<option value="${v}" ${it.motivo === v ? 'selected' : ''}>${t}</option>`;
         const optOS = (v, t) => `<option value="${garEsc(v)}" ${(it.obs || '') === v ? 'selected' : ''}>${garEsc(t)}</option>`;
         const hist = it.historico ? ` <span class="gar-hist" title="Trazida da planilha (análise feita antes do painel): Fat. anterior informado na planilha">Histórico</span>` : '';
@@ -2716,7 +2721,7 @@ function garBaixarTop() {
         'Média cons. faturado (m³)', 'Cons. faturado atual (m³)', 'Δ% cons.', 'Média faturado (R$)', 'Faturado atual (R$)', 'Δ% R$', 'Situação conta'];
     const pct = (p) => (p == null ? null : Math.round(p * 1000) / 10);
     const linhas = garLinhasTop().map((d) => [d.rank, d.lig, d.nome, d.cat, d.loc, d.grupo, d.sup, garValorCol(d, 'eco'), d.mMed, d.mCons, d.cons,
-        pct(garVar(d.cons, d.mCons)), d.mVal, d.val, pct(garVar(d.val, d.mVal)), d.sit || '']);
+        pct(garVar(d.cons, d.mCons)), d.mVal, d.val, pct(garVar(d.val, d.mVal)), garEmAnalise(d) ? garRotSit(d) : (d.sit || '')]);
     baixarPlanilha(cols, linhas, `Garantia_Top${GAR.top}_${GAR.ref.replace('/', '-')}${GAR.soAnalise ? '_em_analise' : ''}${GAR_CAT_TOP.cats ? '_categorias_filtradas' : ''}.csv`);
 }
 function garExportarEmail() {
@@ -3410,7 +3415,7 @@ function opBlocoVolumes(D) {
 }
 
 // ---- Top 5: maiores quedas e aumentos de faturamento (água) entre os clientes do Top 100 ----
-// chave pessoal (navegador): só matrículas liberadas = Situação Conta do mês diferente de "Em análise" (base da aba Garantia)
+// chave pessoal (navegador): só matrículas liberadas = fora de "em análise" (Situação Conta EM ANALISE ou lançamento RETIDA, garEmAnalise)
 let opSoLiberadas = false;
 try { opSoLiberadas = localStorage.getItem('faturamento_op_top_liberadas') === '1'; } catch (e) { opSoLiberadas = false; }
 const opLig = (v) => String(v == null ? '' : v).trim().replace(/\.0+$/, '');

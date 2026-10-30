@@ -210,7 +210,7 @@ def gera_aba_garantia_html(ctx):
     <button type="button" class="btn-just gar-filtro" id="garSoLiberados" aria-pressed="false" title="Considerar só os grupos com situação Liberado (manual ou automática), sem mexer no filtro de grupos das outras abas">Somente grupos liberados</button></div>
     <p class="nota-secao"><b>Queda de consumo:</b> garantia = faturado ajustado (atual) − faturado anterior (foto).
     <b>Aumento de consumo:</b> garantia = faturado ajustado (atual) − valor pela média (estrutura tarifária), o que deixou de ser
-    perdido com o desconto pela média. Liberadas = Situação Conta diferente de EM ANALISE.</p>
+    perdido com o desconto pela média. Em análise = Situação Conta EM ANALISE <b>ou</b> Situação Lançamento com “RETIDA” no nome; liberadas = as demais.</p>
     <div id="garResumo"></div>
   </div>
 </div>
