@@ -2086,7 +2086,7 @@ function marcaNuvem(nome, r) {
 // clique na nuvem: grava tudo o que está na tela e relê a pasta; devolve true se tudo foi salvo
 window.sincronizarTudo = async function () {
     if (!compartilhado()) return false;
-    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncGarantia.empurrar(), await syncPlano.empurrar(), await syncOnePage.empurrar(), await salvarJustificativas()];
+    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncGarantia.empurrar(), await syncGarLiberadas.empurrar(), await syncPlano.empurrar(), await syncOnePage.empurrar(), await salvarJustificativas()];
     puxarAjustesCompartilhados(); lerJustificativasDaPasta();
     return r.every(Boolean);
 };
@@ -2151,6 +2151,7 @@ var syncSituacao = criaSync('situacao', 'Situação do grupo',
 function puxarAjustesCompartilhados() {
     syncForecast.puxar(); syncSituacao.puxar();
     if (typeof syncGarantia !== 'undefined') syncGarantia.puxar();
+    if (typeof syncGarLiberadas !== 'undefined') syncGarLiberadas.puxar();
     if (typeof syncPlano !== 'undefined') syncPlano.puxar();
     if (typeof syncOnePage !== 'undefined') syncOnePage.puxar();
 }
@@ -2221,8 +2222,24 @@ const garNormSit = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '
 let garLibCache = null;
 const garGruposLib = () => { if (!garLibCache) { garLibCache = gruposLiberados(); setTimeout(() => { garLibCache = null; }, 0); } return garLibCache; };
 const garRetida = (d) => !!d && /RETID/.test(garNormSit(d.lanc)) && !garGruposLib().has(normGrupo(d.grupo));
-const garEmAnalise = (d) => !!d && (garNormSit(d.sit) === 'EM ANALISE' || garRetida(d));
-const garRotSit = (d) => (garNormSit(d.sit) === 'EM ANALISE' ? 'Em análise' : garRetida(d) ? 'Em análise (retida)' : (d.sit || ''));
+// Liberada à mão: o botão ao lado da situação (Top 1000 e Aumentos e quedas) marca a matrícula como já liberada no mês, por cima
+// da Situação Conta / lançamento. Fica na seção "garantiaLiberadas" do ajustes_relatorio.json (vale para todos).
+const GAR_LIB_LS = 'faturamento_gar_liberadas';
+let garLibManual = {};
+try { garLibManual = JSON.parse(localStorage.getItem(GAR_LIB_LS) || '{}') || {}; } catch (e) { garLibManual = {}; }
+const garLiberadaManual = (d) => !!d && !!garLibManual[`${GAR.ref}|${d.lig}`];
+const garEmAnaliseAuto = (d) => !!d && (garNormSit(d.sit) === 'EM ANALISE' || garRetida(d));
+const garEmAnalise = (d) => garEmAnaliseAuto(d) && !garLiberadaManual(d);
+const garRotSit = (d) => (garLiberadaManual(d) ? 'Liberada (manual)' : garNormSit(d.sit) === 'EM ANALISE' ? 'Em análise' : garRetida(d) ? 'Em análise (retida)' : (d.sit || ''));
+// célula da situação: selo + botão (✓ Liberar quando em análise; ↺ para desfazer a marcação manual)
+function garSitCelula(d, vazio) {
+    if (!d.sit && !garLiberadaManual(d)) return vazio;
+    const an = garEmAnalise(d), man = garLiberadaManual(d), lig = garEsc(String(d.lig));
+    const selo = `<span class="gar-sit ${an ? 'gar-sit-analise' : 'gar-sit-lib'}"${man ? ` title="Marcada como liberada em ${garEsc(new Date(garLibManual[`${GAR.ref}|${d.lig}`]).toLocaleDateString('pt-BR'))}"` : ''}>${garEsc(an || man ? garRotSit(d) : d.sit)}</span>`;
+    const btn = man ? `<button type="button" class="gar-lib-btn gar-lib-desfaz" data-lib-lig="${lig}" title="Desfazer: voltar à situação da fatura">↺</button>`
+        : an ? `<button type="button" class="gar-lib-btn" data-lib-lig="${lig}" title="Marcar esta matrícula como já liberada">✓ Liberar</button>` : '';
+    return `<span class="gar-sit-cel">${selo}${btn}</span>`;
+}
 const garVar = (atual, media) => (atual == null || !media ? null : (atual - media) / media);
 
 function garCarregar() {
@@ -2333,7 +2350,7 @@ function garDesenharTop() {
     tab.tBodies[0].innerHTML = ls.map((d) => {
         const dc = garVar(d.cons, d.mCons), dv = garVar(d.val, d.mVal);
         const forte = (dc != null && Math.abs(dc) > 0.3) || (dv != null && Math.abs(dv) > 0.3);
-        const sit = d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? garRotSit(d) : d.sit)}</span>` : '<span class="gar-sit">sem fatura no mês</span>';
+        const sit = garSitCelula(d, '<span class="gar-sit">sem fatura no mês</span>');
         const lig = String(d.lig);
         return `<tr class="${forte ? 'gar-linha-forte' : ''}"><td class="num">${d.rank}</td><td class="${forte ? 'gar-forte' : ''}">${garEsc(lig)}</td>`
             + `<td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td><td>${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td>${garEsc(d.sup)}</td>`
@@ -2406,7 +2423,7 @@ function garDesenharVar() {
             + `title="Clique para ordenar">${t}${c === campo ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '<th></th></tr>';
         tab.tBodies[0].innerHTML = vis.map(([d, r]) => {
             const dc = (d.cons != null && d.cAnt != null) ? d.cons - d.cAnt : null, dv = garDifVal(d), pv = d.vAnt ? dv / d.vAnt : null;
-            const sit = d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? garRotSit(d) : d.sit)}</span>` : '';
+            const sit = garSitCelula(d, '');
             const lig = String(d.lig), cls = dv < 0 ? 'gar-queda' : 'gar-aumento';
             return `<tr><td class="num">${r}</td><td>${garEsc(lig)}</td><td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td>`
                 + `<td>${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td>${garEsc(d.sup)}</td><td class="num">${garN(garValorCol(d, 'eco'))}</td>`
@@ -2908,11 +2925,22 @@ function garRedesenhar() {
     garGrupos = gruposFiltro();
     garDesenharTop(); garDesenharVar(); garDesenharAnalise(); garDesenharResumo(); garDesenharOS();
 }
+var syncGarLiberadas = criaSync('garantiaLiberadas', 'Matrículas liberadas (manual)', () => garLibManual,
+    (m) => { garLibManual = m; try { localStorage.setItem(GAR_LIB_LS, JSON.stringify(garLibManual)); } catch (e) {} },
+    () => garRedesenhar());
+document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('.gar-lib-btn'); if (!b) return;
+    const k = `${GAR.ref}|${b.dataset.libLig}`;
+    if (garLibManual[k]) delete garLibManual[k]; else garLibManual[k] = new Date().toISOString();
+    try { localStorage.setItem(GAR_LIB_LS, JSON.stringify(garLibManual)); } catch (er) { /* sem armazenamento */ }
+    syncGarLiberadas.agendar();
+    garRedesenhar();
+});
 var syncGarantia = criaSync('garantia', 'Análise de garantia', () => garItens,
     (m) => { garItens = m; try { localStorage.setItem(GAR_LS, JSON.stringify(garItens)); } catch (e) {} },
     () => garRedesenhar(),
     () => !!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#garTabelaAnalise, #garAvisoOS')));
-garCarregar().then(() => { garRedesenhar(); syncGarantia.puxar(); }).catch((e) => console.warn('Garantia: dados não carregaram', e));
+garCarregar().then(() => { garRedesenhar(); syncGarantia.puxar(); syncGarLiberadas.puxar(); }).catch((e) => console.warn('Garantia: dados não carregaram', e));
 
 // ===== Aba Plano de ação: tabela colada da planilha =====
 // Cada referência (mês) tem um plano { colunas, linhas, atualizado } na seção "plano" do ajustes_relatorio.json — o

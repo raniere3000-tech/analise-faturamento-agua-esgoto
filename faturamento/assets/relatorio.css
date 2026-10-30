@@ -772,3 +772,16 @@ table.tabela-plano tbody tr.pl-z2 td { background-color:#EEF3F8; }
 #varCatTabela td:first-child { white-space:normal; min-width:90px; max-width:170px; }
 #varCatTabela th.var-grupo { text-align:center; border-left:1px solid rgba(255,255,255,.25); }
 #varCatTabela td.var-delta { background:#F6F8FB; }
+/* Garantia: botão de liberar à mão ao lado da situação */
+.gar-sit-cel { display:inline-flex; align-items:center; gap:4px; flex-wrap:nowrap; }
+.gar-lib-btn { border:1px solid #9BC9B4; background:#fff; color:#1f7a5c; border-radius:6px; font:inherit; font-size:10px; font-weight:600; padding:1px 6px; cursor:pointer; white-space:nowrap; }
+.gar-lib-btn:hover { background:#EAF6F0; }
+.gar-lib-btn.gar-lib-desfaz { color:#475569; border-color:#C9D3E0; }
+/* Top 1000 e Aumentos e quedas: tudo na tela, sem rolagem lateral */
+#garTabelaTop, #garTabelaAumento, #garTabelaQueda { font-size:11px; width:100%; }
+:is(#garTabelaTop, #garTabelaAumento, #garTabelaQueda) th { white-space:normal; padding:5px 4px; font-size:10.5px; line-height:1.2; vertical-align:bottom; }
+:is(#garTabelaTop, #garTabelaAumento, #garTabelaQueda) td { padding:3px 4px; }
+:is(#garTabelaTop, #garTabelaAumento, #garTabelaQueda) td:nth-child(4), :is(#garTabelaTop, #garTabelaAumento, #garTabelaQueda) td:nth-child(5) { white-space:normal; }
+:is(#garTabelaTop, #garTabelaAumento, #garTabelaQueda) td.gar-cli { white-space:normal; max-width:170px; min-width:100px; line-height:1.25; }
+:is(#garTabelaTop, #garTabelaAumento, #garTabelaQueda) .gar-sit { font-size:10px; }
+:is(#garTabelaTop, #garTabelaAumento, #garTabelaQueda) .gar-add { font-size:10.5px; padding:2px 6px; }
