@@ -1985,7 +1985,8 @@ let sitManuais = {};
 try { sitManuais = JSON.parse(localStorage.getItem(SIT_LS) || '{}') || {}; } catch (e) { /* sem armazenamento: vale só nesta abertura */ }
 function sitSalvar() {
     try { localStorage.setItem(SIT_LS, JSON.stringify(sitManuais)); } catch (e) { /* ignora */ }
-    if (typeof garDesenharResumo === 'function') setTimeout(garDesenharResumo, 0);     // "Somente grupos liberados" acompanha
+    // "Somente grupos liberados" e o "em análise (retida)" (só em grupo não liberado) acompanham a situação escolhida
+    if (typeof garRedesenhar === 'function') setTimeout(garRedesenhar, 0);
     if (typeof syncSituacao !== 'undefined') syncSituacao.agendar();
 }
 function sitAplicar(el) {
@@ -2212,10 +2213,14 @@ try { garItens = JSON.parse(localStorage.getItem(GAR_LS) || '{}') || {}; } catch
 const garEsc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const garR = (v) => (v == null || isNaN(v) ? '–' : 'R$ ' + fmtBR(v, 2));
 const garN = (v, d) => (v == null || isNaN(v) ? '–' : fmtBR(v, d || 0));
-// Em análise = Situação Conta EM ANALISE ou (teste) Situação Lançamento com "RETIDA" no nome: muitas contas aparecem como
-// liberadas na Situação Conta e ainda estão retidas no lançamento.
+// Em análise = Situação Conta EM ANALISE ou (teste) Situação Lançamento com "RETIDA" no nome num grupo ainda não liberado:
+// muitas contas aparecem como liberadas na Situação Conta e ainda estão retidas no lançamento.
 const garNormSit = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
-const garRetida = (d) => !!d && /RETID/.test(garNormSit(d.lanc));
+// RETIDA só vale nos grupos que ainda NÃO estão liberados (Situação do grupo da aba Diretas: automática, pela mesma regra da
+// etapa 2 — nenhuma conta EM ANALISE no grupo = Liberado —, ou a escolhida à mão). Grupo liberado: vale só a Situação Conta.
+let garLibCache = null;
+const garGruposLib = () => { if (!garLibCache) { garLibCache = gruposLiberados(); setTimeout(() => { garLibCache = null; }, 0); } return garLibCache; };
+const garRetida = (d) => !!d && /RETID/.test(garNormSit(d.lanc)) && !garGruposLib().has(normGrupo(d.grupo));
 const garEmAnalise = (d) => !!d && (garNormSit(d.sit) === 'EM ANALISE' || garRetida(d));
 const garRotSit = (d) => (garNormSit(d.sit) === 'EM ANALISE' ? 'Em análise' : garRetida(d) ? 'Em análise (retida)' : (d.sit || ''));
 const garVar = (atual, media) => (atual == null || !media ? null : (atual - media) / media);
