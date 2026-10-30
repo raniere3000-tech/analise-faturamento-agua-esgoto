@@ -3856,42 +3856,72 @@ document.addEventListener('click', (e) => {
 
 // ===== Aba Análise: variação do faturamento direto por categoria ou cidade (dados de analises.py) =====
 // Visão (categoria/cidade) e serviço (total, água, esgoto) escolhidos aqui; Superintendência e Grupo seguem o cabeçalho.
-let varCatOrdem = { col: 'at', desc: true }, varCatLinhas = null;
+let varCatOrdem = { col: 'fat_at', desc: true }, varCatLinhas = null;
 function varCatDesenhar() {
     const d = lerJson('var-cat-dados'), tab = document.getElementById('varCatTabela');
     if (!d || !tab) return;
     const visao = document.getElementById('varCatVisao').value, serv = document.getElementById('varCatServ').value;
     const iDim = visao === 'cat' ? 3 : 4, nomes = d.dims[visao], grupos = gruposFiltro(), sup = ESTADO.sup;
     const okG = d.dims.g.map((g) => !grupos || grupos.has(normGrupo(g))), okS = d.dims.sup.map((x) => sup === 'TODAS' || x === sup);
-    const soma = new Map();
-    d.linhas.forEach(([m, g, sp, , , sv, v], k) => {
-        if (!okG[g] || !okS[sp] || (serv === 'A' && sv !== 0) || (serv === 'E' && sv !== 1)) return;
-        const nome = nomes[d.linhas[k][iDim]], o = soma.get(nome) || { nome, an: 0, at: 0 };
-        if (m === 0) o.an += v; else o.at += v;
-        soma.set(nome, o);
+    // soma por nome × mês × serviço: [valor, economias, volume, acima do mínimo]
+    const soma = new Map(), novo = () => [[[0, 0, 0, 0], [0, 0, 0, 0]], [[0, 0, 0, 0], [0, 0, 0, 0]]];
+    d.linhas.forEach((l) => {
+        const [m, g, sp] = l; if (!okG[g] || !okS[sp]) return;
+        const nome = nomes[l[iDim]]; if (!soma.has(nome)) soma.set(nome, novo());
+        const c = soma.get(nome)[m][l[5]]; c[0] += l[6]; c[1] += l[7] || 0; c[2] += l[8] || 0; c[3] += l[9] || 0;
     });
-    const linhas = Array.from(soma.values()).filter((o) => Math.abs(o.an) > 0.004 || Math.abs(o.at) > 0.004);
-    const tot = linhas.reduce((t, o) => ({ an: t.an + o.an, at: t.at + o.at }), { an: 0, at: 0 }), dTot = tot.at - tot.an;
-    linhas.forEach((o) => { o.dif = o.at - o.an; o.pct = o.an ? o.dif / o.an : null; o.part = tot.at ? o.at / tot.at : null; });
+    // métricas de um mês pelo serviço escolhido (Total como no Resumo: economias = maior entre água e esgoto, volume = da água)
+    const met = (mes) => {
+        const [a, e] = mes;
+        const fat = serv === 'A' ? a[0] : serv === 'E' ? e[0] : a[0] + e[0];
+        const eco = serv === 'A' ? a[1] : serv === 'E' ? e[1] : Math.max(a[1], e[1]);
+        const vol = serv === 'E' ? e[2] : a[2];
+        return { fat, eco, vol, tar: vol ? fat / vol : null, aci: a[3] };
+    };
+    const K = ['fat', 'eco', 'vol', 'tar', 'aci'];
+    const monta = (nome, x) => {
+        const an = met(x[0]), at = met(x[1]), o = { nome };
+        K.forEach((k) => { o[k + '_an'] = an[k]; o[k + '_at'] = at[k]; o[k + '_pct'] = an[k] ? (at[k] == null ? null : at[k] / an[k] - 1) : null; });
+        o.fat_dif = at.fat - an.fat;
+        return o;
+    };
+    const linhas = Array.from(soma.entries()).map(([n, x]) => monta(n, x)).filter((o) => Math.abs(o.fat_an) > 0.004 || Math.abs(o.fat_at) > 0.004 || o.eco_an || o.eco_at);
+    const totX = novo();
+    soma.forEach((x) => [0, 1].forEach((m) => [0, 1].forEach((sv) => [0, 1, 2, 3].forEach((k) => { totX[m][sv][k] += x[m][sv][k]; }))));
+    const tot = monta('Total', totX);
+    linhas.forEach((o) => { o.part = tot.fat_at ? o.fat_at / tot.fat_at : null; });
     const { col, desc } = varCatOrdem;
     linhas.sort((x, y) => { const a = x[col], b = y[col];
         if (col === 'nome') return desc ? String(b).localeCompare(String(a), 'pt-BR') : String(a).localeCompare(String(b), 'pt-BR');
         return ((a == null ? -Infinity : a) - (b == null ? -Infinity : b)) * (desc ? -1 : 1); });
-    const rs = (v) => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const n = (v, dc) => (v == null ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: dc, maximumFractionDigits: dc }));
     const pc = (v) => (v == null ? '–' : (v > 0 ? '+' : '') + (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%');
     const cls = (v) => (v != null && v < -0.0005 ? ' var-neg' : '');
-    const cab = [['nome', visao === 'cat' ? 'Categoria' : 'Cidade'], ['an', `Faturamento ${d.anterior}`], ['at', `Faturamento ${d.atual}`],
-        ['dif', 'Δ R$'], ['pct', 'Δ %'], ['part', `Part. em ${d.atual}`]];
-    tab.tHead.innerHTML = '<tr>' + cab.map(([k, t]) => `<th class="ordenavel${k === 'nome' ? '' : ' num'}" data-var-ord="${k}" title="Ordenar">${garEsc(t)}${k === col ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '</tr>';
-    tab.tBodies[0].innerHTML = linhas.map((o) => `<tr><td>${garEsc(o.nome)}</td><td class="num">${rs(o.an)}</td><td class="num">${rs(o.at)}</td>`
-        + `<td class="num${cls(o.dif)}">${rs(o.dif)}</td><td class="num${cls(o.pct)}">${pc(o.pct)}</td><td class="num">${o.part == null ? '–' : pc(o.part).replace('+', '')}</td></tr>`).join('')
-        + (linhas.length ? `<tr class="dre-forte"><td>Total</td><td class="num">${rs(tot.an)}</td><td class="num">${rs(tot.at)}</td><td class="num${cls(dTot)}">${rs(dTot)}</td>`
-            + `<td class="num${cls(tot.an ? dTot / tot.an : null)}">${pc(tot.an ? dTot / tot.an : null)}</td><td class="num">100,0%</td></tr>`
-            : '<tr><td colspan="6">Sem faturamento para os filtros escolhidos.</td></tr>');
+    const A = d.anterior, T = d.atual;
+    // [chave, rótulo, formato, grupo do cabeçalho]
+    const cols = [['fat_an', A, (v) => n(v, 0), 'Faturamento (R$)'], ['fat_at', T, (v) => n(v, 0), 'Faturamento (R$)'], ['fat_dif', 'Δ R$', (v) => n(v, 0), 'Faturamento (R$)'], ['fat_pct', 'Δ %', pc, 'Faturamento (R$)'],
+        ['eco_an', A, (v) => n(v, 0), 'Economias'], ['eco_at', T, (v) => n(v, 0), 'Economias'], ['eco_pct', 'Δ %', pc, 'Economias'],
+        ['vol_an', A, (v) => n(v, 0), 'Volume faturado (m³)'], ['vol_at', T, (v) => n(v, 0), 'Volume faturado (m³)'], ['vol_pct', 'Δ %', pc, 'Volume faturado (m³)'],
+        ['tar_an', A, (v) => n(v, 2), 'Tarifa média (R$/m³)'], ['tar_at', T, (v) => n(v, 2), 'Tarifa média (R$/m³)'], ['tar_pct', 'Δ %', pc, 'Tarifa média (R$/m³)'],
+        ['aci_an', A, (v) => n(v, 0), 'Econ. acima do mínimo'], ['aci_at', T, (v) => n(v, 0), 'Econ. acima do mínimo'], ['aci_pct', 'Δ %', pc, 'Econ. acima do mínimo'],
+        ['part', `Part. ${T}`, (v) => (v == null ? '–' : pc(v).replace('+', '')), '']];
+    const delta = (k) => /_(dif|pct)$/.test(k);
+    const seta = (k) => (k === col ? (desc ? ' ▼' : ' ▲') : '');
+    const grupos1 = []; cols.forEach(([, , , g]) => { const u = grupos1[grupos1.length - 1]; if (u && u.g === g) u.n++; else grupos1.push({ g, n: 1 }); });
+    const rotNome = visao === 'cat' ? 'Categoria' : 'Cidade';
+    tab.tHead.innerHTML = `<tr><th rowspan="2" class="ordenavel" data-var-ord="nome" title="Ordenar">${rotNome}${seta('nome')}</th>`
+        + grupos1.map((x) => (x.g ? `<th colspan="${x.n}" class="var-grupo">${garEsc(x.g)}</th>` : `<th rowspan="2" class="ordenavel num" data-var-ord="part" title="Ordenar">${garEsc(cols[cols.length - 1][1])}${seta('part')}</th>`)).join('') + '</tr>'
+        + '<tr>' + cols.filter(([, , , g]) => g).map(([k, t]) => `<th class="ordenavel num${delta(k) ? ' var-delta' : ''}" data-var-ord="${k}" title="Ordenar">${garEsc(t)}${seta(k)}</th>`).join('') + '</tr>';
+    const linha = (o, forte) => `<tr${forte ? ' class="dre-forte"' : ''}><td>${garEsc(o.nome)}</td>`
+        + cols.map(([k, , f]) => `<td class="num${delta(k) ? ' var-delta' + cls(o[k]) : ''}">${k === 'part' && forte ? '100,0%' : f(o[k])}</td>`).join('') + '</tr>';
+    tab.tBodies[0].innerHTML = linhas.map((o) => linha(o)).join('')
+        + (linhas.length ? linha(tot, true) : `<tr><td colspan="${cols.length + 1}">Sem faturamento para os filtros escolhidos.</td></tr>`);
     const rot = { T: 'Total', A: 'Agua', E: 'Esgoto' }[serv];
-    varCatLinhas = { nome: `Variacao_faturamento_${visao === 'cat' ? 'categoria' : 'cidade'}_${rot}_${d.atual}`, cab: cab.map(([, t]) => t),
-        linhas: linhas.map((o) => [o.nome, Math.round(o.an * 100) / 100, Math.round(o.at * 100) / 100, Math.round(o.dif * 100) / 100,
-            o.pct == null ? '' : Math.round(o.pct * 10000) / 10000, o.part == null ? '' : Math.round(o.part * 10000) / 10000]) };
+    varCatLinhas = { nome: `Variacao_faturamento_${visao === 'cat' ? 'categoria' : 'cidade'}_${rot}_${d.atual}`,
+        cab: [rotNome].concat(cols.map(([k, t, , g]) => (g ? `${g} ${t}` : t))),
+        linhas: linhas.concat([tot]).map((o) => [o.nome].concat(cols.map(([k]) => {
+            const v = k === 'part' && o === tot ? 1 : o[k];
+            return v == null ? '' : Math.round(v * (/pct|part/.test(k) ? 10000 : 100)) / (/pct|part/.test(k) ? 10000 : 100); }))) };
 }
 document.addEventListener('change', (e) => { if (e.target.id === 'varCatVisao' || e.target.id === 'varCatServ') varCatDesenhar(); });
 document.addEventListener('click', (e) => {
