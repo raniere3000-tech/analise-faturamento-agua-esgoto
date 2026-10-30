@@ -451,7 +451,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v147</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v148</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -654,7 +654,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v147-20261030"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v148-20261030"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1071,6 +1071,8 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     if (!deMes) {                                 // a cópia na pasta é sempre a do mês mais recente
       htmlAtual = htmlRelatorio;
       if (pastaHandle) agendaCopia(3000);
+      // guardado neste navegador: se o navegador descartar a aba para liberar memória, a volta é imediata (restauraRelatorio)
+      idb.set("relatorioSalvo", { html: htmlRelatorio, refAtual, refAnterior, em: Date.now(), pasta: pastaHandle ? pastaHandle.name : "" });
     }
     $("btnAcomp").hidden = false;                 // a análise está carregada no Python: dá para gerar o Acompanhamento
     // o cabeçalho do relatório repete o do site; aqui ele some (no arquivo/PDF continua)
@@ -1100,7 +1102,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     if (relPorMes.has(ref)) { carregaMes(ref); return; }
     if (!worker || rodando || !relPorMes.size) {  // relatório aberto de arquivo (sem a análise carregada): só DRE/Indiretas mudam
       filtrosEstado.mes = ref; aplicaFiltros();
-      window.avisoSite("Sem a análise carregada (relatório aberto de arquivo), só a DRE e as Indiretas mudam de mês. Conecte a pasta para ver a análise inteira do mês.", true);
+      window.avisoSite("Sem a análise carregada (painel restaurado ou relatório aberto de arquivo), só a DRE e as Indiretas mudam de mês. Clique em ↻ Atualizar (ou conecte a pasta) para ver a análise inteira do mês.", true);
       return;
     }
     trocandoMes = ref;
@@ -2100,10 +2102,39 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   // O navegador só deixa pedir de novo a permissão da pasta depois de um clique/tecla do usuário.
   // Então: se a permissão já vale, carrega na hora; se não, a PRIMEIRA interação com a página
   // (clique em qualquer lugar ou tecla) reconecta e carrega sozinha.
+  // Aba descartada pelo navegador (economia de memória do Chrome/Edge): ao voltar, a página recarrega do zero. Em vez de reler
+  // a pasta e refazer a análise, mostra na hora o último relatório guardado (o mesmo que estava na tela). A análise do Python
+  // não fica carregada: ↻ Atualizar relê a pasta quando for preciso (troca de mês, Acompanhamento, extrair bases).
+  function restauraRelatorio(salvo, h) {
+    if (h) { pastaHandle = h; nuvemInicial(); btnAtualizar.hidden = false; btnEtapa2.hidden = false; btnAtualizar.title = `Reler a pasta "${h.name}"`; }
+    relPorMes = new Map([[salvo.refAtual, { html: salvo.html, refAnterior: salvo.refAnterior }]]);
+    mesUltimo = salvo.refAtual; mesesTodos = null; htmlAtual = null;
+    tituloPeriodo(salvo.refAtual, salvo.refAnterior);
+    progresso.hidden = true; $("fonteStatus").hidden = true; $("btnAcomp").hidden = true;
+    $("quadroRelatorio").srcdoc = salvo.html;
+    $("quadroRelatorio").hidden = false;
+    $("vazioWrap").hidden = true;
+    document.body.classList.add("relatorio-aberto");
+    const quando = new Date(salvo.em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    window.avisoSite(`O navegador tinha suspendido a aba para liberar memória: o painel voltou com o relatório de ${quando}, sem reler a pasta. `
+      + "Para reler os arquivos (ou trocar de mês, Acompanhamento e extrair bases), clique em ↻ Atualizar.");
+    if (!h) return;
+    // as alterações (justificativas, forecast...) continuam indo para a pasta: o 1º clique devolve a permissão, sem reler nada
+    h.queryPermission({ mode: "readwrite" }).then((p) => {
+      if (p === "granted") return;
+      const libera = () => { document.removeEventListener("pointerdown", libera, true); h.requestPermission({ mode: "readwrite" }).catch(() => {}); };
+      document.addEventListener("pointerdown", libera, true);
+    }).catch(() => {});
+  }
+
   (async function inicia() {
     if (!("showDirectoryPicker" in window)) return;
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     const h = await idb.get("pasta");
+    if (document.wasDiscarded) {                  // a aba foi descartada pelo navegador: volta o que estava na tela
+      const salvo = await idb.get("relatorioSalvo");
+      if (salvo && salvo.html && (!h || !salvo.pasta || salvo.pasta === h.name)) { restauraRelatorio(salvo, h); return; }
+    }
     if (!h) return;
     pastaHandle = h;
     nuvemInicial();
