@@ -82,3 +82,16 @@ def test_variacao_por_categoria_e_cidade_soma_o_faturamento_direto(sessao):
             pd.to_numeric(agua["Valor (R$)"], errors="coerce").fillna(0).sum(), abs=0.5)
     assert d["dims"]["cat"] and d["dims"]["cid"]
     assert 'id="varCatTabela"' in gera_variacao_categoria_cidade_html(ctx)
+
+
+def test_variacao_economias_volume_e_acima_do_minimo(sessao):
+    from faturamento.analises import dados_variacao_categoria_cidade
+    ctx = sessao.ctx
+    d = dados_variacao_categoria_cidade(ctx)
+    agua = ctx.df_atual[ctx.df_atual["__serv"] == "A"]
+    c = pd.to_numeric(agua["Consumo Faturado"], errors="coerce").fillna(0)
+    at_agua = [l for l in d["linhas"] if l[0] == 1 and l[5] == 0]
+    assert sum(l[8] for l in at_agua) == pytest.approx(c[c > 0].sum(), abs=0.5)                     # volume faturado
+    assert sum(l[7] for l in at_agua) == pytest.approx(
+        pd.to_numeric(agua["Economias_Totais"], errors="coerce").fillna(0)[c > 0].sum(), abs=0.5)     # economias faturadas
+    assert sum(l[9] for l in at_agua) == pytest.approx(ctx.df_minimo_por_grupo["Acima_Atual"].sum(), abs=0.5)

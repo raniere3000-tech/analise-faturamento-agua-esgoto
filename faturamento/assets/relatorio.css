@@ -765,3 +765,10 @@ table.tabela-plano tbody tr.pl-z2 td { background-color:#EEF3F8; }
 .var-cat-tabela th.ordenavel { cursor:pointer; user-select:none; }
 .var-cat-tabela td:first-child, .var-cat-tabela th:first-child { text-align:left; }
 .var-cat-tabela td.var-neg { color:#C2560C; }
+/* variação por categoria/cidade: muitas colunas numa tabela só, sem rolagem lateral */
+#varCatTabela { font-size:11px; width:100%; table-layout:auto; }
+#varCatTabela th, #varCatTabela td { padding:4px 5px; white-space:nowrap; }
+#varCatTabela th { font-size:10.5px; line-height:1.2; }
+#varCatTabela td:first-child { white-space:normal; min-width:90px; max-width:170px; }
+#varCatTabela th.var-grupo { text-align:center; border-left:1px solid rgba(255,255,255,.25); }
+#varCatTabela td.var-delta { background:#F6F8FB; }
