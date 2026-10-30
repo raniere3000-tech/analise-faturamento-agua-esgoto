@@ -181,6 +181,8 @@ class Sessao:
         passo(81.5, "Criando tabela: Cortadas com consumo (possível irregularidade)")
         from .cortadas_consumo import gera_cortadas_3meses_html, gera_cortadas_consumo_html
         cards_situacao_html += gera_cortadas_consumo_html(ctx) + gera_cortadas_3meses_html(ctx)
+        from .analises import gera_variacao_categoria_cidade_html
+        cards_situacao_html += gera_variacao_categoria_cidade_html(ctx)     # Δ do faturamento direto por categoria / cidade
 
         passo(82, "Calculando: resumo consolidado por grupo")
         df_resumo_grupo = monta_dados_resumo_grupo(ctx)

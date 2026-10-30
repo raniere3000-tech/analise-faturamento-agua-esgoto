@@ -67,3 +67,18 @@ def test_orcados_por_grupo_todos_os_arquivos_e_meses_seguintes(sessao):
         for m in ("valor", "volume", "economias"):
             assert sum(d["pesos"][s][m].values()) == pytest.approx(1.0)
     assert 'id="orcGruposTabela"' in orcados_por_grupo_html(sessao.ctx)
+
+
+def test_variacao_por_categoria_e_cidade_soma_o_faturamento_direto(sessao):
+    from faturamento.analises import dados_variacao_categoria_cidade, gera_variacao_categoria_cidade_html
+    ctx = sessao.ctx
+    d = dados_variacao_categoria_cidade(ctx)
+    for m, df in ((0, ctx.df_anterior), (1, ctx.df_atual)):
+        df = df[df["__serv"].isin(["A", "E"])]
+        esperado = pd.to_numeric(df["Valor (R$)"], errors="coerce").fillna(0).sum()
+        assert sum(l[6] for l in d["linhas"] if l[0] == m) == pytest.approx(esperado, abs=0.5)
+        agua = df[df["__serv"] == "A"]
+        assert sum(l[6] for l in d["linhas"] if l[0] == m and l[5] == 0) == pytest.approx(
+            pd.to_numeric(agua["Valor (R$)"], errors="coerce").fillna(0).sum(), abs=0.5)
+    assert d["dims"]["cat"] and d["dims"]["cid"]
+    assert 'id="varCatTabela"' in gera_variacao_categoria_cidade_html(ctx)

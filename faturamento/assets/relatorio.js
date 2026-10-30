@@ -40,6 +40,7 @@ function definirFiltros(parcial) {
     if (typeof garRedesenhar === 'function') garRedesenhar();
     if (typeof planoDesenhar === 'function') planoDesenhar();
     if (typeof orcGruposDesenhar === 'function') orcGruposDesenhar();
+    if (typeof varCatDesenhar === 'function') varCatDesenhar();
     if (typeof opDesenhar === 'function') opDesenhar();
 }
 
@@ -222,6 +223,7 @@ function filtrarPorGrupo() {
     if (typeof garRedesenhar === 'function') garRedesenhar();   // aba Garantia (Top 1000, análise e resumo)
     if (typeof planoDesenhar === 'function') planoDesenhar();   // aba Plano de ação
     if (typeof orcGruposDesenhar === 'function') orcGruposDesenhar();   // aba Diretas: orçados por grupo
+    if (typeof varCatDesenhar === 'function') varCatDesenhar();         // aba Análise: variação por categoria / cidade
     if (typeof opDesenhar === 'function') opDesenhar();         // aba One page
 }
 
@@ -3849,4 +3851,52 @@ document.addEventListener('click', (e) => {
     if (!e.target.closest || !e.target.closest('#orcGruposBaixar') || !orcGruposLinhas) return;
     const o = orcGruposLinhas;
     baixarPlanilha(o.cab, o.linhas, `Orcados_por_grupo_${o.rotServ}_${o.rotMet}_${o.ref}`.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_') + '.xlsx');
+});
+
+
+// ===== Aba Análise: variação do faturamento direto por categoria ou cidade (dados de analises.py) =====
+// Visão (categoria/cidade) e serviço (total, água, esgoto) escolhidos aqui; Superintendência e Grupo seguem o cabeçalho.
+let varCatOrdem = { col: 'at', desc: true }, varCatLinhas = null;
+function varCatDesenhar() {
+    const d = lerJson('var-cat-dados'), tab = document.getElementById('varCatTabela');
+    if (!d || !tab) return;
+    const visao = document.getElementById('varCatVisao').value, serv = document.getElementById('varCatServ').value;
+    const iDim = visao === 'cat' ? 3 : 4, nomes = d.dims[visao], grupos = gruposFiltro(), sup = ESTADO.sup;
+    const okG = d.dims.g.map((g) => !grupos || grupos.has(normGrupo(g))), okS = d.dims.sup.map((x) => sup === 'TODAS' || x === sup);
+    const soma = new Map();
+    d.linhas.forEach(([m, g, sp, , , sv, v], k) => {
+        if (!okG[g] || !okS[sp] || (serv === 'A' && sv !== 0) || (serv === 'E' && sv !== 1)) return;
+        const nome = nomes[d.linhas[k][iDim]], o = soma.get(nome) || { nome, an: 0, at: 0 };
+        if (m === 0) o.an += v; else o.at += v;
+        soma.set(nome, o);
+    });
+    const linhas = Array.from(soma.values()).filter((o) => Math.abs(o.an) > 0.004 || Math.abs(o.at) > 0.004);
+    const tot = linhas.reduce((t, o) => ({ an: t.an + o.an, at: t.at + o.at }), { an: 0, at: 0 }), dTot = tot.at - tot.an;
+    linhas.forEach((o) => { o.dif = o.at - o.an; o.pct = o.an ? o.dif / o.an : null; o.part = tot.at ? o.at / tot.at : null; });
+    const { col, desc } = varCatOrdem;
+    linhas.sort((x, y) => { const a = x[col], b = y[col];
+        if (col === 'nome') return desc ? String(b).localeCompare(String(a), 'pt-BR') : String(a).localeCompare(String(b), 'pt-BR');
+        return ((a == null ? -Infinity : a) - (b == null ? -Infinity : b)) * (desc ? -1 : 1); });
+    const rs = (v) => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const pc = (v) => (v == null ? '–' : (v > 0 ? '+' : '') + (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%');
+    const cls = (v) => (v != null && v < -0.0005 ? ' var-neg' : '');
+    const cab = [['nome', visao === 'cat' ? 'Categoria' : 'Cidade'], ['an', `Faturamento ${d.anterior}`], ['at', `Faturamento ${d.atual}`],
+        ['dif', 'Δ R$'], ['pct', 'Δ %'], ['part', `Part. em ${d.atual}`]];
+    tab.tHead.innerHTML = '<tr>' + cab.map(([k, t]) => `<th class="ordenavel${k === 'nome' ? '' : ' num'}" data-var-ord="${k}" title="Ordenar">${garEsc(t)}${k === col ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '</tr>';
+    tab.tBodies[0].innerHTML = linhas.map((o) => `<tr><td>${garEsc(o.nome)}</td><td class="num">${rs(o.an)}</td><td class="num">${rs(o.at)}</td>`
+        + `<td class="num${cls(o.dif)}">${rs(o.dif)}</td><td class="num${cls(o.pct)}">${pc(o.pct)}</td><td class="num">${o.part == null ? '–' : pc(o.part).replace('+', '')}</td></tr>`).join('')
+        + (linhas.length ? `<tr class="dre-forte"><td>Total</td><td class="num">${rs(tot.an)}</td><td class="num">${rs(tot.at)}</td><td class="num${cls(dTot)}">${rs(dTot)}</td>`
+            + `<td class="num${cls(tot.an ? dTot / tot.an : null)}">${pc(tot.an ? dTot / tot.an : null)}</td><td class="num">100,0%</td></tr>`
+            : '<tr><td colspan="6">Sem faturamento para os filtros escolhidos.</td></tr>');
+    const rot = { T: 'Total', A: 'Agua', E: 'Esgoto' }[serv];
+    varCatLinhas = { nome: `Variacao_faturamento_${visao === 'cat' ? 'categoria' : 'cidade'}_${rot}_${d.atual}`, cab: cab.map(([, t]) => t),
+        linhas: linhas.map((o) => [o.nome, Math.round(o.an * 100) / 100, Math.round(o.at * 100) / 100, Math.round(o.dif * 100) / 100,
+            o.pct == null ? '' : Math.round(o.pct * 10000) / 10000, o.part == null ? '' : Math.round(o.part * 10000) / 10000]) };
+}
+document.addEventListener('change', (e) => { if (e.target.id === 'varCatVisao' || e.target.id === 'varCatServ') varCatDesenhar(); });
+document.addEventListener('click', (e) => {
+    if (!e.target.closest) return;
+    const th = e.target.closest('#varCatTabela th[data-var-ord]');
+    if (th) { const k = th.dataset.varOrd; varCatOrdem = { col: k, desc: varCatOrdem.col === k ? !varCatOrdem.desc : k !== 'nome' }; varCatDesenhar(); return; }
+    if (e.target.closest('#varCatBaixar') && varCatLinhas) baixarPlanilha(varCatLinhas.cab, varCatLinhas.linhas, varCatLinhas.nome.replace(/[^A-Za-z0-9_-]+/g, '_') + '.xlsx');
 });
