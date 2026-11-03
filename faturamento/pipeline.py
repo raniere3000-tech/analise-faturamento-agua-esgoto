@@ -223,6 +223,8 @@ class Sessao:
         passo(93.5, "Criando aba Plano de ação")
         from .plano_acao import gera_aba_plano_html
         aba_plano_html = gera_aba_plano_html(ctx)
+        from .fechamento import gera_aba_fechamento_html
+        aba_fechamento_html = gera_aba_fechamento_html(ctx)
         passo(93.7, "Criando aba One page")
         from .one_page import gera_aba_onepage_html
         aba_onepage_html = gera_aba_onepage_html(ctx)
@@ -257,6 +259,7 @@ class Sessao:
             aba_forecast_html=aba_forecast_html,
             aba_garantia_html=aba_garantia_html,
             aba_plano_html=aba_plano_html,
+            aba_fechamento_html=aba_fechamento_html,
             aba_onepage_html=aba_onepage_html,
             filtros_dre_html=gera_filtros_dre_html(ctx),
             info_filtros_json=gera_info_filtros_json(ctx),

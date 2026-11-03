@@ -494,7 +494,7 @@ tr.gar-linha-forte td:nth-child(2) { font-weight:800; }
 }
 
 /* ===== Plano de ação ===== */
-#view-plano { padding:0 16px 32px; }
+#view-plano, #view-fechamento { padding:0 16px 32px; }
 .plano-colar { width:100%; min-height:44px; font:inherit; font-size:12.5px; padding:8px 10px; border:1px dashed var(--azul-claro); border-radius:8px; background:var(--zebra); resize:vertical; }
 .plano-colar:focus { background:#fff; outline:2px solid var(--azul-claro); }
 table.tabela-plano { font-family:var(--fonte); font-size:12px; }
@@ -785,3 +785,31 @@ table.tabela-plano tbody tr.pl-z2 td { background-color:#EEF3F8; }
 :is(#garTabelaTop, #garTabelaAumento, #garTabelaQueda) td.gar-cli { white-space:normal; max-width:170px; min-width:100px; line-height:1.25; }
 :is(#garTabelaTop, #garTabelaAumento, #garTabelaQueda) .gar-sit { font-size:10px; }
 :is(#garTabelaTop, #garTabelaAumento, #garTabelaQueda) .gar-add { font-size:10.5px; padding:2px 6px; }
+/* aba Fechamento */
+.fech-sel { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-left:10px; }
+.fech-sel select { font:inherit; font-weight:400; padding:4px 6px; border:1px solid #C9D3E0; border-radius:6px; }
+.fech-colar { border:2px dashed #9DB7D5; border-radius:10px; padding:18px; text-align:center; color:#1F4E79; background:#F5F9FD; cursor:pointer; margin:8px 0; outline:none; }
+.fech-colar:focus { border-color:#1F4E79; background:#EAF2FB; }
+.fech-arq { text-decoration:underline; cursor:pointer; }
+.fech-conf { display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(0, 1fr); gap:18px; margin-top:12px; }
+@media (max-width: 1000px) { .fech-conf { grid-template-columns:1fr; } }
+.fech-conf h3 { margin:0 0 8px; font-size:14px; }
+.fech-conf fieldset { border:1px solid #DCE1E9; border-radius:8px; margin:0 0 10px; padding:6px 10px 8px; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:4px 14px; }
+.fech-conf legend { font-weight:700; font-size:12px; color:#1F4E79; padding:0 4px; }
+.fech-conf label { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; }
+.fech-in { width:130px; text-align:right; font:inherit; font-size:12px; padding:3px 6px; border:1px solid #C9D3E0; border-radius:5px; }
+.fech-conf-img img { max-width:100%; border:1px solid #DCE1E9; border-radius:6px; }
+.fech-conf-img pre { white-space:pre-wrap; font-size:11px; max-height:200px; overflow:auto; background:#F7F8FA; padding:6px; }
+.fech-checks div { font-size:12px; margin:3px 0; }
+.fech-ok { color:#1f7a5c; } .fech-erro { color:#C2560C; font-weight:600; }
+.fech-acoes { display:flex; gap:8px; margin-top:10px; }
+.fech-salvar { background:#102840 !important; color:#fff !important; }
+.fech-card { max-width:900px; }
+table.tabela-fech { font-size:12.5px; width:100%; }
+table.tabela-fech td, table.tabela-fech th { padding:4px 10px; }
+table.tabela-fech td:first-child { text-align:left; }
+table.tabela-fech tr.f-forte td { font-weight:700; }
+table.tabela-fech tr.f-it td:first-child { font-style:italic; }
+table.tabela-fech tr.f-sub td:first-child { padding-left:28px; }
+table.tabela-fech tr.f-vazia td { height:10px; background:transparent; }
+table.tabela-fech td.f-ruim { background:#FFC7CE; color:#9C0006; }
