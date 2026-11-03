@@ -451,7 +451,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v150</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v151</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -493,6 +493,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   <button class="tab" data-view="indiretas" type="button">Indiretas</button>
   <button class="tab" data-view="forecast" type="button">Forecast</button>
   <button class="tab" data-view="dre" type="button">DRE</button>
+  <button class="tab" data-view="fechamento" type="button">Fechamento</button>
   <button class="tab" data-view="garantia" type="button">Garantia</button>
   <button class="tab" data-view="plano" type="button">Plano de ação</button>
   <button class="tab" data-view="onepage" type="button">One page</button>
@@ -654,7 +655,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v150-20261030"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v151-20261103"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1676,6 +1677,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   const escapa = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const TITULOS_VAZIO = {
     garantia: ["Garantia", "Top 1000 por média do faturado, análise de garantia matrícula a matrícula e resumo de ganhos"],
+    fechamento: ["Fechamento", "Fechamento do mês pelos números do BI (print colado), DRE e indiretas contra o orçado escolhido"],
     plano: ["Plano de ação", "Plano de ação colado da planilha, salvo na pasta para todos e incluído no PDF executivo"],
     onepage: ["One page", "Acompanhamento do faturamento numa folha vertical (lê bem no celular), baixado em PDF de uma página"],
     dre: ["DRE: orçado × realizado", "Realizado do mês contra o orçado RF e o orçado SUP, por superintendência"],
@@ -1686,7 +1688,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     forecast: ["Forecast", "Previsão de fechamento do mês, editável: ao mudar um valor, os totais e comparações se refazem"],
   };
   // quais filtros valem em cada aba (os demais ficam esmaecidos)
-  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo", "Mes"], tabelas: ["Sup", "Grupo", "Mes"], analise: ["Sup", "Grupo", "Mes"], dados: ["Mes"], forecast: ["Sup", "Ref", "Mes"], garantia: ["Sup", "Grupo", "Mes"], plano: ["Sup", "Grupo", "Mes"], onepage: ["Sup", "Ref", "Mes", "Grupo"] };
+  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo", "Mes"], tabelas: ["Sup", "Grupo", "Mes"], analise: ["Sup", "Grupo", "Mes"], dados: ["Mes"], forecast: ["Sup", "Ref", "Mes"], garantia: ["Sup", "Grupo", "Mes"], fechamento: ["Sup"], plano: ["Sup", "Grupo", "Mes"], onepage: ["Sup", "Ref", "Mes", "Grupo"] };
 
   function aplicaFiltros() {
     document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
@@ -1712,7 +1714,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     try { infoFiltros = el ? JSON.parse(el.textContent) : null; } catch (e) { infoFiltros = null; }
     // esconde, dentro do relatório, os controles que ficam no cabeçalho do site
     const estilo = doc.createElement("style");
-    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-analise, #view-dre, #view-indiretas, #view-garantia, #view-plano, #view-onepage, #view-dados { padding-top: 16px; }";
+    estilo.textContent = ".header-exec, .toolbar { display: none !important; } #view-resumo, #view-tabelas, #view-analise, #view-dre, #view-indiretas, #view-garantia, #view-plano, #view-fechamento, #view-onepage, #view-dados { padding-top: 16px; }";
     doc.head.appendChild(estilo);
     filtrosEstado.sup = "TODAS"; filtrosEstado.ref = infoFiltros.refPadrao || "";
     filtrosEstado.mes = infoFiltros ? infoFiltros.mesAtual : null;

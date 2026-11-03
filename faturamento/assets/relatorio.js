@@ -1,6 +1,6 @@
 const CHAVE_JUSTIFICATIVA = '__CHAVE_JUSTIFICATIVA__';
 
-const VIEWS = ['resumo', 'tabelas', 'analise', 'indiretas', 'forecast', 'dre', 'garantia', 'plano', 'onepage', 'dados'];
+const VIEWS = ['resumo', 'tabelas', 'analise', 'indiretas', 'forecast', 'dre', 'fechamento', 'garantia', 'plano', 'onepage', 'dados'];
 function mostrarView(view) {
     VIEWS.forEach(v => {
         document.getElementById('view-' + v).classList.toggle('ativo', v === view);
@@ -224,6 +224,7 @@ function filtrarPorGrupo() {
     if (typeof planoDesenhar === 'function') planoDesenhar();   // aba Plano de ação
     if (typeof orcGruposDesenhar === 'function') orcGruposDesenhar();   // aba Diretas: orçados por grupo
     if (typeof varCatDesenhar === 'function') varCatDesenhar();         // aba Análise: variação por categoria / cidade
+    if (typeof fechDesenhar === 'function') fechDesenhar();             // aba Fechamento (segue a SUP do cabeçalho)
     if (typeof opDesenhar === 'function') opDesenhar();         // aba One page
 }
 
@@ -2086,7 +2087,7 @@ function marcaNuvem(nome, r) {
 // clique na nuvem: grava tudo o que está na tela e relê a pasta; devolve true se tudo foi salvo
 window.sincronizarTudo = async function () {
     if (!compartilhado()) return false;
-    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncGarantia.empurrar(), await syncGarLiberadas.empurrar(), await syncPlano.empurrar(), await syncOnePage.empurrar(), await salvarJustificativas()];
+    const r = [await syncForecast.empurrar(), await syncSituacao.empurrar(), await syncGarantia.empurrar(), await syncGarLiberadas.empurrar(), await syncFechamento.empurrar(), await syncPlano.empurrar(), await syncOnePage.empurrar(), await salvarJustificativas()];
     puxarAjustesCompartilhados(); lerJustificativasDaPasta();
     return r.every(Boolean);
 };
@@ -2152,6 +2153,7 @@ function puxarAjustesCompartilhados() {
     syncForecast.puxar(); syncSituacao.puxar();
     if (typeof syncGarantia !== 'undefined') syncGarantia.puxar();
     if (typeof syncGarLiberadas !== 'undefined') syncGarLiberadas.puxar();
+    if (typeof syncFechamento !== 'undefined') syncFechamento.puxar();
     if (typeof syncPlano !== 'undefined') syncPlano.puxar();
     if (typeof syncOnePage !== 'undefined') syncOnePage.puxar();
 }
@@ -3968,3 +3970,247 @@ document.addEventListener('click', (e) => {
     if (th) { const k = th.dataset.varOrd; varCatOrdem = { col: k, desc: varCatOrdem.col === k ? !varCatOrdem.desc : k !== 'nome' }; varCatDesenhar(); return; }
     if (e.target.closest('#varCatBaixar') && varCatLinhas) baixarPlanilha(varCatLinhas.cab, varCatLinhas.linhas, varCatLinhas.nome.replace(/[^A-Za-z0-9_-]+/g, '_') + '.xlsx');
 });
+
+// ===== Aba Fechamento: números do BI (print colado e lido por OCR, conferido antes de salvar) =====
+// Fica na seção "fechamento" do ajustes_relatorio.json, por mês × superintendência (a do cabeçalho). As tabelas comparam com o
+// orçado escolhido na própria aba (dados de fechamento.py: todas as planilhas e meses da pasta). Sem forecast e sem plano de ação.
+const FECH_LS = 'faturamento_fechamento';
+let fechMapa = {};
+try { fechMapa = JSON.parse(localStorage.getItem(FECH_LS) || '{}') || {}; } catch (e) { fechMapa = {}; }
+const FECH_CLASSES = [['CORTE', 'CORTE DE ÁGUA'], ['RELIGAÇÃO', 'RELIGAÇÕES'], ['LNA', 'LIGAÇÕES DE ÁGUA'], ['SANÇÃO', 'SANÇÕES'], ['OUTROS', 'OUTROS ÁGUA']];
+// campos do fechamento: [chave, rótulo, casas decimais]
+const FECH_CAMPOS = {
+    'Diretas (linha do BI)': [['dA', 'Fat. bruto direta água', 2], ['dE', 'Fat. bruto direta esgoto', 2], ['dTot', 'Fat. diretas total', 2],
+        ['ecoA', 'Qtd eco fat água', 0], ['ecoE', 'Qtd eco fat esgoto', 0], ['volA', 'Vol. faturado água direto (m³)', 0], ['volE', 'Vol. faturado esgoto direto (m³)', 0],
+        ['bruto', 'Faturamento total bruto', 2], ['canc', 'R$ Cancelamento total', 2], ['liq', 'R$ Faturamento total líquido', 2]],
+    'Indiretas (R$)': FECH_CLASSES.map(([c, r]) => ['ri_' + c, r, 2]).concat([['iE', 'LIGAÇÕES DE ESGOTO', 2]]),
+    'Indiretas (eventos faturados)': FECH_CLASSES.map(([c, r]) => ['ev_' + c, r, 0]).concat([['ev_LNE', 'LIGAÇÕES DE ESGOTO', 0]]),
+};
+const fechDados = () => lerJson('fechamento-dados');
+const fechChave = (mes) => `${mes}|${ESTADO.sup}`;
+function fechSalvar() {
+    try { localStorage.setItem(FECH_LS, JSON.stringify(fechMapa)); } catch (e) { /* sem armazenamento */ }
+    if (typeof syncFechamento !== 'undefined') syncFechamento.agendar();
+}
+// número do print: "459.916,60" / "1.345.390" / "-5.650.900,52"; o OCR troca às vezes . e , — duas casas no fim = centavos
+function fechNum(t) {
+    let s = String(t || '').trim().replace(/\s/g, '').replace(/^\((.*)\)$/, '-$1');
+    const neg = /^[-–]/.test(s); s = s.replace(/^[-–]/, '');
+    if (!/^\d[\d.,]*$/.test(s)) return null;
+    let v;
+    if (/[.,]\d{1,2}$/.test(s)) { const i = Math.max(s.lastIndexOf('.'), s.lastIndexOf(',')); v = parseFloat(s.slice(0, i).replace(/[.,]/g, '') + '.' + s.slice(i + 1)); }
+    else v = parseFloat(s.replace(/[.,]/g, ''));
+    return isNaN(v) ? null : (neg ? -v : v);
+}
+// lê o texto do OCR: {valores, ref}
+function fechInterpretar(texto) {
+    const v = {}, linhas = String(texto || '').split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    const norm = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    const contaRef = {};                          // mês: a data que se repete nas linhas das tabelas (não a lista do filtro do BI)
+    let diretasDoTotal = false;
+    linhas.forEach((l, i) => {
+        const datas = l.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || [];
+        const semData = l.replace(/\b\d{2}\/\d{2}\/\d{4}\b/g, ' ');
+        const nums = (semData.match(/[-–]?\d[\d.,]*\d|[-–]?\d/g) || []).map((x) => ({ txt: x, v: fechNum(x), dec: /[.,]\d{1,2}$/.test(x) })).filter((x) => x.v != null);
+        const rot = norm(semData.replace(/[-–]?\d[\d.,]*/g, ' ')).replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim();
+        const DIRETAS = ['dA', 'dE', 'dTot', 'ecoA', 'ecoE', 'volA', 'volE', 'bruto', 'canc', 'liq'];
+        // linha Total das diretas: costuma vir com os separadores certos (a linha com a data às vezes perde os pontos e vírgulas)
+        if (/^TOTAL/.test(rot)) {
+            if (nums.length >= 8) { DIRETAS.forEach((k, j) => { if (nums[j]) v[k] = nums[j].v; }); diretasDoTotal = true; }
+            return;
+        }
+        if (datas.length) contaRef[datas[0].slice(3)] = (contaRef[datas[0].slice(3)] || 0) + 1;
+        // linha das diretas: a data e muitos números (se o OCR quebrar a linha, junta com a seguinte)
+        if (datas.length && nums.length >= 6 && v.dA == null && !diretasDoTotal) {
+            let todos = nums.map((x) => x.v);
+            if (todos.length < 10 && linhas[i + 1]) todos = todos.concat((linhas[i + 1].match(/[-–]?\d[\d.,]*\d/g) || []).map(fechNum).filter((x) => x != null));
+            DIRETAS.forEach((k, j) => { if (todos[j] != null) v[k] = todos[j]; });
+            return;
+        }
+        if (!nums.length) return;
+        let cl = null;
+        if (/RELIGA/.test(rot)) cl = 'RELIGAÇÃO';
+        else if (/CORTE/.test(rot)) cl = 'CORTE';
+        else if (/LIGA/.test(rot) && /ESGOTO/.test(rot)) cl = 'LNE';
+        else if (/LIGA/.test(rot)) cl = 'LNA';
+        else if (/SANC|FISCALIZ/.test(rot)) cl = 'SANÇÃO';
+        else if (/OUTROS/.test(rot)) cl = 'OUTROS';
+        if (!cl) return;
+        const n = nums[0];
+        if (n.dec) { const k = cl === 'LNE' ? 'iE' : 'ri_' + cl; if (v[k] == null) v[k] = n.v; }        // R$ (com centavos)
+        else { const k = 'ev_' + cl; if (v[k] == null) v[k] = n.v; }                                  // quantidade (Faturadas)
+    });
+    const ref = Object.keys(contaRef).sort((a, b) => contaRef[b] - contaRef[a])[0] || '';
+    return { valores: v, ref };
+}
+let fechImagemUrl = null, fechTesseract = null;
+async function fechOCR(blob) {
+    const msg = document.getElementById('fechMsg');
+    if (!window.Tesseract) {
+        msg.textContent = 'Carregando o leitor de imagem (primeira vez pode levar alguns segundos)…';
+        await new Promise((ok, erro) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; sc.onload = ok; sc.onerror = () => erro(new Error('não foi possível carregar o leitor de imagem (internet)')); document.head.appendChild(sc); });
+    }
+    msg.textContent = 'Lendo os números da imagem…';
+    // tudo do jsdelivr (o mesmo CDN do gráfico): leitor, núcleo e o dicionário de português
+    if (!fechTesseract) fechTesseract = await Tesseract.createWorker('por', 1, {
+        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1',
+        langPath: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/por@1.0.0/4.0.0_best_int' });
+    const r = await fechTesseract.recognize(blob);
+    return r.data.text;
+}
+async function fechReceberImagem(blob) {
+    const msg = document.getElementById('fechMsg');
+    if (fechImagemUrl) URL.revokeObjectURL(fechImagemUrl);
+    fechImagemUrl = URL.createObjectURL(blob);
+    try {
+        const texto = await fechOCR(blob);
+        const { valores, ref } = fechInterpretar(texto);
+        const n = Object.keys(valores).length;
+        msg.textContent = n ? `${n} número(s) lidos da imagem. Confira e corrija abaixo antes de salvar.` : 'Não encontrei os números na imagem: preencha abaixo ou tente um print mais nítido.';
+        fechConferir(valores, ref, texto);
+    } catch (e) {
+        msg.textContent = 'Não foi possível ler a imagem (' + (e.message || e) + '). Preencha os números abaixo.';
+        fechConferir({}, '', '');
+    }
+}
+// formulário de conferência: todos os campos editáveis, com as somas checadas
+function fechConferir(valores, ref, texto) {
+    const d = fechDados(), box = document.getElementById('fechConferir'); if (!d || !box) return;
+    const selMes = document.getElementById('fechMes');
+    if (ref && d.meses.includes(ref)) selMes.value = ref;
+    const fmt = (x, dc) => (x == null ? '' : x.toLocaleString('pt-BR', { minimumFractionDigits: dc, maximumFractionDigits: dc }));
+    box.innerHTML = `<div class="fech-conf"><div class="fech-conf-campos"><h3>Conferir os números — ${garEsc(d.rotulos[selMes.value] || selMes.value)} · ${garEsc(ESTADO.sup === 'TODAS' ? 'Todas' : ESTADO.sup)}</h3>`
+        + Object.entries(FECH_CAMPOS).map(([grupo, campos]) => `<fieldset><legend>${garEsc(grupo)}</legend>`
+            + campos.map(([k, rot, dc]) => `<label><span>${garEsc(rot)}</span><input class="fech-in" data-k="${k}" data-dc="${dc}" inputmode="decimal" value="${fmt(valores[k], dc)}"></label>`).join('') + '</fieldset>').join('')
+        + '<div id="fechChecks" class="fech-checks"></div>'
+        + '<div class="fech-acoes"><button type="button" class="btn-just fech-salvar" id="fechSalvarBtn">💾 Salvar fechamento</button><button type="button" class="btn-just" id="fechCancelar">Cancelar</button></div></div>'
+        + (fechImagemUrl ? `<div class="fech-conf-img"><img src="${fechImagemUrl}" alt="Print colado"><details><summary>Texto lido da imagem</summary><pre>${garEsc(texto || '')}</pre></details></div>` : '') + '</div>';
+    box.hidden = false;
+    fechChecar();
+}
+function fechLerForm() {
+    const v = {};
+    document.querySelectorAll('#fechConferir .fech-in').forEach((i) => { const x = fechNum(i.value); if (x != null) v[i.dataset.k] = x; });
+    return v;
+}
+function fechChecar() {
+    const el = document.getElementById('fechChecks'); if (!el) return;
+    const v = fechLerForm(), n = (x) => (x || 0), ok = (a, b, tol) => Math.abs(a - b) <= (tol || 1);
+    const iA = FECH_CLASSES.reduce((t, [c]) => t + n(v['ri_' + c]), 0);
+    const fmt = (x) => x.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const linhas = [];
+    if (v.dTot != null) linhas.push([ok(n(v.dA) + n(v.dE), v.dTot), `Diretas: água + esgoto = ${fmt(n(v.dA) + n(v.dE))} · total do BI ${fmt(v.dTot)}`]);
+    if (v.liq != null && v.bruto != null) linhas.push([ok(v.bruto + n(v.canc), v.liq), `Líquido: bruto + cancelamento = ${fmt(v.bruto + n(v.canc))} · líquido do BI ${fmt(v.liq)}`]);
+    if (v.bruto != null) { const s = n(v.dA) + n(v.dE) + iA + n(v.iE); linhas.push([Math.abs(s - v.bruto) <= Math.max(1, v.bruto * 0.001), `Bruto: diretas + indiretas = ${fmt(s)} · bruto do BI ${fmt(v.bruto)} (diferença ${fmt(v.bruto - s)})`]); }
+    el.innerHTML = linhas.map(([b, t]) => `<div class="${b ? 'fech-ok' : 'fech-erro'}">${b ? '✓' : '⚠'} ${garEsc(t)}</div>`).join('')
+        || '<div class="fech-erro">Preencha os números das diretas para checar as somas.</div>';
+}
+document.addEventListener('input', (e) => { if (e.target.classList && e.target.classList.contains('fech-in')) fechChecar(); });
+document.addEventListener('paste', (e) => {
+    if (!e.target.closest || !e.target.closest('#fechColar')) return;
+    const item = Array.from((e.clipboardData || {}).items || []).find((i) => i.type && i.type.startsWith('image/'));
+    if (!item) { document.getElementById('fechMsg').textContent = 'A área de transferência não tem imagem: no Power BI use "Copiar visual" ou tire um print (Win + Shift + S).'; return; }
+    e.preventDefault(); fechReceberImagem(item.getAsFile());
+});
+document.addEventListener('change', (e) => {
+    if (e.target.id === 'fechArquivo' && e.target.files[0]) { fechReceberImagem(e.target.files[0]); e.target.value = ''; }
+    if (e.target.id === 'fechMes' || e.target.id === 'fechOrcado') {
+        if (e.target.id === 'fechOrcado') { try { localStorage.setItem('faturamento_fech_orcado', e.target.value); } catch (er) {} }
+        fechDesenhar();
+    }
+});
+document.addEventListener('click', (e) => {
+    const id = e.target.id;
+    if (id === 'fechSalvarBtn') {
+        const mes = document.getElementById('fechMes').value, v = fechLerForm();
+        if (!Object.keys(v).length) { document.getElementById('fechMsg').textContent = 'Nada para salvar.'; return; }
+        fechMapa[fechChave(mes)] = { v, atualizado: new Date().toISOString() };
+        fechSalvar();
+        document.getElementById('fechConferir').hidden = true;
+        document.getElementById('fechMsg').textContent = `Fechamento de ${fechDados().rotulos[mes] || mes} salvo na pasta.`;
+        fechDesenhar();
+    } else if (id === 'fechCancelar') document.getElementById('fechConferir').hidden = true;
+    else if (id === 'fechEditar') { const s = fechMapa[fechChave(document.getElementById('fechMes').value)]; fechImagemUrl = null; fechConferir(s ? s.v : {}, '', ''); }
+    else if (id === 'fechLimpar') {
+        const mes = document.getElementById('fechMes').value, k = fechChave(mes);
+        if (!fechMapa[k]) return;
+        if (!confirm(`Apagar o fechamento de ${fechDados().rotulos[mes] || mes} (${ESTADO.sup})?`)) return;
+        delete fechMapa[k]; fechSalvar(); fechDesenhar();
+    } else if (e.target.closest && e.target.closest('#fechColar') && e.target.tagName !== 'INPUT') {
+        document.getElementById('fechMsg').textContent = 'Agora cole o print (Ctrl+V).';
+    }
+});
+function fechDesenhar() {
+    const d = fechDados(), alvo = document.getElementById('fechTabelas'); if (!d || !alvo) return;
+    const selMes = document.getElementById('fechMes'), selOrc = document.getElementById('fechOrcado');
+    if (!selMes.options.length) {
+        selMes.innerHTML = d.meses.slice().reverse().map((m) => `<option value="${garEsc(m)}">${garEsc(d.rotulos[m] || m)}</option>`).join('');
+        const salvos = Object.keys(fechMapa).filter((k) => k.endsWith('|' + ESTADO.sup)).map((k) => k.split('|')[0]).filter((m) => d.meses.includes(m));
+        const i = d.meses.indexOf(d.mesAtual);
+        selMes.value = salvos.length ? salvos.sort((a, b) => planoRefChave(a) < planoRefChave(b) ? 1 : -1)[0] : (i > 0 ? d.meses[i - 1] : d.mesAtual);
+        let salvoOrc = ''; try { salvoOrc = localStorage.getItem('faturamento_fech_orcado') || ''; } catch (e) {}
+        selOrc.innerHTML = d.fontes.map((f) => `<option value="${garEsc(f)}">${garEsc(f)}</option>`).join('') || '<option value="">Sem orçado</option>';
+        selOrc.value = d.fontes.includes(salvoOrc) ? salvoOrc : (d.fontes.includes(d.padrao) ? d.padrao : (d.fontes[0] || ''));
+    }
+    const mes = selMes.value, fonte = selOrc.value, sup = ESTADO.sup, salvo = fechMapa[fechChave(mes)];
+    const rotMes = d.rotulos[mes] || mes, nomeSup = sup === 'TODAS' ? 'Todas' : sup;
+    if (!salvo) { alvo.innerHTML = `<div class="card"><p class="gar-vazio">Nenhum fechamento salvo para ${garEsc(rotMes)} — ${garEsc(nomeSup)}. Cole o print do BI acima.</p></div>`; return; }
+    const r = salvo.v, o = ((d.orc[fonte] || {})[mes] || {})[sup] || {}, ev = ((d.ev[mes] || {})[sup]) || {};
+    const n = (x) => (x == null ? null : x), soma = (ks, obj) => (ks.some((k) => obj[k] != null) ? ks.reduce((t, k) => t + (obj[k] || 0), 0) : null);
+    const ris = FECH_CLASSES.map(([c]) => 'ri_' + c);
+    const calc = (x, ehReal) => {
+        const c = Object.assign({}, x);
+        c.dTot = ehReal && x.dTot != null ? x.dTot : soma(['dA', 'dE'], x);
+        c.iA = soma(ris, x); c.iTot = soma(['iA', 'iE'], c);
+        c.brutoDre = soma(['dTot', 'iTot'], c);
+        c.liqDre = ehReal && x.liq != null ? x.liq : (c.brutoDre != null ? c.brutoDre + (x.canc || 0) : null);
+        c.vmA = x.volA && x.ecoA ? x.volA / x.ecoA : null; c.vmE = x.volE && x.ecoE ? x.volE / x.ecoE : null;
+        c.tarA = x.dA && x.volA ? x.dA / x.volA : null; c.tarE = x.dE && x.volE ? x.dE / x.volE : null;
+        return c;
+    };
+    const R = calc(r, true), O = calc(o, false);
+    const fmt = (x, dc) => (x == null ? '–' : x.toLocaleString('pt-BR', { minimumFractionDigits: dc, maximumFractionDigits: dc }));
+    const pct = (x) => (x == null ? '–' : x.toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    // [chave, rótulo, classe da linha, casas]
+    const LIN = [['brutoDre', 'FATURAMENTO BRUTO', 'f-forte', 0], ['dTot', 'DIRETAS TOTAIS', 'f-forte', 0], ['dA', 'DIRETAS ÁGUA', 'f-sub', 0], ['dE', 'DIRETAS ESGOTO', 'f-sub', 0],
+        ['iTot', 'INDIRETAS TOTAIS', 'f-forte', 0], ['iA', 'INDIRETA ÁGUA', 'f-forte f-it', 0]].concat(FECH_CLASSES.map(([c, rot]) => ['ri_' + c, rot, 'f-sub', 0]),
+        [['iE', 'INDIRETA ESGOTO', 'f-forte f-it', 0], ['iE', 'LIGAÇÕES DE ESGOTO', 'f-sub', 0], ['ecoA', 'FAT ECONOMIAS ÁGUA', '', 0], ['ecoE', 'FAT ECONOMIAS ESGOTO', '', 0],
+        ['volA', 'VOL. FAT. ÁGUA', '', 0], ['volE', 'VOL. FAT. ESGOTO', '', 0], [null], ['vmA', 'VOLUME MÉDIO DE ÁGUA', '', 2], ['vmE', 'VOLUME MÉDIO DE ESGOTO', '', 2],
+        ['tarA', 'TARIFA MÉDIA DE ÁGUA', '', 2], ['tarE', 'TARIFA MÉDIA DE ESGOTO', '', 2], ['canc', 'CANCELAMENTO', 'f-forte', 0], ['liqDre', 'FATURAMENTO LÍQUIDO C/ REAJUSTE', 'f-forte', 0]]);
+    const linhaDre = ([k, rot, cls, dc]) => {
+        if (!k) return '<tr class="f-vazia"><td colspan="5"></td></tr>';
+        const a = n(O[k]), b = n(R[k]), dif = a != null && b != null ? b - a : null, p = dif != null && a ? dif / Math.abs(a) : null;
+        const ruim = dif != null && dif < -0.0001;                   // abaixo do orçado (no cancelamento: cancelou mais que o orçado)
+        return `<tr class="${cls}"><td>${garEsc(rot)}</td><td class="num">${fmt(a, dc)}</td><td class="num">${fmt(b, dc)}</td>`
+            + `<td class="num${ruim ? ' f-ruim' : ''}">${fmt(dif, dc)}</td><td class="num${ruim ? ' f-ruim' : ''}">${pct(p)}</td></tr>`;
+    };
+    const quando = salvo.atualizado ? new Date(salvo.atualizado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    const dre = `<div class="card fech-card"><h2>DRE — fechamento ${garEsc(rotMes)} — ${garEsc(nomeSup)}</h2>`
+        + `<p class="nota-secao">Números do BI salvos em ${garEsc(quando)} · orçado: <b>${garEsc(fonte || '—')}</b>. Faturamento bruto = diretas + indiretas; líquido = o do BI.</p>`
+        + `<div class="tabela-wrap"><table class="tabela-fech"><thead><tr><th>DRE</th><th class="num">Orçado</th><th class="num">${garEsc(rotMes)}</th><th class="num">Dif</th><th class="num">%</th></tr></thead><tbody>`
+        + LIN.map(linhaDre).join('') + '</tbody></table></div></div>';
+    // indiretas: R$ e eventos (com ticket médio realizado)
+    const linhaInd = (rot, a, b, cls, dc) => { const dif = a != null && b != null ? b - a : null, p = dif != null && a ? dif / a : null;
+        return `<tr class="${cls || ''}"><td>${garEsc(rot)}</td><td class="num">${fmt(a, dc)}</td><td class="num">${fmt(b, dc)}</td><td class="num${dif < -0.0001 ? ' f-ruim' : ''}">${fmt(dif, dc)}</td><td class="num${dif < -0.0001 ? ' f-ruim' : ''}">${pct(p)}</td></tr>`; };
+    const cabInd = (t1) => `<thead><tr><th>${t1}</th><th class="num">Orçado</th><th class="num">${garEsc(rotMes)}</th><th class="num">Dif</th><th class="num">%</th></tr></thead>`;
+    const indR = `<div class="card fech-card"><h2>Indiretas — valor (R$) — ${garEsc(rotMes)} — ${garEsc(nomeSup)}</h2><div class="tabela-wrap"><table class="tabela-fech">${cabInd('Classe')}<tbody>`
+        + FECH_CLASSES.map(([c, rot]) => linhaInd(rot, n(O['ri_' + c]), n(R['ri_' + c]), 'f-sub', 0)).join('')
+        + linhaInd('INDIRETA ÁGUA', O.iA, R.iA, 'f-forte f-it', 0) + linhaInd('LIGAÇÕES DE ESGOTO', n(O.iE), n(R.iE), 'f-sub', 0)
+        + linhaInd('INDIRETAS TOTAIS', O.iTot, R.iTot, 'f-forte', 0) + '</tbody></table></div></div>';
+    const evR = (c) => n(r['ev_' + c]), evO = (c) => n(ev[c === 'LNE' ? 'iE' : 'ri_' + c]);
+    const ticket = (c) => { const val = c === 'LNE' ? r.iE : r['ri_' + c], q = evR(c); return val != null && q ? val / q : null; };
+    const classesEv = FECH_CLASSES.concat([['LNE', 'LIGAÇÕES DE ESGOTO']]);
+    const indE = `<div class="card fech-card"><h2>Indiretas — eventos faturados — ${garEsc(rotMes)} — ${garEsc(nomeSup)}</h2>`
+        + `<p class="nota-secao">Orçado em eventos: planilha de eventos do orçado SUP (quando houver). Ticket médio = valor ÷ eventos do BI.</p>`
+        + `<div class="tabela-wrap"><table class="tabela-fech"><thead><tr><th>Classe</th><th class="num">Orçado</th><th class="num">${garEsc(rotMes)}</th><th class="num">Dif</th><th class="num">%</th><th class="num">Ticket médio (R$)</th></tr></thead><tbody>`
+        + classesEv.map(([c, rot]) => linhaInd(rot, evO(c), evR(c), 'f-sub', 0).replace('</tr>', `<td class="num">${fmt(ticket(c), 2)}</td></tr>`)).join('')
+        + (() => { const tq = classesEv.reduce((t, [c]) => t + (evR(c) || 0), 0), to = classesEv.some(([c]) => evO(c) != null) ? classesEv.reduce((t, [c]) => t + (evO(c) || 0), 0) : null;
+            return linhaInd('TOTAL (soma das classes)', to, tq || null, 'f-forte', 0).replace('</tr>', `<td class="num">${fmt(tq ? (R.iTot || 0) / tq : null, 2)}</td></tr>`); })()
+        + '</tbody></table></div></div>';
+    alvo.innerHTML = dre + indR + indE;
+}
+var syncFechamento = criaSync('fechamento', 'Fechamento', () => fechMapa,
+    (m) => { fechMapa = m; try { localStorage.setItem(FECH_LS, JSON.stringify(fechMapa)); } catch (e) {} },
+    () => fechDesenhar(),
+    () => !!(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('fech-in')));

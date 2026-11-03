@@ -95,3 +95,15 @@ def test_variacao_economias_volume_e_acima_do_minimo(sessao):
     assert sum(l[7] for l in at_agua) == pytest.approx(
         pd.to_numeric(agua["Economias_Totais"], errors="coerce").fillna(0)[c > 0].sum(), abs=0.5)     # economias faturadas
     assert sum(l[9] for l in at_agua) == pytest.approx(ctx.df_minimo_por_grupo["Acima_Atual"].sum(), abs=0.5)
+
+
+def test_aba_fechamento_com_os_orcados_de_todos_os_arquivos(sessao):
+    from faturamento.dre import orcado
+    from faturamento.fechamento import dados_fechamento, gera_aba_fechamento_html
+    d = dados_fechamento(sessao.ctx)
+    assert set(d["fontes"]) == {"RF01T26", "RF3T25", "RF SUP"} and d["padrao"] == "RF SUP"
+    assert "12/2026" in d["meses"] and "09/2026" in d["meses"]
+    o = orcado(sessao.ctx, "RF01T26", "INTERIOR", "10/2026")
+    assert d["orc"]["RF01T26"]["10/2026"]["INTERIOR"]["dA"] == pytest.approx(o["dA"])
+    h = gera_aba_fechamento_html(sessao.ctx)
+    assert 'id="fechColar"' in h and 'id="fechamento-dados"' in h
