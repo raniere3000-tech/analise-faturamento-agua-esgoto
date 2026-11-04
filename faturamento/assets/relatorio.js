@@ -2803,6 +2803,20 @@ function garPrazo(iso, dias) { const d = new Date(iso + 'T12:00:00'); d.setDate(
 // contagem e a O.S. volta ao aviso depois de OS_RETRAM_DIAS dias (pode ser retramitada de novo). Obs.: texto livre (os_obs).
 const OS_RETRAM = 'Retramitada', OS_RETRAM_DIAS = 5, OS_FECHADAS = ['Realizada', 'EXOC'];
 const OS_ROTULO = { Realizada: 'Realizada', EXOC: 'EXOC', Retramitada: 'Retramitada/Solicitada prioridade' };
+// As O.S. ficam no garItens com o mês da análise na chave e continuam no aviso nos meses seguintes. O aviso segue só a
+// Superintendência do cabeçalho (o filtro de grupos do mês novo escondia as O.S. de grupos ainda não liberados). Nome, grupo e
+// SUP vêm da base do mês; quando a matrícula não está no mês aberto, usa a cópia guardada na O.S. (garOSInfo).
+function garOSInfo(k, v, lig) {
+    const d = GAR.porLig.get(lig);
+    if (d) {
+        if (k.startsWith(GAR.ref + '|') && (v.os_nome !== d.nome || v.os_grupo !== d.grupo || v.os_sup !== d.sup)) {
+            v.os_nome = d.nome; v.os_grupo = d.grupo; v.os_sup = d.sup; garOSInfo.mudou = true;     // cópia para os meses seguintes
+        }
+        return d;
+    }
+    return v.os_nome || v.os_grupo || v.os_sup ? { nome: v.os_nome, grupo: v.os_grupo, sup: v.os_sup } : null;
+}
+const garOSVisivel = (info) => !info || ESTADO.sup === 'TODAS' || !info.sup || info.sup === ESTADO.sup;
 function garOS() {
     const hoje = new Date(garHoje() + 'T12:00:00');
     return Object.entries(garItens).filter(([, v]) => v.obs === OS_ABRIR && !OS_FECHADAS.includes(v.os_status)).map(([k, v]) => {
@@ -2810,8 +2824,8 @@ function garOS() {
         const data = v.os_data || (v.foto ? v.foto.slice(0, 10) : garHoje());
         const retram = v.os_status === OS_RETRAM && v.os_retram ? v.os_retram : null;
         const prazo = garPrazo(retram || data, retram ? OS_RETRAM_DIAS : OS_PRAZO_DIAS), dias = Math.round((hoje - prazo) / 86400000);
-        return { k, ref, lig, v, data, retram, prazo, dias, vencida: dias >= 0, d: GAR.porLig.get(lig) };
-    }).filter((o) => garVisivel(o.d)).sort((a, b) => b.dias - a.dias);
+        return { k, ref, lig, v, data, retram, prazo, dias, vencida: dias >= 0, d: garOSInfo(k, v, lig) };
+    }).filter((o) => garOSVisivel(o.d)).sort((a, b) => b.dias - a.dias);
 }
 // O.S. já encerradas (Realizada ou EXOC): marcar não apaga nada (só grava o status e a data), então elas continuam na
 // análise e podem voltar para o aviso ("↺ Voltar para o aviso") — sem guardar nada a mais
@@ -2819,13 +2833,15 @@ const garOSDataFim = (v) => v.os_realizada || v.os_exoc || '';
 function garOSRealizadas() {
     return Object.entries(garItens).filter(([, v]) => v.obs === OS_ABRIR && OS_FECHADAS.includes(v.os_status)).map(([k, v]) => {
         const i = k.lastIndexOf('|'), lig = k.slice(i + 1);
-        return { k, lig, v, data: v.os_data || (v.foto ? v.foto.slice(0, 10) : ''), d: GAR.porLig.get(lig) };
-    }).filter((o) => garVisivel(o.d)).sort((a, b) => String(garOSDataFim(b.v)).localeCompare(String(garOSDataFim(a.v))));
+        return { k, lig, v, data: v.os_data || (v.foto ? v.foto.slice(0, 10) : ''), d: garOSInfo(k, v, lig) };
+    }).filter((o) => garOSVisivel(o.d)).sort((a, b) => String(garOSDataFim(b.v)).localeCompare(String(garOSDataFim(a.v))));
 }
 const garOSObs = (o) => `<td class="gar-os-obs-td"><input class="gar-in gar-os-obs" data-k="${garEsc(o.k)}" value="${garEsc(o.v.os_obs || '')}" placeholder="Obs.:" aria-label="Observação da O.S. da matrícula ${garEsc(o.lig)}"></td>`;
 function garDesenharOS() {
     const el = document.getElementById('garAvisoOS'); if (!el || !GAR.dados) return;
+    garOSInfo.mudou = false;
     const os = garOS(), vencidas = os.filter((o) => o.vencida), noPrazo = os.length - vencidas.length, feitas = garOSRealizadas();
+    if (garOSInfo.mudou) setTimeout(garSalvar, 0);              // guardou nome/grupo/SUP nas O.S. do mês (uma vez)
     const aba = document.querySelector('[data-gar-aba="resumo"]');
     if (aba) aba.innerHTML = 'Resumo de Ganhos' + (vencidas.length ? ` <span class="gar-badge" title="O.S. com prazo vencido">${vencidas.length}</span>` : '');
     if (!os.length && !feitas.length) { el.hidden = true; el.innerHTML = ''; return; }
