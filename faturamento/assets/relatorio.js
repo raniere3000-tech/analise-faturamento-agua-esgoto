@@ -1613,7 +1613,8 @@ function gerarExecutivo(libs, modo) {
         ['Faturamento Mês a Mês', [card('#tabela-agua'), card('#tabela-esgoto')]],
         ['Indiretas', qa(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .prev-card`)],
         ['Plano de Ação', [q('#plano-card.tem-dados')]],
-        ['Análise de Ciclo', [q('#card-justificativa')]],         // título só no PDF, em cima das justificativas
+        // título só no PDF, em cima das justificativas; sem nenhuma justificativa escrita a seção não entra (não sobra página em branco)
+        ['Análise de Ciclo', qa('#card-justificativa .jg-txt, #lista-justificativas > p').some((t) => t.textContent.trim() || t.querySelector('img')) ? [q('#card-justificativa')] : []],
     ];
     // justificativas: cada grupo vira um bloco próprio no PDF — a quebra de página cai entre grupos, sem cortar o texto
     const separaGrupos = (c) => {
