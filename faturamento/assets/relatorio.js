@@ -2299,12 +2299,13 @@ const GAR_COLS_TOP = [
     ['rank', '#', 'n'], ['lig', 'Matrícula', 't'], ['nome', 'Cliente', 't'], ['cat', 'Categoria', 't'], ['loc', 'Localidade', 't'],
     ['grupo', 'Grupo', 't'], ['sup', 'SUP', 't'], ['eco', 'Econ.', 'n'], ['mMed', 'Média cons. medido (m³)', 'n'],
     ['mCons', 'Média cons. faturado (m³)', 'n'], ['cons', 'Cons. faturado atual (m³)', 'n'], ['dCons', 'Δ% cons.', 'n'],
-    ['mVal', 'Média faturado (R$)', 'n'], ['val', 'Faturado atual (R$)', 'n'], ['dVal', 'Δ% R$', 'n'], ['sit', 'Situação conta', 't'],
+    ['mVal', 'Média faturado (R$)', 'n'], ['val', 'Faturado atual (R$)', 'n'], ['dValR', 'Δ R$', 'n'], ['dVal', 'Δ% R$', 'n'], ['sit', 'Situação conta', 't'],
 ];
 function garValorCol(d, c) {
     if (c === 'eco') return (d.res || 0) + (d.com || 0) + (d.ind || 0) + (d.pub || 0);
     if (c === 'dCons') return garVar(d.cons, d.mCons);
     if (c === 'dVal') return garVar(d.val, d.mVal);
+    if (c === 'dValR') return d.val != null && d.mVal != null ? d.val - d.mVal : null;     // faturado atual − média faturada
     return d[c];
 }
 function garLinhasTop() {
@@ -2366,6 +2367,8 @@ function garDesenharTop() {
     tab.tHead.innerHTML = '<tr>' + GAR_COLS_TOP.map(([c, t, tipo]) => `<th class="gar-ord ${tipo === 'n' ? 'num' : ''}" data-ord="${c}" tabindex="0" title="Ordenar">${t}${c === campo ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '<th></th></tr>';
     const ls = garLinhasTop();
     const naAnalise = new Set(Object.keys(garItens).filter((k) => k.startsWith(GAR.ref + '|')).map((k) => k.slice(GAR.ref.length + 1)));
+    const difCel = (v, p) => (v == null ? '<td class="num">–</td>'          // Δ R$ com a mesma cor do Δ% (forte acima de 30%)
+        : `<td class="num ${p != null && Math.abs(p) > 0.3 ? 'gar-forte ' + (v < 0 ? 'gar-queda' : 'gar-aumento') : ''}">${garR(v)}</td>`);
     const pctCel = (p) => {
         if (p == null) return '<td class="num">–</td>';
         const forte = Math.abs(p) > 0.3, cls = p < 0 ? 'gar-queda' : 'gar-aumento';
@@ -2379,7 +2382,7 @@ function garDesenharTop() {
         return `<tr class="${forte ? 'gar-linha-forte' : ''}"><td class="num">${d.rank}</td><td class="${forte ? 'gar-forte' : ''}">${garEsc(lig)}</td>`
             + `<td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td><td>${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td>${garEsc(d.sup)}</td>`
             + `<td class="num">${garN(garValorCol(d, 'eco'))}</td><td class="num">${garN(d.mMed, 1)}</td><td class="num">${garN(d.mCons, 1)}</td><td class="num">${garN(d.cons, 1)}</td>${pctCel(dc)}`
-            + `<td class="num">${garR(d.mVal)}</td><td class="num">${garR(d.val)}</td>${pctCel(dv)}<td>${sit}</td>`
+            + `<td class="num">${garR(d.mVal)}</td><td class="num">${garR(d.val)}</td>${difCel(garValorCol(d, 'dValR'), dv)}${pctCel(dv)}<td>${sit}</td>`
             + `<td><button type="button" class="btn-just gar-add" data-lig="${garEsc(lig)}" ${naAnalise.has(lig) ? 'disabled title="Já está na Análise de Garantia"' : 'title="Levar para a Análise de Garantia"'}>${naAnalise.has(lig) ? '✓' : '+ Análise'}</button></td></tr>`;
     }).join('') || `<tr><td colspan="${GAR_COLS_TOP.length + 1}" class="gar-vazio">${GAR.busca.length && !GAR.busca.some((t) => GAR.lista.some((d) => String(d.lig).includes(t)))
         ? 'Matrícula fora do Top ' + GAR.top + ': para analisá-la, use a sub-aba Análise de Garantia.' : 'Nenhuma matrícula com os filtros escolhidos.'}</td></tr>`;
@@ -2655,6 +2658,7 @@ document.addEventListener('click', (e) => {
     if (aba) {
         document.querySelectorAll('[data-gar-aba]').forEach((b) => { const ok = b === aba; b.classList.toggle('ativo', ok); b.setAttribute('aria-pressed', ok ? 'true' : 'false'); });
         document.querySelectorAll('.gar-painel').forEach((p) => { p.hidden = p.dataset.gar !== aba.dataset.garAba; });
+        document.querySelectorAll('#garAvisoOS .gar-os-obs').forEach((t) => { if (t.offsetParent) garOSObsAltura(t); });   // Obs. com a altura do texto
         return;
     }
     const ord = e.target.closest && e.target.closest('#garTabelaTop th.gar-ord');
@@ -2764,10 +2768,11 @@ function garImportarExcel(texto) {
 }
 function garBaixarTop() {
     const cols = ['Ranking', 'Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'SUP', 'Economias', 'Média cons. medido (m³)',
-        'Média cons. faturado (m³)', 'Cons. faturado atual (m³)', 'Δ% cons.', 'Média faturado (R$)', 'Faturado atual (R$)', 'Δ% R$', 'Situação conta'];
+        'Média cons. faturado (m³)', 'Cons. faturado atual (m³)', 'Δ% cons.', 'Média faturado (R$)', 'Faturado atual (R$)', 'Δ R$', 'Δ% R$', 'Situação conta'];
     const pct = (p) => (p == null ? null : Math.round(p * 1000) / 10);
     const linhas = garLinhasTop().map((d) => [d.rank, d.lig, d.nome, d.cat, d.loc, d.grupo, d.sup, garValorCol(d, 'eco'), d.mMed, d.mCons, d.cons,
-        pct(garVar(d.cons, d.mCons)), d.mVal, d.val, pct(garVar(d.val, d.mVal)), garEmAnalise(d) ? garRotSit(d) : (d.sit || '')]);
+        pct(garVar(d.cons, d.mCons)), d.mVal, d.val, garValorCol(d, 'dValR') == null ? null : Math.round(garValorCol(d, 'dValR') * 100) / 100,
+        pct(garVar(d.val, d.mVal)), garEmAnalise(d) ? garRotSit(d) : (d.sit || '')]);
     baixarPlanilha(cols, linhas, `Garantia_Top${GAR.top}_${GAR.ref.replace('/', '-')}${GAR.soAnalise ? '_em_analise' : ''}${GAR_CAT_TOP.cats ? '_categorias_filtradas' : ''}.csv`);
 }
 function garExportarEmail() {
@@ -2858,7 +2863,9 @@ function garOSRealizadas() {
         return { k, lig, v, data: v.os_data || (v.foto ? v.foto.slice(0, 10) : ''), d: garOSInfo(k, v, lig) };
     }).filter((o) => garOSVisivel(o.d)).sort((a, b) => String(garOSDataFim(b.v)).localeCompare(String(garOSDataFim(a.v))));
 }
-const garOSObs = (o) => `<td class="gar-os-obs-td"><input class="gar-in gar-os-obs" data-k="${garEsc(o.k)}" value="${garEsc(o.v.os_obs || '')}" placeholder="Obs.:" aria-label="Observação da O.S. da matrícula ${garEsc(o.lig)}"></td>`;
+// Obs.: caixa de texto que quebra a linha e cresce com o texto (todo o texto visível, sem rolagem lateral)
+const garOSObs = (o) => `<td class="gar-os-obs-td"><textarea class="gar-in gar-os-obs" rows="1" data-k="${garEsc(o.k)}" placeholder="Obs.:" aria-label="Observação da O.S. da matrícula ${garEsc(o.lig)}">${garEsc(o.v.os_obs || '')}</textarea></td>`;
+const garOSObsAltura = (t) => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px'; };
 function garDesenharOS() {
     const el = document.getElementById('garAvisoOS'); if (!el || !GAR.dados) return;
     garOSInfo.mudou = false;
@@ -2893,6 +2900,7 @@ function garDesenharOS() {
                 + `<td><select class="gar-in gar-os-sit" data-k="${garEsc(o.k)}" aria-label="Situação da O.S. da matrícula ${garEsc(o.lig)}"><option value="">Marcar como…</option>`
                 + `<option value="Realizada">✓ Realizada</option><option value="EXOC">EXOC</option><option value="${OS_RETRAM}">↻ Retramitada/Solicitada prioridade</option></select></td>${garOSObs(o)}</tr>`).join('')
             + '</tbody></table></div>' : '') + historico;
+    requestAnimationFrame(() => el.querySelectorAll('.gar-os-obs').forEach((t) => { if (t.offsetParent) garOSObsAltura(t); }));
 }
 document.addEventListener('change', (e) => {
     const sel = e.target.closest && e.target.closest('.gar-os-sit'); if (!sel || !sel.value) return;
@@ -2904,8 +2912,9 @@ document.addEventListener('change', (e) => {
 });
 document.addEventListener('input', (e) => {                    // Obs.: salva enquanto digita (sem redesenhar, para não perder o foco)
     const inp = e.target.closest && e.target.closest('.gar-os-obs'); if (!inp) return;
+    garOSObsAltura(inp);
     const it = garItens[inp.dataset.k]; if (!it) return;
-    it.os_obs = inp.value;
+    it.os_obs = inp.value.replace(/\n+/g, ' ');
     clearTimeout(GAR.tObsOS); GAR.tObsOS = setTimeout(garSalvar, 400);
 });
 document.addEventListener('click', (e) => {
@@ -2914,7 +2923,12 @@ document.addEventListener('click', (e) => {
     delete it.os_status; delete it.os_realizada; delete it.os_exoc;
     garSalvar(); garDesenharOS();
 });
-document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('gar-os-hist')) GAR.osHistAberto = e.target.open; }, true);
+document.addEventListener('toggle', (e) => {
+    if (!e.target.classList || !e.target.classList.contains('gar-os-hist')) return;
+    GAR.osHistAberto = e.target.open;
+    if (e.target.open) e.target.querySelectorAll('.gar-os-obs').forEach(garOSObsAltura);      // altura certa ao abrir o histórico
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('gar-os-obs')) e.preventDefault(); });
 
 // --- Resumo de Ganhos ---
 function garTotais() {
