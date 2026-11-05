@@ -2099,14 +2099,23 @@ function avisoNuvem(texto, erro) {
 }
 const igualJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const copiaJson = (o) => JSON.parse(JSON.stringify(o || {}));
+// Campo em edição (texto, número, lista, editor): nada que venha da pasta substitui a tela enquanto a pessoa digita — antes,
+// o retorno da gravação ou a atualização a cada 2 s redesenhava a tabela e tirava o cursor da caixa no meio da frase.
+function editandoAlgo() {
+    const a = document.activeElement;
+    return !!(a && a !== document.body && ((a.matches && a.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, select')) || a.isContentEditable));
+}
 function criaSync(secao, nome, obter, definir, redesenhar, ocupado) {
-    let base = null, timer = null;
+    let base = null, timer = null, adiado = false;
+    const espera = () => editandoAlgo() || (ocupado && ocupado());
     async function puxar() {
         const comp = compartilhado();
-        if (!comp || (ocupado && ocupado()) || timer || pendentesNuvem.has(nome)) return;   // não atropela o que ainda vai ser salvo
+        if (!comp || timer || pendentesNuvem.has(nome)) return;   // não atropela o que ainda vai ser salvo
+        if (espera()) { adiado = true; return; }                 // relê quando a pessoa sair do campo
         const d = await comp.ler();
         if (!d) return;
         if (!d[secao]) { if (base === null) base = {}; return; }   // nunca salvo na pasta: fica o que há neste navegador
+        if (espera() || timer) { adiado = true; return; }        // começou a digitar durante a leitura
         const remoto = d[secao].mapa || {};
         if (!igualJson(remoto, obter())) {
             definir(copiaJson(remoto)); redesenhar();
@@ -2128,15 +2137,27 @@ function criaSync(secao, nome, obter, definir, redesenhar, ocupado) {
         });
         if (r.ok) {
             base = copiaJson(r.dados[secao].mapa);
-            if (!igualJson(base, obter())) { definir(copiaJson(base)); redesenhar(); }
+            // o que foi digitado enquanto gravava fica (e vai na próxima gravação); de fora, entra só o que outra pessoa mudou
+            const agora = obter(), junto = copiaJson(base);
+            let digitouDepois = false;
+            new Set([...Object.keys(atual), ...Object.keys(agora)]).forEach(k => {
+                if (igualJson(atual[k], agora[k])) return;
+                digitouDepois = true;
+                if (k in agora) junto[k] = copiaJson(agora[k]); else delete junto[k];
+            });
+            if (!igualJson(junto, agora)) {
+                if (espera()) adiado = true;                     // redesenha quando sair do campo
+                else { definir(junto); redesenhar(); }
+            }
+            if (digitouDepois) agendar();
         }
         marcaNuvem(nome, r);
         return r.ok;
     }
-    return {
-        puxar, empurrar,
-        agendar() { clearTimeout(timer); timer = setTimeout(() => { timer = null; empurrar(); }, 700); },
-    };
+    function agendar() { clearTimeout(timer); timer = setTimeout(() => { timer = null; empurrar(); }, 700); }
+    // saiu do campo: aplica o que ficou esperando (outra pessoa salvou enquanto digitava)
+    document.addEventListener('focusout', () => setTimeout(() => { if (adiado && !espera()) { adiado = false; puxar(); } }, 400));
+    return { puxar, empurrar, agendar };
 }
 var syncForecast = criaSync('forecast', 'Forecast', () => prevEdicoes,
     (m) => { prevEdicoes = m; try { localStorage.setItem(PREV_CHAVE_LS, JSON.stringify({ edicoes: prevEdicoes, oculta: prevOculta, ocultaInd: prevOcultaInd })); } catch (e) {} },
