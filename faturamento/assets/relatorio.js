@@ -2995,10 +2995,12 @@ function planoInfo() {
 }
 function planoAtual() {                          // [ref, plano] do mês; sem plano no mês, o último colado antes dele
     const inf = planoInfo(); if (!inf) return [null, null];
+    if (planoMapa[inf.ref] && planoMapa[inf.ref].vazio) return [null, null];   // "Limpar": o mês fica sem plano (não mostra o anterior)
     if (planoMapa[inf.ref] && planoMapa[inf.ref].linhas && planoMapa[inf.ref].linhas.length) return [inf.ref, planoMapa[inf.ref]];
-    const antes = Object.keys(planoMapa).filter((r) => planoMapa[r] && (planoMapa[r].linhas || []).length && planoRefChave(r) < planoRefChave(inf.ref))
+    // o mês anterior mais recente com plano ou limpo: se foi limpo, os meses seguintes também ficam sem plano
+    const antes = Object.keys(planoMapa).filter((r) => planoMapa[r] && ((planoMapa[r].linhas || []).length || planoMapa[r].vazio) && planoRefChave(r) < planoRefChave(inf.ref))
         .sort((a, b) => (planoRefChave(a) < planoRefChave(b) ? 1 : -1));
-    return antes.length ? [antes[0], planoMapa[antes[0]]] : [null, null];
+    return antes.length && !planoMapa[antes[0]].vazio ? [antes[0], planoMapa[antes[0]]] : [null, null];
 }
 function planoSalvar() {
     try { localStorage.setItem(PLANO_LS, JSON.stringify(planoMapa)); } catch (e) { /* ignora */ }
@@ -3151,10 +3153,14 @@ document.addEventListener('paste', (e) => {
 });
 document.addEventListener('click', (e) => {
     if (e.target.id === 'planoLimpar') {
-        const inf = planoInfo();
-        if (!planoMapa[inf.ref]) { avisoNuvem(`O mês ${inf.mes} não tem plano colado.`, true); return; }
-        if (!confirm(`Apagar o plano de ação de ${inf.mes}?`)) return;
-        delete planoMapa[inf.ref]; planoSalvar(); planoDesenhar(); return;
+        // o mês fica sem plano: apaga o colado nele e deixa de mostrar o último plano de um mês anterior
+        const inf = planoInfo(), [ref, plano] = planoAtual();
+        if (!plano) { avisoNuvem(`O mês ${inf.mes} já está sem plano de ação.`, true); return; }
+        const doMes = ref === inf.ref;
+        if (!confirm(doMes ? `Apagar o plano de ação de ${inf.mes}?`
+            : `${inf.mes} ainda não tem plano colado e está mostrando o plano de ${ref}.\n\nDeixar ${inf.mes} sem plano de ação? (o plano de ${ref} continua salvo no mês dele)`)) return;
+        planoMapa[inf.ref] = { colunas: [], linhas: [], vazio: true, atualizado: new Date().toISOString() };
+        planoSalvar(); planoDesenhar(); return;
     }
     if (e.target.id === 'planoBaixar') {
         const [ref, plano] = planoAtual(); if (!plano) return;
