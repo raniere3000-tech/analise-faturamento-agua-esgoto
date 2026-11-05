@@ -3352,7 +3352,7 @@ function opAbertoFat(D, L) {
 }
 
 // ---- Acompanhamento por semana: grupos lidos em cada semana do mês, contra o orçado SUP e o mês anterior ----
-// Semana = semana do calendário (segunda a domingo) da primeira data de leitura do grupo no cronograma do mês vigente.
+// Semana = semana do calendário (domingo a sábado) da primeira data de leitura do grupo no cronograma do mês vigente.
 let opSemanasAbertas = null;                    // semanas abertas na tela (null = abre só a última com grupos)
 function opGrupos(D) {
     const blocos = Array.from(document.querySelectorAll('#view-tabelas .orc-ciclo-bloco'));
@@ -3371,9 +3371,9 @@ function opGrupos(D) {
         g.o = (g.o || 0) + (parseFloat(tr.dataset.fatAnterior) || 0);
     });
     let datas = {}; try { datas = JSON.parse((document.getElementById('opDatasLeitura') || {}).textContent || '{}') || {}; } catch (e) { datas = {}; }
-    const semanaDe = (iso) => {                 // {n, ini, fim} da semana (segunda a domingo) dentro do mês
+    const semanaDe = (iso) => {                 // {n, ini, fim} da semana (domingo a sábado) dentro do mês
         const d = new Date(iso + 'T12:00:00'), p = new Date(d.getFullYear(), d.getMonth(), 1, 12);
-        const desl = (p.getDay() + 6) % 7;      // dias do dia 1 até a segunda anterior
+        const desl = p.getDay();                // semana de domingo a sábado: dias do dia 1 até o domingo anterior
         const n = Math.floor((d.getDate() + desl - 1) / 7) + 1;
         const ult = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
         const ini = Math.max(1, (n - 1) * 7 - desl + 1), fim = Math.min(ult, n * 7 - desl);
