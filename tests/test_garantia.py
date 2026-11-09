@@ -220,7 +220,10 @@ def test_aba_one_page(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     for trecho in ('id="view-onepage"', 'id="btn-onepage"', 'id="opEditor"', 'id="opFolha"', "function opLinhasPrev(D)",
                    "document.addEventListener('forecast-recalculado', () => opDesenhar());", "'Indiretas por classe'",
-                   "function gerarOnePage(libs)", 'onclick="gerarOnePage()"', 'id="opDatasLeitura"'):
+                   "function gerarOnePage(libs)", 'onclick="gerarOnePage()"', 'id="opDatasLeitura"',
+                   # Top 5: o nome do cliente abre a ficha da matrícula (só na tela: o PDF tira o que é .op-so-tela)
+                   "function opTopFicha(x)", 'class="op-top-ficha op-so-tela"', "it('Matrícula', garEsc(x.lig || '–'))",
+                   "t.closest('#opFolha .op-top-abre')"):
         assert trecho in html, trecho
     assert "opBlocoAnalise" not in html and "opBlocoProjetos" not in html          # análise do mês e projetos saíram da folha
     raiz = os.path.join(os.path.dirname(__file__), "..")

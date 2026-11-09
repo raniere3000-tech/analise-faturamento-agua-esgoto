@@ -638,6 +638,14 @@ table.op-tab tfoot td { border-top:2px solid var(--op-azul); }
 .op-top-lin span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:uppercase; }
 /* nome comprido quebra em duas linhas (nada cortado); grupo e valor acompanham a primeira linha */
 .op-top-lin .op-top-nome { white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; line-height:1.35; }
+.op-top-lin .op-top-abre { cursor:pointer; text-decoration:underline dotted #94A3B8; text-underline-offset:3px; }
+.op-top-lin .op-top-abre:hover, .op-top-lin.aberto .op-top-abre { color:var(--op-azul-esc); text-decoration-color:currentColor; }
+.op-top-lin .op-top-abre:focus-visible { outline:2px solid var(--op-azul-esc); outline-offset:2px; }
+.op-top-ficha { grid-column:1 / -1; display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:4px 14px; margin:6px 0 2px;
+  padding:8px 10px; background:#fff; border:1px solid #E2E8F0; border-radius:6px; font-size:11.5px; text-transform:none; }
+.op-top-ficha > div { display:flex; justify-content:space-between; gap:8px; min-width:0; border-bottom:1px dotted #E2E8F0; padding:2px 0; }
+.op-top-ficha span { color:#64748B; white-space:normal; text-transform:none; overflow:visible; }
+.op-top-ficha b { font-weight:600; text-align:right; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 .op-top-lin .op-top-grupo { overflow:visible; color:#475569; font-size:11px; text-align:left; }
 .op-secao-top > h3 .op-top-chave { align-self:center; margin-left:auto; padding:3px 10px; font-size:11.5px; }
 .op-secao-top > h3 .op-h-dir + .op-top-chave { margin-left:0; }
