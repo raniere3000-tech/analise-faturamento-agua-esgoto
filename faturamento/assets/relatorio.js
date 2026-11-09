@@ -3524,8 +3524,13 @@ function opTop5(D, tipo) {
         const liberada = (l) => !opSoLiberadas || !garEmAnalise(GAR.porLig.get(opLig(l[iL])));
         const linhas = d[chave].data.filter((l) => (D.sup === 'TODAS' || iSup < 0 || l[iSup] === D.sup) && (!grupos || grupos.has(normGrupo(l[iG]))) && liberada(l))
             .slice(0, 100);
+        const iCat = ix('Categoria'), iCons = cols.map((c, i) => (/^Consumo \d/.test(c) ? i : -1)).filter((i) => i >= 0),
+            iSit = cols.findIndex((c) => /^Situação Lançamento/.test(c));
         return tirar5(linhas.map((l) => ({ nome: String(l[iN] == null ? '' : l[iN]).trim(), grupo: iG >= 0 ? normGrupo(l[iG]) : '', v: Math.abs(+l[iV] || 0),
-            pct: iAnt === undefined ? null : pctFat(+l[iAt], +l[iAnt]) })));
+            pct: iAnt === undefined ? null : pctFat(+l[iAt], +l[iAnt]), lig: iL >= 0 ? opLig(l[iL]) : '',
+            cat: iCat >= 0 ? l[iCat] : '', lanc: iSit >= 0 ? l[iSit] : '',
+            vAt: iAt === undefined ? null : +l[iAt], vAnt: iAnt === undefined ? null : +l[iAnt],
+            cAt: iCons.length ? +l[iCons[0]] : null, cAnt: iCons.length > 1 ? +l[iCons[1]] : null })));
     }
     const t = document.querySelector(`#view-analise .sup-top-bloco[data-sup="${D.sup}"] table[data-top="${chave}"]`)
         || document.querySelector(`.sup-top-bloco[data-sup="${D.sup}"] table[data-top="${chave}"]`)
@@ -3538,7 +3543,9 @@ function opTop5(D, tipo) {
     return tirar5(Array.from(t.tBodies[0].rows).filter((tr) => tr.style.display !== 'none' && tr.cells.length === cab.length)
         .filter((tr) => !opSoLiberadas || iLig < 0 || !garEmAnalise(GAR.porLig.get(opLig(tr.cells[iLig].textContent))))
         .map((tr) => ({ nome: tr.cells[iNome].textContent.trim(), grupo: iGrupo >= 0 ? tr.cells[iGrupo].textContent.trim() : '', v: Math.abs(opNum(tr.cells[iVal].textContent) || 0),
-            pct: iAnt === undefined ? null : pctFat(opNum(tr.cells[iAt].textContent), opNum(tr.cells[iAnt].textContent)) })));
+            pct: iAnt === undefined ? null : pctFat(opNum(tr.cells[iAt].textContent), opNum(tr.cells[iAnt].textContent)),
+            lig: iLig >= 0 ? opLig(tr.cells[iLig].textContent) : '',
+            vAt: iAt === undefined ? null : opNum(tr.cells[iAt].textContent), vAnt: iAnt === undefined ? null : opNum(tr.cells[iAnt].textContent) })));
 }
 // % do faturamento do cliente contra o mês anterior, ao lado do valor (sem faturamento no mês anterior: "novo")
 function opTopPct(p) {
@@ -3546,11 +3553,38 @@ function opTopPct(p) {
     const t = (p > 0 ? '+' : '') + (p * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
     return `<span class="op-top-pct ${p < 0 ? 'neg' : 'pos'}" title="Faturamento do cliente contra o mês anterior">${t}</span>`;
 }
+// Clique no nome do cliente: ficha da matrícula logo abaixo da linha (só na tela; o PDF sai sem ela)
+const opTopAbertos = new Set();
+function opTopFicha(x) {
+    const g = (x.lig && GAR.porLig && GAR.porLig.get(x.lig)) || {};
+    const num = (v, dec) => (v == null || !isFinite(v) ? '–' : fmtBR(v, dec));
+    const eco = [['res', 'Res.'], ['com', 'Com.'], ['ind', 'Ind.'], ['pub', 'Púb.']].filter(([k]) => +g[k] > 0).map(([k, r]) => `${r} ${fmtBR(+g[k])}`).join(' · ');
+    const sit = g.lig ? garRotSit(g) : '';
+    const it = (rot, val) => (val == null || val === '' ? '' : `<div><span>${rot}</span><b>${val}</b></div>`);
+    return `<div class="op-top-ficha op-so-tela">`
+        + it('Matrícula', garEsc(x.lig || '–'))
+        + it('Categoria', garEsc(x.cat || g.cat || ''))
+        + it('Localidade', garEsc(g.loc || ''))
+        + it('Grupo / rota', garEsc([x.grupo || g.grupo, g.rota].filter((v) => v != null && v !== '').join(' / ')))
+        + it('Economias', eco)
+        + it('Esgoto', g.lig ? (g.esg ? 'Sim' : 'Não') : '')
+        + it('Situação da conta', garEsc(sit))
+        + it('Lançamento', garEsc(x.lanc || g.lanc || ''))
+        + it('Fat. água (mês / ant.)', x.vAt != null || x.vAnt != null ? `${garR(x.vAt)} / ${garR(x.vAnt)}` : '')
+        + it('Consumo (mês / ant.)', x.cAt != null || x.cAnt != null ? `${num(x.cAt, 0)} / ${num(x.cAnt, 0)} m³` : '')
+        + it('Média faturada', g.mVal != null ? garR(g.mVal) : '')
+        + '</div>';
+}
 function opBlocoTop(D) {
     // o nome comprido quebra linha; o grupo e o valor ficam sempre inteiros, em colunas fixas
     const lista = (tit, cls, itens) => `<div class="op-top ${cls}"><div class="op-top-tit">${tit}</div>`
-        + (itens.length ? itens.map((x, i) => `<div class="op-top-lin"><span class="op-top-nome" title="${garEsc(x.nome)}">${i + 1}. ${garEsc(x.nome)}</span>`
-            + `<span class="op-top-grupo">${x.grupo ? `Grupo ${garEsc(x.grupo)}` : ''}</span><b>${opMoeda(x.v, 2)}</b>${opTopPct(x.pct)}</div>`).join('')
+        + (itens.length ? itens.map((x, i) => {
+            const chave = `${cls}|${x.lig || x.nome}`, aberto = opTopAbertos.has(chave);
+            return `<div class="op-top-lin${aberto ? ' aberto' : ''}"><span class="op-top-nome op-top-abre" role="button" tabindex="0" data-chave="${garEsc(chave)}" aria-expanded="${aberto}"`
+            + ` title="${garEsc(x.nome)} — clique para ver a matrícula e outros detalhes">${i + 1}. ${garEsc(x.nome)}</span>`
+            + `<span class="op-top-grupo">${x.grupo ? `Grupo ${garEsc(x.grupo)}` : ''}</span><b>${opMoeda(x.v, 2)}</b>${opTopPct(x.pct)}`
+            + (aberto ? opTopFicha(x) : '') + '</div>';
+        }).join('')
             : `<p class="op-vazio">${opSoLiberadas && !GAR.dados ? 'Carregando as matrículas…' : 'Sem clientes.'}</p>`) + '</div>';
     const m = opMesCurto((opEditor() || { dataset: {} }).dataset.ref || '');
     return `<div class="op-tops">${lista('Maiores aumentos de faturamento — ' + garEsc(m), 'op-top-pos', opTop5(D, 'aumento'))}`
@@ -3618,12 +3652,23 @@ document.addEventListener('click', (e) => {
         try { localStorage.setItem('faturamento_op_top_liberadas', opSoLiberadas ? '1' : '0'); } catch (er) { /* sem armazenamento */ }
         opDesenhar(); return;
     }
+    const nome = t.closest && t.closest('#opFolha .op-top-abre');
+    if (nome) {
+        const k = nome.dataset.chave;
+        if (opTopAbertos.has(k)) opTopAbertos.delete(k); else opTopAbertos.add(k);
+        opDesenhar(); return;
+    }
     const sem = t.closest && t.closest('#opFolha tr.op-sem');
     if (sem) {
         const n = +sem.dataset.semana; if (!opSemanasAbertas) opSemanasAbertas = new Set();
         if (opSemanasAbertas.has(n)) opSemanasAbertas.delete(n); else opSemanasAbertas.add(n);
         opDesenhar();
     }
+});
+
+document.addEventListener('keydown', (e) => {
+    const nome = (e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('#opFolha .op-top-abre');
+    if (nome) { e.preventDefault(); nome.click(); }
 });
 
 // PDF de uma página só (da altura da folha): a folha é copiada (gráfico como imagem, sem botões e dicas de edição) para um documento à
