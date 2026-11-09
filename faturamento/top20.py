@@ -135,14 +135,19 @@ def aplica_ajustes_top20(ctx, ajustes):
     """ajustes: lista de {ligacao, consumo, valor} (campo None = não alterado).
     Consumo Faturado vale para todas as linhas da ligação no mês atual.
     O valor total novo é repartido entre água e esgoto mantendo a proporção original
-    (se o original era 0, vai tudo para a linha de água)."""
+    (se o original era 0, vai tudo para a linha de água).
+    Os valores do sistema dessas ligações ficam guardados em ctx.linhas_sistema_etapa2: a aba Garantia mostra sempre o
+    original (a correção da etapa 2 é só para as tabelas da diretoria)."""
     ref = _ref_atual_base(ctx)
     feitos = 0
+    originais = []                                 # linhas como vieram do sistema (a aba Garantia usa estas)
     for a in ajustes or []:
         lig = str(a.get("ligacao"))
         mask = (ctx.base_final["N. Ligação"].astype(str) == lig) & (ctx.base_final["Referencia de Leitura"] == ref)
         if not mask.any():
             continue
+        originais.append(ctx.base_final.loc[mask, ["N. Ligação", "Referencia de Leitura", "Rubrica", "Consumo Faturado",
+                                                   "Valor (R$)"]].copy())
         if a.get("consumo") is not None:
             ctx.base_final.loc[mask, "Consumo Faturado"] = float(a["consumo"])
         if a.get("valor") is not None:
@@ -158,6 +163,8 @@ def aplica_ajustes_top20(ctx, ajustes):
                 novos.loc[alvo] = novo
                 ctx.base_final.loc[mask, "Valor (R$)"] = novos
         feitos += 1
+    if originais:
+        ctx.linhas_sistema_etapa2 = pd.concat(originais)
     if feitos:
         print(f"✏️ {feitos} ligação(ões) ajustada(s) manualmente.")
         ctx.ajustes_feitos = feitos

@@ -43,6 +43,30 @@ def _num(s):
     return pd.to_numeric(s, errors="coerce").fillna(0)
 
 
+def _valores_do_sistema(ctx, pm_val, pm_cons):
+    """Desfaz as correções da etapa 2 (conferência): a garantia olha o valor e o consumo como vieram do sistema, para
+    nada passar despercebido (uma O.S. que precisa ser aberta, por exemplo)."""
+    orig = getattr(ctx, "linhas_sistema_etapa2", None)
+    if orig is None or not len(orig):
+        return pm_val, pm_cons
+    serv = orig["Rubrica"].astype(str).str.upper().map(lambda r: "E" if "ESGOTO" in r else "A" if "AGUA" in r else "")
+    ok = serv.isin(["A", "E"])
+    o, serv = orig[ok], serv[ok]
+    lig = o["N. Ligação"].astype(str).str.strip()
+    ref = o["Referencia de Leitura"]
+    agua = serv == "A"
+    val = _num(o["Valor (R$)"]).groupby([lig, ref]).sum()
+    cons = _num(o.loc[agua, "Consumo Faturado"]).groupby([lig[agua], ref[agua]]).sum()
+    pm_val, pm_cons = pm_val.copy(), pm_cons.copy()
+    for k, v in val.items():
+        if k in pm_val.index:
+            pm_val.loc[k] = v
+    for k, v in cons.items():
+        if k in pm_cons.index:
+            pm_cons.loc[k] = v
+    return pm_val, pm_cons
+
+
 def monta_garantia(ctx):
     """DataFrame (uma linha por matrícula, ordenado pelo ranking) com as colunas de COLUNAS + lista de meses fechados."""
     from .dre import prepara
@@ -66,6 +90,7 @@ def monta_garantia(ctx):
     pm_cons = _num(b.loc[agua, "Consumo Faturado"]).groupby([lig[agua], ref[agua]]).sum()
     pm_med = (_num(b.loc[agua, col_med]).groupby([lig[agua], ref[agua]]).sum() if col_med
               else pd.Series(dtype=float))
+    pm_val, pm_cons = _valores_do_sistema(ctx, pm_val, pm_cons)
 
     def media(s):
         if not len(s):
@@ -149,7 +174,7 @@ def gera_aba_garantia_html(ctx):
     </span>
   </div>
   <p class="nota-secao">Top {TOP} matrículas pela <b>média do faturado (água + esgoto)</b> dos meses fechados disponíveis ({e(meses)});
-  a lista se refaz a cada mês fechado que entra na pasta. Valores do mês atual ({e(ctx.mes_atual)}) e Situação Conta pela fatura de ciclo.
+  a lista se refaz a cada mês fechado que entra na pasta. Valores do mês atual ({e(ctx.mes_atual)}) e Situação Conta pela fatura de ciclo, sempre <b>como vieram do sistema</b> (as correções da etapa 2 não entram nesta aba).
   Variação acima de 30% (consumo faturado ou faturamento) em <b>negrito</b>. Estrutura tarifária: {fonte_tarifa}.</p>
 </div>
 <div class="gar-painel" data-gar="top">

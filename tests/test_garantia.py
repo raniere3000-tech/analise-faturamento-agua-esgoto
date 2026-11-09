@@ -255,3 +255,29 @@ def test_resumo_somente_grupos_liberados(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert 'id="garSoLiberados"' in html and "function gruposLiberados()" in html
     assert "if (lib && !(d && lib.has(normGrupo(d.grupo)))) return;" in html
+
+
+def test_garantia_ignora_correcao_da_etapa_2(pasta_pequena):
+    """A etapa 2 corrige o valor só para as tabelas da diretoria; a garantia mostra sempre o valor do sistema."""
+    import pandas as pd
+    from faturamento import Sessao
+    from faturamento.garantia import monta_garantia
+    from faturamento.top20 import _ref_atual_base
+
+    def roda(ajustes):
+        s = Sessao(pasta_pequena, progresso=lambda pct, desc: None)
+        s.preparar()
+        ra = _ref_atual_base(s.ctx)
+        b = s.ctx.base_final
+        lig = str(b[b["Referencia de Leitura"] == ra]["N. Ligação"].iloc[0])
+        s.continuar([{**a, "ligacao": lig} for a in ajustes])
+        g, _ = monta_garantia(s.ctx)
+        linha = g[g["lig"].astype(str) == lig].iloc[0]
+        bf = s.ctx.base_final
+        m = (bf["N. Ligação"].astype(str) == lig) & (bf["Referencia de Leitura"] == ra)
+        return linha, pd.to_numeric(bf.loc[m, "Valor (R$)"], errors="coerce").sum()
+
+    orig, _ = roda([])
+    ajust, total_base = roda([{"consumo": 99999, "valor": 123456.0}])
+    assert abs(total_base - 123456.0) < 0.01                  # as demais tabelas usam o valor corrigido
+    assert abs(ajust["val"] - orig["val"]) < 0.01 and abs(ajust["cons"] - orig["cons"]) < 0.01
