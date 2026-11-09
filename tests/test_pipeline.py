@@ -294,7 +294,9 @@ def test_ajustes_compartilhados_forecast_situacao_e_etapa2(analise):
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert 'const ARQ_AJUSTES = "ajustes_relatorio.json"' in site and "window.arquivoCompartilhado" in site
     # etapa 2: só abre com arquivo lido agora (novo/alterado) ou pelo botão; os ajustes ficam salvos para todos
-    assert "const novos = !dados.leitura || (dados.leitura.lidos || 0) > 0;" in site
+    assert "const novos = !dados.leitura || (dados.leitura.lidos || 0) > 0 || !assinaturaArquivos || assinaturaArquivos !== conferidos();" in site
+    # só conta como conferida a etapa 2 concluída (recarregar no meio dela não a pula na próxima vez)
+    assert site.count("marcaConferidos();") == 2 and "assinaturaArquivos = assinaturaDe(arquivos, nomePasta);" in site
     assert 'id="btnEtapa2"' in site and "guardaAjustes(refTop20, ajustes)" in site
 
 

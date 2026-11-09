@@ -451,7 +451,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v159</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v160</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -655,7 +655,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v159-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v160-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1196,6 +1196,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       lista.appendChild(tag);
     });
     $("statusNota").textContent = `${arquivos.length} arquivo(s) encontrado(s) em "${nomePasta}".`;
+    assinaturaArquivos = assinaturaDe(arquivos, nomePasta);
     pegaWorker().postMessage({ fase: "preparar", arquivos });
   }
 
@@ -1395,10 +1396,23 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   }
 
   // ===== Ajustes da etapa 2 guardados (pasta do SharePoint; sem pasta, só neste navegador) =====
-  // A etapa 2 só abre quando algum arquivo foi lido agora (novo ou alterado desde a última análise neste navegador) ou pelo
-  // botão "Etapa 2". Sem arquivo novo, a análise segue sozinha com os ajustes salvos — os mesmos para todos.
+  // A etapa 2 só abre quando algum arquivo foi lido agora (novo ou alterado desde a última análise neste navegador), quando
+  // os arquivos da pasta ainda não passaram por uma etapa 2 concluída neste navegador, ou pelo botão "Etapa 2". Sem arquivo novo, a análise segue sozinha com os ajustes salvos — os mesmos para todos.
   const LS_AJUSTES = "faturamento_ajustes_etapa2";
   let forcarEtapa2 = false, refTop20 = "";
+  // Arquivos que já passaram por uma etapa 2 concluída ("Aplicar alterações" ou "Pular, usar valores originais") neste navegador. Os arquivos ficam
+  // guardados como "já lidos" assim que a etapa 2 abre; sem esta marca, recarregar a página no meio da conferência (ou
+  // com uma versão nova do painel) pulava a etapa 2 de arquivos que ninguém tinha conferido.
+  const LS_CONFERIDOS = "faturamento_etapa2_conferida";
+  let assinaturaArquivos = "";
+  function assinaturaDe(arquivos, pasta) {
+    const txt = pasta + "\n" + arquivos.map((a) => `${a.nome}|${a.tamanho}|${a.modificado || 0}`).sort().join("\n");
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (let i = 0; i < txt.length; i++) { h1 = Math.imul(h1 ^ txt.charCodeAt(i), 16777619); h2 = Math.imul(h2 + txt.charCodeAt(i), 2246822519); }
+    return (h1 >>> 0).toString(16) + (h2 >>> 0).toString(16) + txt.length.toString(16);
+  }
+  const conferidos = () => { try { return localStorage.getItem(LS_CONFERIDOS) || ""; } catch (e) { return ""; } };
+  function marcaConferidos() { try { if (assinaturaArquivos) localStorage.setItem(LS_CONFERIDOS, assinaturaArquivos); } catch (e) {} }
   async function ajustesSalvos(ref) {
     const comp = window.arquivoCompartilhado;
     if (comp.disponivel()) {
@@ -1426,7 +1440,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     const salvos = await ajustesSalvos(refTop20);
     const presentes = new Set(dados.linhas.map((l) => String(l.ligacao)));
     const validos = salvos.ajustes.filter((a) => presentes.has(String(a.ligacao)));
-    const novos = !dados.leitura || (dados.leitura.lidos || 0) > 0;
+    const novos = !dados.leitura || (dados.leitura.lidos || 0) > 0 || !assinaturaArquivos || assinaturaArquivos !== conferidos();
     if (!novos && !forcarEtapa2) {
       continuaAnalise(validos, `Nenhum arquivo novo ou alterado: etapa 2 pulada${validos.length ? `, com ${validos.length} ajuste(s) salvos (${salvos.fonte})` : ""}. Para conferir os clientes, use "✎ Etapa 2".`);
       return;
@@ -1647,9 +1661,10 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     const { ajustes, invalido } = leAjustes();
     if (invalido) return;
     const r = await guardaAjustes(refTop20, ajustes);          // salvos para todos antes de seguir (o clique dá a permissão de gravar)
+    marcaConferidos();
     continuaAnalise(ajustes, r.ok ? "Ajustes salvos na pasta do SharePoint." : `Ajustes salvos só neste navegador (${r.motivo}).`);
   });
-  $("btnPular").addEventListener("click", () => continuaAnalise([]));
+  $("btnPular").addEventListener("click", () => { marcaConferidos(); continuaAnalise([]); });
   // ↺ de cada linha: volta só aquela ligação aos valores originais (consumo, valor e a caixa do mínimo)
   document.addEventListener("click", (e) => {
     const btn = e.target.closest && e.target.closest("#corpoTop20 .btn-rest-linha");
