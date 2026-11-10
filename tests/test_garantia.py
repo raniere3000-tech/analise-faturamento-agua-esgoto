@@ -284,3 +284,14 @@ def test_garantia_ignora_correcao_da_etapa_2(pasta_pequena):
     ajust, total_base = roda([{"consumo": 99999, "valor": 123456.0}])
     assert abs(total_base - 123456.0) < 0.01                  # as demais tabelas usam o valor corrigido
     assert abs(ajust["val"] - orig["val"]) < 0.01 and abs(ajust["cons"] - orig["cons"]) < 0.01
+
+
+def test_aumentos_e_quedas_com_consumo_medido(sessao):
+    """Aumentos e quedas: consumo medido do mês anterior e do atual ao lado do faturado (tabela e planilha)."""
+    from faturamento.garantia import COLUNAS, monta_garantia
+    assert "mdAnt" in COLUNAS and "med" in COLUNAS
+    d, _ = monta_garantia(sessao.ctx)
+    assert d["mdAnt"].notna().any() and d["med"].notna().any()
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert "['mdAnt', 'Cons. med. anterior (m³)', 'n'], ['med', 'Cons. med. atual (m³)', 'n']" in html
+    assert "'Cons. medido mês anterior (m³)', 'Cons. medido atual (m³)'" in html

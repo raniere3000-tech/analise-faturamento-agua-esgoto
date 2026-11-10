@@ -23,7 +23,7 @@ from .formatacao import nome_mes, normaliza_texto
 
 TOP = int(REGRAS.get("garantia_top", 1000))
 COLUNAS = ["lig", "nome", "cat", "loc", "grupo", "rota", "sup", "res", "com", "ind", "pub", "esg", "sit", "lanc",
-           "mMed", "mCons", "mVal", "n", "med", "cons", "val", "rank", "vAnt", "cAnt"]
+           "mMed", "mCons", "mVal", "n", "med", "cons", "val", "rank", "vAnt", "cAnt", "mdAnt"]
 _ECO = {"res": "Qtd. Economia Residencial", "com": "Qtd. Economia Comercial", "ind": "Qtd. Economia Industrial",
         "pub": "Qtd. Economia Publica"}
 
@@ -129,7 +129,8 @@ def monta_garantia(ctx):
     d["mVal"], d["mCons"], d["mMed"], d["n"] = mVal, mCons, mMed, n_meses
     d["val"], d["cons"], d["med"] = aVal, aCons, aMed
     rn = getattr(ctx, "ref_anterior", None)                       # mês anterior: sub-aba Aumentos e quedas
-    d["vAnt"], d["cAnt"] = (do_mes(pm_val, rn), do_mes(pm_cons, rn)) if rn else (np.nan, np.nan)
+    d["vAnt"], d["cAnt"], d["mdAnt"] = ((do_mes(pm_val, rn), do_mes(pm_cons, rn), do_mes(pm_med, rn)) if rn
+                                        else (np.nan, np.nan, np.nan))
     d = d.reset_index()
     d = d.sort_values(["mVal", "val"], ascending=False, na_position="last").reset_index(drop=True)
     d["rank"] = np.where(d["mVal"].notna(), np.arange(1, len(d) + 1), np.nan)
