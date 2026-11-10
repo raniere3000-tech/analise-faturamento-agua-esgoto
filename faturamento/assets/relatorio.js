@@ -2412,7 +2412,8 @@ function garVarLista(tipo) {
 // [campo, título, tipo]: clique no título ordena a tabela (as 100 do ranking): número começa do maior, texto de A a Z;
 // o terceiro clique volta à ordem do ranking (#). Cada tabela (aumentos / quedas) tem a sua ordem.
 const GAR_COLS_VAR = [['rank', '#', 'n'], ['lig', 'Matrícula', 't'], ['nome', 'Cliente', 't'], ['cat', 'Categoria', 't'], ['loc', 'Localidade', 't'],
-    ['grupo', 'Grupo', 't'], ['sup', 'SUP', 't'], ['eco', 'Econ.', 'n'], ['cAnt', 'Cons. fat. anterior (m³)', 'n'], ['cons', 'Cons. fat. atual (m³)', 'n'],
+    ['grupo', 'Grupo', 't'], ['sup', 'SUP', 't'], ['eco', 'Econ.', 'n'], ['mdAnt', 'Cons. med. anterior (m³)', 'n'], ['med', 'Cons. med. atual (m³)', 'n'],
+    ['cAnt', 'Cons. fat. anterior (m³)', 'n'], ['cons', 'Cons. fat. atual (m³)', 'n'],
     ['dc', 'Δ cons. (m³)', 'n'], ['vAnt', 'Faturado anterior (R$)', 'n'], ['val', 'Faturado atual (R$)', 'n'], ['dv', 'Δ R$', 'n'], ['pv', 'Δ %', 'n'],
     ['sit', 'Situação conta', 't']];
 GAR_VAR.ordem = { aumento: { campo: null, desc: false }, queda: { campo: null, desc: false } };
@@ -2454,6 +2455,7 @@ function garDesenharVar() {
             const lig = String(d.lig), cls = dv < 0 ? 'gar-queda' : 'gar-aumento';
             return `<tr><td class="num">${r}</td><td>${garEsc(lig)}</td><td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td>`
                 + `<td>${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td>${garEsc(d.sup)}</td><td class="num">${garN(garValorCol(d, 'eco'))}</td>`
+                + `<td class="num">${garN(d.mdAnt, 1)}</td><td class="num">${garN(d.med, 1)}</td>`
                 + `<td class="num">${garN(d.cAnt, 1)}</td><td class="num">${garN(d.cons, 1)}</td><td class="num ${dc < 0 ? 'gar-neg' : ''}">${garN(dc, 1)}</td>`
                 + `<td class="num">${garR(d.vAnt)}</td><td class="num">${garR(d.val)}</td><td class="num gar-forte ${cls}">${garR(dv)}</td>`
                 + `<td class="num ${cls}">${pv == null ? '–' : (pv > 0 ? '+' : '') + fmtBR(pv * 100, 1) + '%'}</td><td>${sit}</td>`
@@ -2470,11 +2472,12 @@ function garBaixarVar(tipo) {
     const lista = garVarLista(tipo), P = tipo === 'aumento' ? 'Aumento' : 'Queda';
     const cols = ['Ranking', 'Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'Rota', 'SUP', 'Econ. residencial', 'Econ. comercial',
         'Econ. industrial', 'Econ. pública', 'Econ. total', 'Tem esgoto', 'Situação conta', 'Situação lançamento',
+        'Cons. medido mês anterior (m³)', 'Cons. medido atual (m³)',
         'Cons. faturado mês anterior (m³)', 'Cons. faturado atual (m³)', 'Δ consumo (m³)', 'Δ % consumo',
         'Faturado mês anterior (R$)', 'Faturado atual (R$)', `${P} (R$)`, 'Δ % faturado', 'Média faturado meses fechados (R$)', 'Posição no Top 1000'];
     const pct = (a, b) => (b ? Math.round((a - b) / b * 1000) / 10 : null), r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
     const linhas = lista.map((d, i) => [i + 1, d.lig, d.nome, d.cat, d.loc, d.grupo, d.rota, d.sup, d.res, d.com, d.ind, d.pub, garValorCol(d, 'eco'),
-        d.esg ? 'Sim' : 'Não', d.sit || '', d.lanc || '', d.cAnt, d.cons, r2(d.cons != null && d.cAnt != null ? d.cons - d.cAnt : null), pct(d.cons, d.cAnt),
+        d.esg ? 'Sim' : 'Não', d.sit || '', d.lanc || '', d.mdAnt, d.med, d.cAnt, d.cons, r2(d.cons != null && d.cAnt != null ? d.cons - d.cAnt : null), pct(d.cons, d.cAnt),
         d.vAnt, d.val, r2(garDifVal(d)), pct(d.val, d.vAnt), d.mVal, d.rank && d.rank <= GAR.top ? d.rank : '']);
     baixarPlanilha(cols, linhas, `Garantia_${P}s_${GAR.ref.replace('/', '-')}${GAR_VAR.soAnalise ? '_em_analise' : ''}${GAR_CAT_VAR.cats ? '_categorias_filtradas' : ''}.csv`);
 }
