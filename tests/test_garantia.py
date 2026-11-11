@@ -295,3 +295,16 @@ def test_aumentos_e_quedas_com_consumo_medido(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert "['mdAnt', 'Cons. med. anterior (m³)', 'n'], ['med', 'Cons. med. atual (m³)', 'n']" in html
     assert "'Cons. medido mês anterior (m³)', 'Cons. medido atual (m³)'" in html
+
+
+def test_os_abertas_categoria_e_lista_de_prioridade(sessao):
+    """O.S. abertas: coluna Categoria; Retramitada vai para a lista de prioridade e só é retramitada quando a lista sai."""
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    for trecho in ("v.os_cat = d.cat", "<th>Cliente</th><th>Categoria</th><th>Grupo</th>",
+                   "else if (sel.value === OS_RETRAM) it.os_lista = garHoje();", "function garOSRetramitarLista(itens)",
+                   'id="garOSListaCopiar"', 'id="garOSListaBaixar"', "garOSRetramitarLista(itens);",
+                   # as já retramitadas (inclusive as de antes desta versão) ficam à vista para copiar, sem mudar nada
+                   "const aguardando = garOSAguardando(os);", 'id="garOSAguardCopiar"', 'id="garOSAguardBaixar"'):
+        assert trecho in html, trecho
+    # marcar Retramitada não grava mais o status na hora (só a lista copiada/baixada retramita)
+    assert "else if (sel.value === OS_RETRAM) { it.os_status = OS_RETRAM;" not in html

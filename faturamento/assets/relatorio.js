@@ -2839,12 +2839,12 @@ const OS_ROTULO = { Realizada: 'Realizada', EXOC: 'EXOC', Retramitada: 'Retramit
 function garOSInfo(k, v, lig) {
     const d = GAR.porLig.get(lig);
     if (d) {
-        if (k.startsWith(GAR.ref + '|') && (v.os_nome !== d.nome || v.os_grupo !== d.grupo || v.os_sup !== d.sup)) {
-            v.os_nome = d.nome; v.os_grupo = d.grupo; v.os_sup = d.sup; garOSInfo.mudou = true;     // cópia para os meses seguintes
+        if (k.startsWith(GAR.ref + '|') && (v.os_nome !== d.nome || v.os_grupo !== d.grupo || v.os_sup !== d.sup || v.os_cat !== d.cat)) {
+            v.os_nome = d.nome; v.os_grupo = d.grupo; v.os_sup = d.sup; v.os_cat = d.cat; garOSInfo.mudou = true;     // cópia para os meses seguintes
         }
         return d;
     }
-    return v.os_nome || v.os_grupo || v.os_sup ? { nome: v.os_nome, grupo: v.os_grupo, sup: v.os_sup } : null;
+    return v.os_nome || v.os_grupo || v.os_sup ? { nome: v.os_nome, grupo: v.os_grupo, sup: v.os_sup, cat: v.os_cat } : null;
 }
 const garOSVisivel = (info) => !info || ESTADO.sup === 'TODAS' || !info.sup || info.sup === ESTADO.sup;
 function garOS() {
@@ -2881,37 +2881,115 @@ function garDesenharOS() {
     const motivo = (m) => (m === 'QUEDA' ? 'Queda de consumo' : m === 'AUMENTO' ? 'Aumento de consumo' : '–');
     const historico = feitas.length ? `<details class="gar-os-hist"${GAR.osHistAberto ? ' open' : ''}><summary>O.S. já marcadas como realizadas / EXOC (${feitas.length})</summary>`
         + '<p class="nota-secao">Marcou por engano? Clique em <b>↺ Voltar para o aviso</b>: a O.S. volta para a lista acima (se o prazo já venceu) com os mesmos dados.</p>'
-        + '<div class="tabela-wrap"><table class="tabela-garantia"><thead><tr><th>Matrícula</th><th>Cliente</th><th>Grupo</th><th>SUP</th><th>Motivo</th>'
+        + '<div class="tabela-wrap"><table class="tabela-garantia"><thead><tr><th>Matrícula</th><th>Cliente</th><th>Categoria</th><th>Grupo</th><th>SUP</th><th>Motivo</th>'
         + '<th>Nº O.S.</th><th>Análise</th><th>Situação</th><th>Marcada em</th><th></th><th>Obs.:</th></tr></thead><tbody>'
         + feitas.map((o) => `<tr><td><b>${garEsc(o.lig)}</b></td><td class="gar-cli" title="${garEsc(o.d && o.d.nome)}">${garEsc(o.d && o.d.nome)}</td>`
-            + `<td>${garEsc(o.d && o.d.grupo)}</td><td>${garEsc(o.d && o.d.sup)}</td><td>${motivo(o.v.motivo)}</td>`
+            + `<td>${garEsc(o.d && o.d.cat)}</td><td>${garEsc(o.d && o.d.grupo)}</td><td>${garEsc(o.d && o.d.sup)}</td><td>${motivo(o.v.motivo)}</td>`
             + `<td>${o.v.os_num ? garEsc(o.v.os_num) : '–'}</td><td>${garDataBR(o.data)}</td><td>${garEsc(OS_ROTULO[o.v.os_status] || o.v.os_status)}</td><td>${garDataBR(garOSDataFim(o.v))}</td>`
             + `<td><button type="button" class="btn-just gar-os-voltar" data-k="${garEsc(o.k)}" title="Desfazer: a O.S. volta a ser acompanhada no aviso">↺ Voltar para o aviso</button></td>${garOSObs(o)}</tr>`).join('')
         + '</tbody></table></div></details>' : '';
-    const nRetram = os.filter((o) => o.retram && !o.vencida).length;
+    const nRetram = os.filter((o) => o.retram && !o.vencida).length, naLista = vencidas.filter((o) => o.v.os_lista);
+    // O.S. com prioridade já solicitada (retramitadas), esperando os dias para voltar ao aviso: à vista para copiar de novo
+    const aguardando = garOSAguardando(os);
+    const aguardandoHtml = aguardando.length ? `<details class="gar-os-hist gar-os-aguard"${GAR.osAguardFechado ? '' : ' open'}><summary>↻ Prioridade já solicitada — aguardando ${OS_RETRAM_DIAS} dias (${aguardando.length})</summary>`
+        + `<p class="nota-secao">O.S. retramitadas/com prioridade solicitada que ainda não voltaram ao aviso. Copiar ou baixar daqui não muda nada nas O.S.`
+        + ` <button type="button" class="btn-just" id="garOSAguardCopiar">📋 Copiar lista</button> <button type="button" class="btn-just" id="garOSAguardBaixar">⬇ Baixar Excel</button></p>`
+        + '<div class="tabela-wrap"><table class="tabela-garantia"><thead><tr><th>Matrícula</th><th>Cliente</th><th>Categoria</th><th>Grupo</th><th>SUP</th><th>Motivo</th>'
+        + '<th>Retorno superintendência</th><th>Nº O.S.</th><th>Análise</th><th>Prioridade solicitada em</th><th>Volta ao aviso em</th><th>Obs.:</th></tr></thead><tbody>'
+        + aguardando.map((o) => `<tr><td><b>${garEsc(o.lig)}</b></td><td class="gar-cli" title="${garEsc(o.d && o.d.nome)}">${garEsc(o.d && o.d.nome)}</td>`
+            + `<td>${garEsc(o.d && o.d.cat)}</td><td>${garEsc(o.d && o.d.grupo)}</td><td>${garEsc(o.d && o.d.sup)}</td><td>${garOSMotivo(o.v.motivo)}</td><td>${garEsc(o.v.retorno)}</td>`
+            + `<td>${o.v.os_num ? garEsc(o.v.os_num) : '–'}</td><td>${garDataBR(o.data)}</td><td>${garDataBR(o.retram)}${o.v.os_retram_n > 1 ? ` (${o.v.os_retram_n}ª vez)` : ''}</td>`
+            + `<td>${o.prazo.toLocaleDateString('pt-BR')}</td>${garOSObs(o)}</tr>`).join('')
+        + '</tbody></table></div></details>' : '';
+    const listaHtml = naLista.length ? `<div class="gar-os-lista" role="region" aria-label="Lista para solicitar prioridade">`
+        + `<div><b>↻ Lista para solicitar prioridade: ${naLista.length} O.S.</b><span>Marque todas as que vão no pedido de prioridade; depois copie ou baixe a lista.`
+        + ` Só então elas saem do aviso e voltam em ${OS_RETRAM_DIAS} dias (retramitadas hoje).</span></div>`
+        + `<button type="button" class="btn-just" id="garOSListaCopiar" title="Copia a lista (cole no e-mail, Teams ou Excel)">📋 Copiar lista</button>`
+        + `<button type="button" class="btn-just" id="garOSListaBaixar" title="Baixa a lista em Excel">⬇ Baixar Excel</button></div>` : '';
     el.innerHTML = `<h2>⚠ O.S. abertas — prazo de ${OS_PRAZO_DIAS} dias</h2>`
         + `<p class="nota-secao">${vencidas.length ? `<b>${vencidas.length}</b> matrícula(s) com O.S. com prazo vencido: verifique se foram realizadas ou estão em atraso.` : 'Nenhuma O.S. com prazo vencido.'}`
         + (noPrazo ? ` ${noPrazo} ainda dentro do prazo${nRetram ? ` (${nRetram} retramitada(s), voltam ${OS_RETRAM_DIAS} dias depois)` : ''}.` : '')
-        + ` Depois de conferir, escolha a situação: <b>Realizada</b> ou <b>EXOC</b> encerram a O.S.; <b>Retramitada/Solicitada prioridade</b> reinicia a contagem e ela volta ao aviso em ${OS_RETRAM_DIAS} dias.</p>`
-        + (vencidas.length ? '<div class="tabela-wrap"><table class="tabela-garantia"><thead><tr><th>Matrícula</th><th>Cliente</th><th>Grupo</th><th>SUP</th><th>Motivo</th>'
+        + ` Depois de conferir, escolha a situação: <b>Realizada</b> ou <b>EXOC</b> encerram a O.S.; <b>Retramitada/Solicitada prioridade</b> põe a O.S. na lista de prioridade (abaixo da tabela); depois de copiar ou baixar a lista, ela sai do aviso e volta em ${OS_RETRAM_DIAS} dias.</p>`
+        + (vencidas.length ? '<div class="tabela-wrap"><table class="tabela-garantia"><thead><tr><th>Matrícula</th><th>Cliente</th><th>Categoria</th><th>Grupo</th><th>SUP</th><th>Motivo</th>'
             + `<th>Retorno superintendência</th><th>Nº O.S.</th><th>Análise</th><th title="D+${OS_PRAZO_DIAS} da análise; retramitada: D+${OS_RETRAM_DIAS} da retramitação">Prazo</th><th class="num">Dias após o prazo</th><th>Situação</th><th>Obs.:</th></tr></thead><tbody>`
-            + vencidas.map((o) => `<tr><td><b>${garEsc(o.lig)}</b></td><td class="gar-cli" title="${garEsc(o.d && o.d.nome)}">${garEsc(o.d && o.d.nome)}</td>`
-                + `<td>${garEsc(o.d && o.d.grupo)}</td><td>${garEsc(o.d && o.d.sup)}</td><td>${motivo(o.v.motivo)}</td><td>${garEsc(o.v.retorno)}</td>`
+            + vencidas.map((o) => `<tr${o.v.os_lista ? ' class="gar-os-na-lista"' : ''}><td><b>${garEsc(o.lig)}</b></td><td class="gar-cli" title="${garEsc(o.d && o.d.nome)}">${garEsc(o.d && o.d.nome)}</td>`
+                + `<td>${garEsc(o.d && o.d.cat)}</td><td>${garEsc(o.d && o.d.grupo)}</td><td>${garEsc(o.d && o.d.sup)}</td><td>${motivo(o.v.motivo)}</td><td>${garEsc(o.v.retorno)}</td>`
                 + `<td>${o.v.os_num ? '<b>' + garEsc(o.v.os_num) + '</b>' : '<span class="gar-sit">não informado</span>'}</td>`
                 + `<td>${garDataBR(o.data)}${o.retram ? `<small class="gar-os-retram">retramitada em ${garDataBR(o.retram)}${o.v.os_retram_n > 1 ? ` (${o.v.os_retram_n}ª vez)` : ''}</small>` : ''}</td>`
                 + `<td>${o.prazo.toLocaleDateString('pt-BR')}</td><td class="num gar-neg"><b>${o.dias}</b></td>`
-                + `<td><select class="gar-in gar-os-sit" data-k="${garEsc(o.k)}" aria-label="Situação da O.S. da matrícula ${garEsc(o.lig)}"><option value="">Marcar como…</option>`
-                + `<option value="Realizada">✓ Realizada</option><option value="EXOC">EXOC</option><option value="${OS_RETRAM}">↻ Retramitada/Solicitada prioridade</option></select></td>${garOSObs(o)}</tr>`).join('')
-            + '</tbody></table></div>' : '') + historico;
+                + `<td><select class="gar-in gar-os-sit" data-k="${garEsc(o.k)}" aria-label="Situação da O.S. da matrícula ${garEsc(o.lig)}">`
+                + (o.v.os_lista ? '<option value="">↻ Na lista de prioridade</option>' : '<option value="">Marcar como…</option>')
+                + `<option value="Realizada">✓ Realizada</option><option value="EXOC">EXOC</option>`
+                + (o.v.os_lista ? '<option value="tirar">✕ Tirar da lista</option>' : `<option value="${OS_RETRAM}">↻ Retramitada/Solicitada prioridade</option>`)
+                + `</select></td>${garOSObs(o)}</tr>`).join('')
+            + '</tbody></table></div>' + listaHtml : '') + aguardandoHtml + historico;
     requestAnimationFrame(() => el.querySelectorAll('.gar-os-obs').forEach((t) => { if (t.offsetParent) garOSObsAltura(t); }));
 }
 document.addEventListener('change', (e) => {
     const sel = e.target.closest && e.target.closest('.gar-os-sit'); if (!sel || !sel.value) return;
     const it = garItens[sel.dataset.k]; if (!it) return;
-    if (sel.value === 'Realizada') { it.os_status = 'Realizada'; it.os_realizada = garHoje(); }
-    else if (sel.value === 'EXOC') { it.os_status = 'EXOC'; it.os_exoc = garHoje(); }
-    else if (sel.value === OS_RETRAM) { it.os_status = OS_RETRAM; it.os_retram = garHoje(); it.os_retram_n = (it.os_retram_n || 0) + 1; }
+    if (sel.value === 'Realizada') { it.os_status = 'Realizada'; it.os_realizada = garHoje(); delete it.os_lista; }
+    else if (sel.value === 'EXOC') { it.os_status = 'EXOC'; it.os_exoc = garHoje(); delete it.os_lista; }
+    else if (sel.value === OS_RETRAM) it.os_lista = garHoje();      // vai para a lista; só é retramitada quando a lista sai
+    else if (sel.value === 'tirar') delete it.os_lista;
     garSalvar(); garDesenharOS();
+});
+// Lista para solicitar prioridade: as O.S. marcadas ficam no aviso (destacadas) até a lista ser copiada ou baixada; aí são
+// retramitadas (hoje) e voltam ao aviso depois de OS_RETRAM_DIAS dias.
+const garOSMotivo = (m) => (m === 'QUEDA' ? 'Queda de consumo' : m === 'AUMENTO' ? 'Aumento de consumo' : '');
+const garOSAguardando = (os) => (os || garOS()).filter((o) => o.retram && !o.vencida).sort((a, b) => String(b.retram).localeCompare(String(a.retram)));
+function garOSListaAguardando() {
+    const itens = garOSAguardando();
+    const cols = ['Matrícula', 'Cliente', 'Categoria', 'Grupo', 'SUP', 'Motivo', 'Retorno superintendência', 'Nº O.S.', 'Análise', 'Prioridade solicitada em', 'Volta ao aviso em', 'Obs.'];
+    const linhas = itens.map((o) => [o.lig, (o.d && o.d.nome) || '', (o.d && o.d.cat) || '', (o.d && o.d.grupo) || '', (o.d && o.d.sup) || '',
+        garOSMotivo(o.v.motivo), o.v.retorno || '', o.v.os_num || '', garDataBR(o.data), garDataBR(o.retram), o.prazo.toLocaleDateString('pt-BR'), o.v.os_obs || '']);
+    return { itens, cols, linhas };
+}
+function garOSLista() {
+    const itens = garOS().filter((o) => o.vencida && o.v.os_lista);
+    const cols = ['Matrícula', 'Cliente', 'Categoria', 'Grupo', 'SUP', 'Motivo', 'Retorno superintendência', 'Nº O.S.', 'Análise', 'Prazo', 'Dias após o prazo', 'Obs.'];
+    const motivo = (m) => (m === 'QUEDA' ? 'Queda de consumo' : m === 'AUMENTO' ? 'Aumento de consumo' : '');
+    const linhas = itens.map((o) => [o.lig, (o.d && o.d.nome) || '', (o.d && o.d.cat) || '', (o.d && o.d.grupo) || '', (o.d && o.d.sup) || '',
+        motivo(o.v.motivo), o.v.retorno || '', o.v.os_num || '', garDataBR(o.data), o.prazo.toLocaleDateString('pt-BR'), o.dias, o.v.os_obs || '']);
+    return { itens, cols, linhas };
+}
+function garOSRetramitarLista(itens) {
+    const hoje = garHoje();
+    itens.forEach((o) => { const it = garItens[o.k]; if (!it) return;
+        it.os_status = OS_RETRAM; it.os_retram = hoje; it.os_retram_n = (it.os_retram_n || 0) + 1; delete it.os_lista; });
+    garSalvar(); garDesenharOS();
+    avisoNuvem(`${itens.length} O.S. retramitada(s)/com prioridade solicitada hoje: voltam ao aviso em ${OS_RETRAM_DIAS} dias.`);
+}
+async function garOSCopiar(cols, linhas) {
+    const cel = (v, th) => `<${th ? 'th' : 'td'} style="border:1px solid #CBD5E1;padding:2px 8px;${th ? 'background:#333F4F;color:#fff;' : ''}">${garEsc(v == null ? '' : v)}</${th ? 'th' : 'td'}>`;
+    const html = '<table style="border-collapse:collapse;font-family:Calibri,sans-serif;font-size:11pt">'
+        + '<tr>' + cols.map((c) => cel(c, true)).join('') + '</tr>' + linhas.map((l) => '<tr>' + l.map((v) => cel(v)).join('') + '</tr>').join('') + '</table>';
+    const texto = cols.join('\t') + '\n' + linhas.map((l) => l.map((v) => String(v == null ? '' : v).replace(/[\t\n]+/g, ' ')).join('\t')).join('\n');
+    try {
+        await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([texto], { type: 'text/plain' }) })]);
+        return true;
+    } catch (e) {
+        try { await navigator.clipboard.writeText(texto); return true; } catch (e2) { /* sem permissão: tenta pela seleção */ }
+        const ta = document.createElement('textarea'); ta.value = texto; ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false; try { ok = document.execCommand('copy'); } catch (e3) { ok = false; }
+        ta.remove(); return ok;
+    }
+}
+document.addEventListener('click', async (e) => {
+    const ag = e.target.closest && e.target.closest('#garOSAguardCopiar, #garOSAguardBaixar');
+    if (ag) {                                                   // já retramitadas: só copia/baixa, sem mudar nada
+        const { itens, cols, linhas } = garOSListaAguardando(); if (!itens.length) return;
+        if (ag.id === 'garOSAguardCopiar') avisoNuvem((await garOSCopiar(cols, linhas)) ? `${itens.length} O.S. copiadas: cole no e-mail, Teams ou Excel (Ctrl+V).` : 'Não foi possível copiar: use ⬇ Baixar Excel.', false);
+        else await baixarPlanilha(cols, linhas, `OS_prioridade_solicitada_${garHoje()}.xlsx`);
+        return;
+    }
+    const t = e.target.closest && e.target.closest('#garOSListaCopiar, #garOSListaBaixar'); if (!t) return;
+    const { itens, cols, linhas } = garOSLista(); if (!itens.length) return;
+    if (t.id === 'garOSListaCopiar') {
+        if (!(await garOSCopiar(cols, linhas))) { avisoNuvem('Não foi possível copiar a lista: use ⬇ Baixar Excel. As O.S. continuam na lista.', true); return; }
+    } else await baixarPlanilha(cols, linhas, `OS_prioridade_${garHoje()}.xlsx`);
+    garOSRetramitarLista(itens);
 });
 document.addEventListener('input', (e) => {                    // Obs.: salva enquanto digita (sem redesenhar, para não perder o foco)
     const inp = e.target.closest && e.target.closest('.gar-os-obs'); if (!inp) return;
@@ -2928,7 +3006,8 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('toggle', (e) => {
     if (!e.target.classList || !e.target.classList.contains('gar-os-hist')) return;
-    GAR.osHistAberto = e.target.open;
+    if (e.target.classList.contains('gar-os-aguard')) GAR.osAguardFechado = !e.target.open;
+    else GAR.osHistAberto = e.target.open;
     if (e.target.open) e.target.querySelectorAll('.gar-os-obs').forEach(garOSObsAltura);      // altura certa ao abrir o histórico
 }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('gar-os-obs')) e.preventDefault(); });
