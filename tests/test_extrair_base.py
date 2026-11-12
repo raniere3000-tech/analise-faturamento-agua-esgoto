@@ -107,3 +107,13 @@ def test_aba_fechamento_com_os_orcados_de_todos_os_arquivos(sessao):
     assert d["orc"]["RF01T26"]["10/2026"]["INTERIOR"]["dA"] == pytest.approx(o["dA"])
     h = gera_aba_fechamento_html(sessao.ctx)
     assert 'id="fechColar"' in h and 'id="fechamento-dados"' in h
+
+
+def test_quadro_analitico_por_matriculas_na_aba_dados():
+    """Aba Dados: o campo das matrículas fica num quadro próprio (não numa janela), visível só na aba Dados."""
+    import os
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert '<section class="card-extrair" id="cardExtrair" hidden' in site and "<dialog id=\"dlgExtrair\"" not in site
+    assert '<textarea id="extLigs"' in site and 'id="extGerar">📥 Baixar analítico</button>' in site
+    assert '$("cardExtrair").hidden = $("barraDados").hidden;' in site and "function extPrepara()" in site
+    assert 'worker.postMessage({ fase: "extrair", params, arquivo }' in site

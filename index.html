@@ -254,8 +254,11 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 .menu-pdf-lista[hidden] { display: none; }
 #menuBases { min-width: 340px; left: 0; right: auto; }
 #menuAcomp { min-width: 330px; }
-.dlg-extrair { border: 0; border-radius: 14px; padding: 0; width: min(920px, calc(100vw - 32px)); box-shadow: 0 18px 50px rgba(17,42,66,.35); color: var(--ink); }
-.dlg-extrair::backdrop { background: rgba(10,25,45,.45); }
+.card-extrair { background: #fff; color: var(--ink); border-bottom: 1px solid var(--line); }
+.card-extrair[hidden] { display: none; }
+.card-extrair .dlg-corpo { max-width: 1100px; max-height: none; overflow: visible; }
+.card-extrair.destaque { animation: extDestaque 1.2s ease-out; }
+@keyframes extDestaque { from { background: #fff7d6; } to { background: #fff; } }
 .dlg-corpo { padding: 20px 22px; max-height: calc(100vh - 60px); overflow: auto; }
 .dlg-corpo h2 { margin: 0 0 6px; font-size: 1.15rem; }
 .dlg-corpo h3 { margin: 10px 0 6px; font-size: .92rem; }
@@ -451,7 +454,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v163</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v164</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -550,11 +553,12 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         <button type="button" id="btnAcompZerar">↺ Zerar contagem semanal<small>Apaga as "fotos" guardadas das indiretas: o próximo arquivo começa do zero</small></button>
       </span></span>
   </div>
-  <dialog id="dlgExtrair" class="dlg-extrair" aria-labelledby="dlgExtrairTit">
-    <form method="dialog" class="dlg-corpo" id="frmExtrair">
-      <h2 id="dlgExtrairTit">Extrair base por matrículas e meses</h2>
-      <p class="dlg-nota">Gera a base só das matrículas informadas, ou de todas, nos meses marcados (todos os grupos, sem os filtros do cabeçalho).
-        Até 150 mil linhas sai em Excel (uma aba por mês); acima disso, em CSV, que abre no Excel.</p>
+  <!-- aba Dados: analítico das matrículas coladas (como a aba Base do painel da arrecadação) -->
+  <section class="card-extrair" id="cardExtrair" hidden aria-labelledby="dlgExtrairTit">
+    <div class="dlg-corpo" id="frmExtrair">
+      <h2 id="dlgExtrairTit">Analítico por matrículas</h2>
+      <p class="dlg-nota">Cole as matrículas (ou carregue um arquivo), marque os meses e baixe o analítico só delas — ou de todas as matrículas.
+        Vale para todos os grupos, sem os filtros do cabeçalho. Até 150 mil linhas sai em Excel (uma aba por mês); acima disso, em CSV, que abre no Excel.</p>
       <div class="dlg-grade">
         <div>
           <h3>1. Matrículas</h3>
@@ -573,11 +577,11 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
           <label class="dlg-op"><input type="radio" name="extFormato" value="linhas"> Linhas da base (todas as colunas)<small>Uma linha por rubrica, como vem da fatura</small></label>
         </div>
       </div>
-      <div class="dlg-acoes dlg-rodape"><button type="button" class="dlg-btn dlg-prim" id="extGerar">📥 Extrair base</button>
-        <button type="button" class="dlg-btn" id="extFechar">Fechar</button><span id="extStatus" class="dlg-qtd"></span></div>
+      <div class="dlg-acoes dlg-rodape"><button type="button" class="dlg-btn dlg-prim" id="extGerar">📥 Baixar analítico</button>
+        <span id="extStatus" class="dlg-qtd"></span></div>
       <div id="extResultado"></div>
-    </form>
-  </dialog>
+    </div>
+  </section>
   <iframe id="quadroRelatorio" title="Relatório comparativo de água e esgoto" hidden></iframe>
 </main>
 
@@ -655,7 +659,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v163-20261111"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v164-20261112"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1708,6 +1712,9 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   function aplicaFiltros() {
     document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
     $("barraDados").hidden = filtrosEstado.view !== "dados" || quadro().hidden;   // botões de arquivos: só na aba Dados
+    const extOculto = $("cardExtrair").hidden;
+    $("cardExtrair").hidden = $("barraDados").hidden;                                // analítico por matrículas: idem
+    if (extOculto && !$("cardExtrair").hidden) setTimeout(() => { try { extPrepara(); } catch (e) { /* ainda carregando */ } }, 0);
     ["Sup", "Ref", "Mes", "Grupo"].forEach((f) => {
       const ok = APLICA[filtrosEstado.view].includes(f);
       $("fg" + f).classList.toggle("inativo", !ok);
@@ -1906,7 +1913,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     try { localStorage.setItem(EXT_LS, $("extLigs").value.slice(0, 2e6)); } catch (e) {}
   }
   const extModo = () => (document.querySelector('input[name="extModo"]:checked') || {}).value;
-  function extAbre() {
+  function extPrepara() {
     const meses = (mesesTodos || (infoFiltros && infoFiltros.meses) || []).map((m) => m.ref);
     const atual = (infoFiltros && infoFiltros.mesAtual) || meses[meses.length - 1];
     const marcados = new Set(Array.from($("extMeses").querySelectorAll("input:checked")).map((i) => i.value));
@@ -1915,14 +1922,15 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     if (!$("extLigs").value) { try { $("extLigs").value = localStorage.getItem(EXT_LS) || ""; } catch (e) {} }
     $("extLigs").disabled = extModo() === "todas";
     extAtualizaQtd();
-    $("dlgExtrair").showModal();
   }
+  // o menu Bases analíticas leva ao quadro da aba Dados
   $("btnExtrairAbrir").addEventListener("click", () => {
     fechaMenuBases();
-    if (!worker || !relPorMes.size) { window.avisoSite("Para extrair bases, conecte a pasta e carregue a análise (o relatório aberto de arquivo não tem a base).", true); return; }
-    extAbre();
+    const c = $("cardExtrair"); if (c.hidden) return;
+    c.scrollIntoView({ behavior: "smooth", block: "start" });
+    c.classList.remove("destaque"); void c.offsetWidth; c.classList.add("destaque");
+    if (!$("extLigs").disabled) $("extLigs").focus({ preventScroll: true });
   });
-  $("extFechar").addEventListener("click", () => $("dlgExtrair").close());
   document.querySelectorAll('input[name="extModo"]').forEach((r) => r.addEventListener("change", () => { $("extLigs").disabled = extModo() === "todas"; }));
   $("extLigs").addEventListener("input", extAtualizaQtd);
   $("extLimpar").addEventListener("click", () => { $("extLigs").value = ""; extArquivo = null; extAtualizaQtd(); });
@@ -1941,7 +1949,8 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
   $("extGerar").addEventListener("click", async () => {
-    if (!worker || esperaExtrair) return;
+    if (esperaExtrair) return;
+    if (!worker || !relPorMes.size) { $("extStatus").textContent = "Para baixar o analítico, conecte a pasta e carregue a análise (clique em ↻ Atualizar se o painel foi reaberto)."; return; }
     const todas = extModo() === "todas", meses = Array.from($("extMeses").querySelectorAll("input:checked")).map((i) => i.value);
     if (!todas && !extLigsDoTexto($("extLigs").value).length && !extArquivo) { $("extStatus").textContent = "Informe as matrículas (cole a lista ou carregue um arquivo) ou escolha Todas as matrículas."; return; }
     if (!meses.length) { $("extStatus").textContent = "Marque pelo menos um mês."; return; }
