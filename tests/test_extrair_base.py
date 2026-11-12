@@ -117,3 +117,6 @@ def test_quadro_analitico_por_matriculas_na_aba_dados():
     assert '<textarea id="extLigs"' in site and 'id="extGerar">📥 Baixar analítico</button>' in site
     assert '$("cardExtrair").hidden = $("barraDados").hidden;' in site and "function extPrepara()" in site
     assert 'worker.postMessage({ fase: "extrair", params, arquivo }' in site
+    # com o relatório aberto a página tem a altura da tela: o quadro não encolhe (o botão ficava escondido atrás do relatório)
+    assert ".card-extrair { flex: none; max-height: 50vh; overflow: auto; }" in site
+    assert 'id="extRecarregar"' in site                          # análise não carregada: oferece reler a pasta
