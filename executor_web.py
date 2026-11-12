@@ -58,7 +58,7 @@ def extrair(params_json, arquivo, caminho):
     ligs = None
     if p.get("modo") != "todas":
         ligs = ligacoes_do_texto(p.get("texto") or "")
-        if arquivo is not None:
+        if arquivo is not None and type(arquivo).__name__ != "JsNull":   # null do navegador chega como JsNull, não None
             vistos = set(ligs)
             dados = arquivo.to_bytes() if hasattr(arquivo, "to_bytes") else bytes(arquivo)   # Uint8Array do navegador
             ligs += [l for l in ligacoes_do_arquivo(p.get("nomeArquivo") or "", dados) if l not in vistos]

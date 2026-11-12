@@ -109,14 +109,30 @@ def test_aba_fechamento_com_os_orcados_de_todos_os_arquivos(sessao):
     assert 'id="fechColar"' in h and 'id="fechamento-dados"' in h
 
 
-def test_quadro_analitico_por_matriculas_na_aba_dados():
-    """Aba Dados: o campo das matrículas fica num quadro próprio (não numa janela), visível só na aba Dados."""
+def test_aba_base_com_o_analitico_por_matriculas():
+    """Aba Base (do site): o quadro das matrículas coladas fica no lugar do relatório, só nessa aba."""
     import os
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
-    assert '<section class="card-extrair" id="cardExtrair" hidden' in site and "<dialog id=\"dlgExtrair\"" not in site
+    assert '<button class="tab" data-view="base" type="button">Base</button>' in site
+    assert '<section class="card-extrair" id="cardExtrair" hidden' in site and '<dialog id="dlgExtrair"' not in site
     assert '<textarea id="extLigs"' in site and 'id="extGerar">📥 Baixar analítico</button>' in site
-    assert '$("cardExtrair").hidden = $("barraDados").hidden;' in site and "function extPrepara()" in site
-    assert 'worker.postMessage({ fase: "extrair", params, arquivo }' in site
-    # com o relatório aberto a página tem a altura da tela: o quadro não encolhe (o botão ficava escondido atrás do relatório)
-    assert ".card-extrair { flex: none; max-height: 50vh; overflow: auto; }" in site
-    assert 'id="extRecarregar"' in site                          # análise não carregada: oferece reler a pasta
+    assert '$("cardExtrair").hidden = !naBase || quadro().hidden;' in site and "body.view-base #quadroRelatorio { display: none; }" in site
+    assert 'worker.postMessage({ fase: "extrair", params, arquivo }' in site and 'id="extRecarregar"' in site
+
+
+def test_extrair_sem_arquivo_vindo_do_navegador(sessao, tmp_path):
+    """Sem arquivo de matrículas o navegador mandava null, que chega ao Python como JsNull (não None):
+    "cannot convert 'JsNull' object to bytes". O worker manda undefined e o executor ignora o JsNull."""
+    import json
+    import os
+    import executor_web
+    worker = open(os.path.join(os.path.dirname(__file__), "..", "analisador.worker.js"), encoding="utf-8").read()
+    assert "arquivo ? new Uint8Array(arquivo) : undefined, caminho" in worker
+    JsNull = type("JsNull", (), {})                       # o objeto do Pyodide (não converte para bytes)
+    executor_web._estado["sessao"] = sessao
+    ref = sessao.ctx.ref_atual
+    b = sessao.ctx.base_final
+    lig = str(b.loc[b["Referencia de Leitura"] == ref, "N. Ligação"].iloc[0])
+    params = {"modo": "lista", "texto": lig, "nomeArquivo": "", "meses": [ref], "formato": "matricula"}
+    r = json.loads(executor_web.extrair(json.dumps(params), JsNull(), str(tmp_path / "saida.bin")))
+    assert r["linhas"] >= 1 and os.path.getsize(tmp_path / "saida.bin") > 0
