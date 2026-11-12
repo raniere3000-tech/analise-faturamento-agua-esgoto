@@ -269,7 +269,7 @@ async function faseExtrair(params, arquivo) {
   const caminho = "/tmp/extracao.bin";
   const extrair = pyodide.globals.get("extrair");
   try {
-    const info = JSON.parse(extrair(JSON.stringify(params || {}), arquivo ? new Uint8Array(arquivo) : null, caminho));
+    const info = JSON.parse(extrair(JSON.stringify(params || {}), arquivo ? new Uint8Array(arquivo) : undefined, caminho));
     const saida = pyodide.FS.readFile(caminho);
     avisa("extracao", { info, conteudo: saida.buffer }, [saida.buffer]);
   } finally { extrair.destroy(); }

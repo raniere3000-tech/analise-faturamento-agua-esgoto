@@ -256,25 +256,24 @@ body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", Arial,
 #menuAcomp { min-width: 330px; }
 .card-extrair { background: #fff; color: var(--ink); border-bottom: 1px solid var(--line); }
 .card-extrair[hidden] { display: none; }
-/* com o relatório aberto a página tem a altura da tela: o quadro não encolhe (o relatório fica com o resto) e, se passar de
-   metade da tela, rola por dentro */
-.card-extrair { flex: none; max-height: 50vh; overflow: auto; }
-.card-extrair .dlg-corpo { max-width: 1400px; max-height: none; overflow: visible; padding: 12px 20px 14px; }
+/* aba Base: o quadro fica no lugar do relatório (escondido) e rola por dentro */
+.card-extrair { flex: 1; min-height: 0; overflow: auto; background: var(--bg, #f4f7fa); }
+body.view-base #quadroRelatorio { display: none; }
+.card-extrair .dlg-corpo { background: #fff; border: 1px solid var(--line); border-radius: 12px; margin: 16px auto; width: calc(100% - 32px); box-sizing: border-box; }
+.card-extrair .dlg-corpo { max-width: 1400px; max-height: none; overflow: visible; padding: 16px 22px 18px; }
 .ext-topo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; }
 .ext-topo h2 { margin: 0; text-wrap: balance; }
 .ext-topo .dlg-nota { margin: 0; }
 .ext-grade { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; }
-@media (max-width: 900px) { .ext-grade { grid-template-columns: 1fr; } .card-extrair { max-height: none; } }
+@media (max-width: 900px) { .ext-grade { grid-template-columns: 1fr; } }
 .ext-modo { display: flex; flex-wrap: wrap; gap: 0 16px; }
-.card-extrair .dlg-meses { max-height: 120px; }
+.card-extrair .dlg-meses { max-height: 260px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .ext-baixar { margin-top: 10px; }
 .ext-baixar .dlg-btn { min-height: 40px; font-size: .92rem; }
 .ext-status { margin: 6px 0 0; }
 .ext-status button { margin-left: 6px; }
 #extResultado table { font-size: .82rem; border-collapse: collapse; margin-top: 6px; }
 #extResultado th, #extResultado td { padding: 2px 10px 2px 0; text-align: left; font-variant-numeric: tabular-nums; }
-.card-extrair.destaque { animation: extDestaque 1.2s ease-out; }
-@keyframes extDestaque { from { background: #fff7d6; } to { background: #fff; } }
 .dlg-corpo { padding: 20px 22px; max-height: calc(100vh - 60px); overflow: auto; }
 .dlg-corpo h2 { margin: 0 0 6px; font-size: 1.15rem; }
 .dlg-corpo h3 { margin: 10px 0 6px; font-size: .92rem; }
@@ -470,7 +469,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v165</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v166</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -517,6 +516,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   <button class="tab" data-view="plano" type="button">Plano de ação</button>
   <button class="tab" data-view="onepage" type="button">One page</button>
   <button class="tab" data-view="dados" type="button">Dados</button>
+  <button class="tab" data-view="base" type="button">Base</button>
 </nav>
 
 <main class="conteudo" id="inicio">
@@ -569,17 +569,17 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         <button type="button" id="btnAcompZerar">↺ Zerar contagem semanal<small>Apaga as "fotos" guardadas das indiretas: o próximo arquivo começa do zero</small></button>
       </span></span>
   </div>
-  <!-- aba Dados: analítico das matrículas coladas (como a aba Base do painel da arrecadação) -->
+  <!-- aba Base (do site): analítico das matrículas coladas, como a aba Base do painel da arrecadação -->
   <section class="card-extrair" id="cardExtrair" hidden aria-labelledby="dlgExtrairTit">
     <div class="dlg-corpo" id="frmExtrair">
       <div class="ext-topo"><h2 id="dlgExtrairTit">Analítico por matrículas</h2>
-        <p class="dlg-nota">Todos os grupos, sem os filtros do cabeçalho. Até 150 mil linhas sai em Excel (uma aba por mês); acima disso, em CSV.</p></div>
+        <p class="dlg-nota">Cole as matrículas (ou carregue um arquivo), marque os meses e baixe. Todos os grupos, sem os filtros do cabeçalho. Até 150 mil linhas sai em Excel (uma aba por mês); acima disso, em CSV.</p></div>
       <div class="ext-grade">
         <div>
           <h3>1. Matrículas</h3>
           <div class="ext-modo"><label class="dlg-op"><input type="radio" name="extModo" value="lista" checked> Só as matrículas abaixo</label>
             <label class="dlg-op"><input type="radio" name="extModo" value="todas"> Todas (base completa)</label></div>
-          <textarea id="extLigs" rows="5" placeholder="Cole aqui as matrículas (uma por linha, ou separadas por espaço, vírgula ou ponto e vírgula). Pode colar direto de uma coluna do Excel."></textarea>
+          <textarea id="extLigs" rows="12" placeholder="Cole aqui as matrículas (uma por linha, ou separadas por espaço, vírgula ou ponto e vírgula). Pode colar direto de uma coluna do Excel."></textarea>
           <div class="dlg-acoes"><label class="dlg-btn dlg-arq">Carregar de arquivo (Excel, CSV ou TXT)<input type="file" id="extArquivo" accept=".xlsx,.xls,.csv,.txt" hidden></label>
             <button type="button" class="dlg-btn" id="extLimpar">Limpar</button><span id="extQtd" class="dlg-qtd">0 matrículas</span></div>
         </div>
@@ -676,7 +676,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v165-20261112"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v166-20261112"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1721,16 +1721,19 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     resumo: ["Resumo", "KPIs, gráfico de faturamento por grupo e destaques do mês"],
     tabelas: ["Diretas", "Tabelas de água e esgoto por grupo, orçado por ciclo, consumo mínimo e Top 100"],
     dados: ["Dados", "Bases carregadas, avisos e explicação de como cada cálculo é feito (inclusive o forecast)"],
+    base: ["Base", "Analítico só das matrículas coladas (ou de todas), nos meses marcados, em Excel"],
     forecast: ["Forecast", "Previsão de fechamento do mês, editável: ao mudar um valor, os totais e comparações se refazem"],
   };
   // quais filtros valem em cada aba (os demais ficam esmaecidos)
-  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo", "Mes"], tabelas: ["Sup", "Grupo", "Mes"], analise: ["Sup", "Grupo", "Mes"], dados: ["Mes"], forecast: ["Sup", "Ref", "Mes"], garantia: ["Sup", "Grupo", "Mes"], fechamento: ["Sup"], plano: ["Sup", "Grupo", "Mes"], onepage: ["Sup", "Ref", "Mes", "Grupo"] };
+  const APLICA = { dre: ["Sup", "Ref", "Mes"], indiretas: ["Sup", "Mes"], resumo: ["Sup", "Grupo", "Mes"], tabelas: ["Sup", "Grupo", "Mes"], analise: ["Sup", "Grupo", "Mes"], dados: ["Mes"], base: [], forecast: ["Sup", "Ref", "Mes"], garantia: ["Sup", "Grupo", "Mes"], fechamento: ["Sup"], plano: ["Sup", "Grupo", "Mes"], onepage: ["Sup", "Ref", "Mes", "Grupo"] };
 
   function aplicaFiltros() {
     document.querySelectorAll("#nav .tab").forEach((t) => t.classList.toggle("active", t.dataset.view === filtrosEstado.view));
     $("barraDados").hidden = filtrosEstado.view !== "dados" || quadro().hidden;   // botões de arquivos: só na aba Dados
-    const extOculto = $("cardExtrair").hidden;
-    $("cardExtrair").hidden = $("barraDados").hidden;                                // analítico por matrículas: idem
+    // aba Base: é do site (não do relatório): mostra o quadro do analítico por matrículas no lugar do relatório
+    const naBase = filtrosEstado.view === "base", extOculto = $("cardExtrair").hidden;
+    $("cardExtrair").hidden = !naBase || quadro().hidden;
+    document.body.classList.toggle("view-base", naBase && !quadro().hidden);
     if (extOculto && !$("cardExtrair").hidden) setTimeout(() => { try { extPrepara(); } catch (e) { /* ainda carregando */ } }, 0);
     ["Sup", "Ref", "Mes", "Grupo"].forEach((f) => {
       const ok = APLICA[filtrosEstado.view].includes(f);
@@ -1738,6 +1741,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       $("fg" + f).title = ok ? "" : "Este filtro não se aplica a esta aba";
     });
     const w = quadro().hidden ? null : janela();
+    if (naBase && w) return;                                                         // o relatório fica escondido
     if (!w || !w.mostrarView) {
       $("vazioTitulo").textContent = TITULOS_VAZIO[filtrosEstado.view][0];
       $("vazioDica").textContent = TITULOS_VAZIO[filtrosEstado.view][1];
@@ -1943,9 +1947,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   // o menu Bases analíticas leva ao quadro da aba Dados
   $("btnExtrairAbrir").addEventListener("click", () => {
     fechaMenuBases();
-    const c = $("cardExtrair"); if (c.hidden) return;
-    c.scrollIntoView({ behavior: "smooth", block: "start" });
-    c.classList.remove("destaque"); void c.offsetWidth; c.classList.add("destaque");
+    filtrosEstado.view = "base"; aplicaFiltros();
     if (!$("extLigs").disabled) $("extLigs").focus({ preventScroll: true });
   });
   document.querySelectorAll('input[name="extModo"]').forEach((r) => r.addEventListener("change", () => { $("extLigs").disabled = extModo() === "todas"; }));
