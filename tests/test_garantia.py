@@ -325,7 +325,9 @@ def test_regras_novas_da_garantia(sessao):
     divergente, em análise/sem fatura e sem retorno ficam fora (em cinza, com o valor que dariam)."""
     html = open(sessao.caminho_html, encoding="utf-8").read()
     for trecho in ("const GAR_ZERA_ATE = 1;", "const entra = cf.st === 'ok' || cf.st === 'sem';",
-                   "const base = it.motivo === 'AUMENTO' ? vmed : it.anterior;",
+                   "? (it.motivo === 'AUMENTO' ? it.anterior : (vmed != null ? vmed : calc))",   # divergente: perda
+                   ": (it.motivo === 'AUMENTO' ? vmed : it.anterior);",
+                   "Divergentes — não seguiram o solicitado · perda",
                    "const bruto = atual != null && base != null ? atual - base : null;",
                    "['vmed', 'Valor da média (R$)', 'n'", "const vmed = garCalculado(d, it.media);",
                    "const calc = garCalculado(d, vol != null ? vol : it.media);", "['calc', 'Pedido (R$)', 'n'",

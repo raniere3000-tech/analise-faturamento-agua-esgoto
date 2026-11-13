@@ -977,6 +977,7 @@ def _aba_garantia(ctx):
                       "Faturado × pedido: consumo faturado do mês × volume pedido no retorno (sem número: a média), tolerância de 1 m³ ou 1%",
                       "Entram no resultado: ✓ conforme e ? retorno sem volume (ex.: contrato de demanda)",
                       "Fora do resultado (aparecem em cinza, com o valor que dariam): ⚠ divergente (não seguiu o solicitado), ⏳ conta em análise ou sem fatura, sem retorno",
+                      "Divergente: o valor mostrado é a perda por não seguir o pedido — queda = Fat. ajustado − valor da média (sem média: o pedido do retorno em R$); aumento = Fat. ajustado − Fat. anterior",
                       "Pedido (R$) = tarifa do volume pedido no retorno (sem número: a média digitada)",
                       "Liberadas = Situação Conta diferente de EM ANALISE",
                       "Motivo em branco: fora da soma (continua no controle de O.S.)",

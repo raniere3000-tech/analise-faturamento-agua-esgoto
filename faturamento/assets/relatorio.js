@@ -2541,7 +2541,7 @@ function garCalcItem(it) {
     const calc = garCalculado(d, vol != null ? vol : it.media);
     const vmed = garCalculado(d, it.media);                    // Valor da média (R$): tarifa da Média volume fat. (m³)
     const atual = d ? d.val : null;
-    const g = garGanhoItem(it, d, atual, vmed);
+    const g = garGanhoItem(it, d, atual, vmed, calc);
     return { d, calc, vmed, atual, dif: g.gar, ganho: g };
 }
 // Garantia: QUEDA = Fat. ajustado − Fat. anterior; AUMENTO = Fat. ajustado − Valor da média (o que se perderia se o faturamento
@@ -2549,13 +2549,18 @@ function garCalcItem(it) {
 // conformes e as de retorno sem volume (?); divergentes, ⏳ (em análise / sem fatura) e sem retorno ficam fora (garantia 0 nas
 // somas), mas aparecem na tabela e no popup com o valor que dariam, em cinza.
 const GAR_ZERA_ATE = 1;
-const GAR_FORA_ROT = { div: 'Divergentes — não seguiram o solicitado', esp: 'Aguardando (conta em análise ou sem fatura)', vazio: 'Sem retorno da superintendência' };
-function garGanhoItem(it, d, atual, vmed) {
+const GAR_FORA_ROT = { div: 'Divergentes — não seguiram o solicitado · perda', esp: 'Aguardando (conta em análise ou sem fatura)', vazio: 'Sem retorno da superintendência' };
+function garGanhoItem(it, d, atual, vmed, calc) {
     if (d === undefined) d = GAR.porLig.get(it.lig);
     if (atual === undefined) atual = d ? d.val : null;
     if (vmed === undefined) vmed = garCalculado(d, it.media);
+    if (calc === undefined) { const vol = garPedidoVolume(it); calc = garCalculado(d, vol != null ? vol : it.media); }
     const cf = garConferencia(it);
-    const base = it.motivo === 'AUMENTO' ? vmed : it.anterior;          // referência: valor da média (aumento) ou foto (queda)
+    // referência: valor da média (aumento) ou foto (queda). Divergente: a conta é a PERDA por não seguir o pedido —
+    // queda = Fat. ajustado − valor da média (sem média digitada: o pedido do retorno, R$); aumento = Fat. ajustado − Fat. anterior
+    const base = cf.st === 'div'
+        ? (it.motivo === 'AUMENTO' ? it.anterior : (vmed != null ? vmed : calc))
+        : (it.motivo === 'AUMENTO' ? vmed : it.anterior);
     const bruto = atual != null && base != null ? atual - base : null;
     const valor = bruto == null ? null : (Math.abs(bruto) <= GAR_ZERA_ATE + 1e-9 ? 0 : Math.round(bruto * 100) / 100);
     const entra = cf.st === 'ok' || cf.st === 'sem';
@@ -2620,7 +2625,7 @@ const garSeloConf = (cf) => `<span class="gar-conf gar-conf-${cf.st}" title="${g
 // célula da garantia: fora do resultado em cinza, com a observação
 const garCelGarantia = (g) => (g.entra
     ? `<td class="num ${g.valor < 0 ? 'gar-neg' : ''}" data-f="dif"><b>${garR(g.valor)}</b></td>`
-    : `<td class="num gar-fora" data-f="dif" title="Não entra no resultado (${garEsc(g.cf.rot)})">${garR(g.valor)}<small>não entra no resultado</small></td>`);
+    : `<td class="num gar-fora" data-f="dif" title="${g.cf.st === 'div' ? 'Perda por não seguir o solicitado (queda: Fat. ajustado − valor da média; aumento: Fat. ajustado − Fat. anterior). ' : ''}Não entra no resultado (${garEsc(g.cf.rot)})">${garR(g.valor)}<small>${g.cf.st === 'div' ? 'perda · ' : ''}não entra no resultado</small></td>`);
 function garOrdenarAnalise(itens) {
     const { campo, desc } = GAR.ordemAnalise;
     if (!campo) return itens;
