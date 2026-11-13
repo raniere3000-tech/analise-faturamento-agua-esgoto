@@ -2577,6 +2577,10 @@ function garAnteriorSuspeito(it, cf, atual) {
 // origem do Fat. anterior (embaixo do valor): foto dd/mm, planilha, à mão dd/mm
 function garOrigemAnterior(it) {
     const dm = (iso) => { const m = String(iso || '').match(/^\d{4}-(\d{2})-(\d{2})/); return m ? `${m[2]}/${m[1]}` : ''; };
+    if (it.anterior_medido != null) {
+        const d = GAR.porLig.get(it.lig), min = d && GAR.tarifa && window.Tarifa ? Tarifa.minimo(GAR.tarifa, d.cat, garEco(d)) : 0;
+        return `pelo medido ${fmtBR(it.anterior_medido, 0)} m³${min && it.anterior_medido <= min ? ` → mínimo ${fmtBR(min, 0)} m³` : ''} · ${dm(it.anterior_manual)}`;
+    }
     if (it.anterior_manual) return `à mão ${dm(it.anterior_manual)}`;
     if (it.anterior == null) return it.sem_foto ? 'preencha o Fat. anterior' : '';
     if (it.historico && !it.foto) return 'planilha';
@@ -2590,7 +2594,7 @@ const GAR_COLS_ANALISE = [
     ['media', 'Média volume fat. (m³)', 'n', 'Média faturada do sistema (m³) — preenchida manualmente'],
     ['vmed', 'Valor da média (R$)', 'n', 'Tarifa da Média volume fat. (m³): no aumento, a garantia é Fat. ajustado − este valor'],
     ['calc', 'Pedido (R$)', 'n', 'Tarifa do volume pedido no retorno (sem número no retorno: a média digitada)'],
-    ['anterior', 'Fat. anterior (R$)', 'n', 'Foto do faturado quando a matrícula entrou na análise'],
+    ['anterior', 'Fat. anterior (R$)', 'n', 'Foto do faturado quando a matrícula entrou na análise; para corrigir, digite o consumo medido original (m³) e o valor sai pela estrutura tarifária'],
     ['atual', 'Fat. ajustado (R$)', 'n', 'Faturado real atual (muda quando a fatura é liberada)'],
     ['dif', 'Garantia (R$)', 'n', 'Queda: Fat. ajustado − Fat. anterior; aumento: Fat. ajustado − Valor da média (até R$ 1,00 = 0); divergente, em análise/sem fatura e sem retorno não entram no resultado'],
     ['motivo', 'Motivo', 't'], ['retorno', 'Retorno superintendência', 't'],
@@ -2637,9 +2641,12 @@ function garConferencia(it) {
         dica: `Faturado ${fmtBR(fat, 0)} m³, pedido ${fmtBR(pedido, 0)} m³ (diferença ${fat - pedido > 0 ? '+' : ''}${fmtBR(fat - pedido, 0)} m³): não entra no resultado` };
 }
 // Fat. anterior: campo para corrigir à mão (o original do sistema), com a origem do valor e o alerta de foto suspeita
+// O Fat. anterior (R$) pode ser refeito pelo consumo MEDIDO original (m³): o valor sai pela estrutura tarifária da matrícula
+// (categoria, economias e esgoto), com o mínimo da categoria quando o medido fica abaixo dele.
 const garCelAnterior = (it, g) => `<td class="num gar-ant-td${g.antSusp ? ' gar-ant-susp' : ''}" data-f="anterior">`
-    + `<input class="gar-in gar-anterior" data-campo="anterior" inputmode="decimal" value="${it.anterior == null ? '' : fmtBR(it.anterior, 2)}" `
-    + `aria-label="Fat. anterior da matrícula ${garEsc(it.lig)}" title="Faturado original (antes do refaturamento). Digite para corrigir: fica salvo como corrigido à mão.">`
+    + `<b class="gar-ant-valor">${garR(it.anterior)}</b>`
+    + `<input class="gar-in gar-anterior" data-campo="anterior_medido" inputmode="decimal" placeholder="medido m³" value="${it.anterior_medido == null ? '' : fmtBR(it.anterior_medido, it.anterior_medido % 1 ? 2 : 0)}" `
+    + `aria-label="Consumo medido original (m³) da matrícula ${garEsc(it.lig)}" title="Consumo MEDIDO original (m³), antes do refaturamento: o Fat. anterior é calculado pela estrutura tarifária (abaixo do mínimo da categoria, vale o mínimo).">`
     + `<small>${garEsc(garOrigemAnterior(it))}</small>${g.antSusp ? `<small class="gar-ant-alerta" title="Queda conforme com o Fat. anterior ${it.anterior == null ? 'vazio' : 'igual ao ajustado'}: a foto pode ter sido tirada depois do refaturamento. Confira o valor original e digite (ou redigite) no campo.">⚠ conferir</small>` : ''}</td>`;
 const GAR_CONF_ORDEM = { div: 0, esp: 1, sem: 2, ok: 3, vazio: 4 };
 const garSeloConf = (cf) => `<span class="gar-conf gar-conf-${cf.st}" title="${garEsc(cf.dica)}">${garEsc(cf.rot)}${cf.det ? `<small>${garEsc(cf.det)}</small>` : ''}</span>`;
@@ -2727,7 +2734,7 @@ function garDesenharConferencia(conta) {
 }
 function garBaixarConferencia() {
     const cols = ['Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'Rota', 'SUP', 'Situação conta', 'Motivo', 'Retorno superintendência',
-        'Média volume fat. (m³)', 'Volume pedido (m³)', 'Consumo faturado no mês (m³)', 'Diferença (m³)', 'Conferência', 'Valor da média (R$)', 'Pedido (R$)', 'Fat. anterior (R$)', 'Origem do Fat. anterior', 'Fat. anterior a conferir', 'Fat. ajustado (R$)',
+        'Média volume fat. (m³)', 'Volume pedido (m³)', 'Consumo faturado no mês (m³)', 'Diferença (m³)', 'Conferência', 'Valor da média (R$)', 'Pedido (R$)', 'Fat. anterior (R$)', 'Medido informado (m³)', 'Origem do Fat. anterior', 'Fat. anterior a conferir', 'Fat. ajustado (R$)',
         'Garantia (R$)', 'Entra no resultado', 'O.S.', 'Nº O.S.'];
     const rotSt = { ok: 'Conforme', div: 'Divergente — não seguiu o solicitado', esp: 'Aguardando (conta em análise ou sem fatura)', sem: 'Sem volume no retorno', vazio: 'Sem retorno' };
     const r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
@@ -2736,7 +2743,7 @@ function garBaixarConferencia() {
     const linhas = itens.map((it) => { const { d, calc, vmed, atual, ganho } = garCalcItem(it), c = ganho.cf, x = d || {};
         return [it.lig, x.nome || '', x.cat || '', x.loc || '', x.grupo || '', x.rota || '', x.sup || '', d ? (garEmAnalise(d) ? garRotSit(d) : (d.sit || '')) : 'não encontrada',
             it.motivo === 'QUEDA' ? 'Queda de consumo' : it.motivo === 'AUMENTO' ? 'Aumento de consumo' : '', it.retorno || '', it.media, c.pedido, c.fat, r2(c.dif), rotSt[c.st],
-            r2(vmed), r2(calc), r2(it.anterior), garOrigemAnterior(it), ganho.antSusp ? 'Sim' : 'Não', r2(atual), ganho.valor, ganho.entra ? 'Sim' : 'Não', it.obs || '', it.os_num || '']; });
+            r2(vmed), r2(calc), r2(it.anterior), it.anterior_medido == null ? null : it.anterior_medido, garOrigemAnterior(it), ganho.antSusp ? 'Sim' : 'Não', r2(atual), ganho.valor, ganho.entra ? 'Sim' : 'Não', it.obs || '', it.os_num || '']; });
     baixarPlanilha(cols, linhas, `Garantia_conferencia_faturamento_${GAR.ref.replace('/', '-')}.xlsx`);
 }
 document.addEventListener('click', (e) => {
@@ -2755,8 +2762,11 @@ document.addEventListener('input', (e) => {
     const inp = e.target.closest && e.target.closest('#garTabelaAnalise .gar-in'); if (!inp) return;
     const tr = inp.closest('tr'), it = garItens[garChave(tr.dataset.lig)]; if (!it) return;
     const campo = inp.dataset.campo;
-    it[campo] = campo === 'media' || campo === 'anterior' ? garLerNumero(inp.value) : inp.value;
-    if (campo === 'anterior') { it.anterior_manual = new Date().toISOString(); delete it.sem_foto; }
+    it[campo] = campo === 'media' || campo === 'anterior_medido' ? garLerNumero(inp.value) : inp.value;
+    if (campo === 'anterior_medido') {             // Fat. anterior pelo medido informado (tarifa, com o mínimo da categoria)
+        if (it.anterior_medido == null) { delete it.anterior_medido; delete it.anterior_manual; it.anterior = null; it.sem_foto = true; }
+        else { it.anterior = garCalculado(GAR.porLig.get(tr.dataset.lig), it.anterior_medido); it.anterior_manual = new Date().toISOString(); delete it.sem_foto; }
+    }
     if (campo === 'obs') {
         if (inp.value === OS_ABRIR) { if (!it.os_data) it.os_data = garHoje(); delete it.os_status; }
         else { delete it.os_data; delete it.os_status; delete it.os_realizada; delete it.os_num; delete it.os_exoc; delete it.os_retram; delete it.os_retram_n; delete it.os_obs; }
@@ -2766,7 +2776,7 @@ document.addEventListener('input', (e) => {
         const c = garCalcItem({ lig: tr.dataset.lig, ...it });
         tr.querySelector('[data-f="calc"]').textContent = garR(c.calc);
     }
-    if (campo === 'media' || campo === 'retorno' || campo === 'anterior') {   // pedido, conferência e garantia da linha e contagem acima (sem redesenhar a tabela)
+    if (campo === 'media' || campo === 'retorno' || campo === 'anterior_medido') {   // pedido, conferência e garantia da linha e contagem acima (sem redesenhar a tabela)
         const c = garCalcItem({ lig: tr.dataset.lig, ...it }), cf = c.ganho.cf, td = tr.querySelector('[data-f="conf"]');
         tr.querySelector('[data-f="calc"]').textContent = garR(c.calc);
         tr.querySelector('[data-f="vmed"]').textContent = garR(c.vmed);
@@ -2774,7 +2784,8 @@ document.addEventListener('input', (e) => {
         const tg = tr.querySelector('[data-f="dif"]'); if (tg) tg.outerHTML = garCelGarantia(c.ganho);
         const ta = tr.querySelector('[data-f="anterior"]');
         if (ta) { ta.classList.toggle('gar-ant-susp', !!c.ganho.antSusp); ta.querySelectorAll('small').forEach((x) => x.remove());
-            ta.insertAdjacentHTML('beforeend', `<small>${garEsc(garOrigemAnterior(it))}</small>${c.ganho.antSusp ? '<small class="gar-ant-alerta">⚠ conferir</small>' : ''}`); }
+            const vb = ta.querySelector('.gar-ant-valor'); if (vb) vb.textContent = garR(it.anterior);
+            ta.insertAdjacentHTML('beforeend', `<small>${garEsc(garOrigemAnterior({ lig: tr.dataset.lig, ...it }))}</small>${c.ganho.antSusp ? '<small class="gar-ant-alerta">⚠ conferir</small>' : ''}`); }
         tr.classList.toggle('gar-conf-div-lin', cf.st === 'div');
         garDesenharConferencia(garContaConferencia());
     }

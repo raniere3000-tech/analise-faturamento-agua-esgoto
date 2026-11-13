@@ -226,7 +226,9 @@ def gera_aba_garantia_html(ctx):
     <b>Análises feitas antes do painel:</b> no Excel, selecione as linhas da planilha de garantia <i>com o cabeçalho</i>, copie e cole no
     campo acima. Entram com o selo <b>Histórico</b>, o Fat. anterior da planilha, a média, o motivo, o retorno e a O.S. (“abrir O.S.” na
     observação). <b>Fat. anterior</b>: a foto é tirada uma vez, quando a matrícula entra na análise (ou na primeira fatura do mês, se ainda
-    não havia), e fica salva; embaixo aparece a origem (foto dd/mm, planilha ou à mão). Dá para corrigir digitando o valor original.
+    não havia), e fica salva; embaixo aparece a origem (foto dd/mm, planilha ou pelo medido). Para corrigir, digite o <b>consumo medido original
+    (m³)</b>: o Fat. anterior sai pela estrutura tarifária da matrícula (categoria, economias e esgoto); medido abaixo do mínimo da
+    categoria vale o mínimo.
     <b>Pedido (R$)</b> = tarifa do volume pedido no retorno (sem número no retorno, a média digitada). <b>Valor da média (R$)</b> =
     tarifa da Média volume fat. (m³). <b>Garantia</b>: queda = Fat. ajustado − Fat. anterior; aumento = Fat. ajustado − Valor da média (até
     R$ 1,00 = 0; em cinza quando não entra no resultado). <b>Faturado × pedido</b> confere o consumo faturado do mês com o volume pedido no retorno (ex.: “FATURAR MÉDIA 311 m³”;
@@ -247,7 +249,7 @@ def gera_aba_garantia_html(ctx):
     contrato de demanda). Ficam <b>fora do resultado</b>, só para conhecimento (em cinza, com o valor que dariam): ⚠ divergente (não seguiu o
     solicitado; o valor mostrado é a <b>perda</b>: queda = Fat. ajustado − valor da média, ou o pedido do retorno sem média digitada;
     aumento = Fat. ajustado − Fat. anterior), ⏳ conta em análise ou sem fatura no mês, e sem retorno. Também fica fora, até ser conferida, a <b>queda conforme com o Fat. anterior vazio ou igual
-    ao ajustado</b> (⚠ conferir): a foto pode ter sido tirada depois do refaturamento — corrija ou redigite o Fat. anterior. Em análise = Situação Conta EM ANALISE <b>ou</b> Situação Lançamento com “RETIDA” no nome em grupo ainda não liberado (Situação do grupo na aba Diretas, que pode ser ajustada à mão); liberadas = as demais.</p>
+    ao ajustado</b> (⚠ conferir): a foto pode ter sido tirada depois do refaturamento — informe o consumo medido original. Em análise = Situação Conta EM ANALISE <b>ou</b> Situação Lançamento com “RETIDA” no nome em grupo ainda não liberado (Situação do grupo na aba Diretas, que pode ser ajustada à mão); liberadas = as demais.</p>
     <div id="garResumo"></div>
   </div>
 </div>
