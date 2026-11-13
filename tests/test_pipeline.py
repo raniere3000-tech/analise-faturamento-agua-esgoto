@@ -400,3 +400,15 @@ def test_botao_cortadas_com_consumo_usa_o_analitico(analise):
     assert "window.baixarCortadasConsumo" in html_rel and "case 'cortadas'" in html_rel
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert 'id="btnCortadas"' in site and "w.baixarCortadasConsumo()" in site
+
+
+def test_painel_usa_a_largura_toda(analise):
+    """Etapa 2 e relatório sem teto de largura (o PDF executivo mantém o dele); etapa 2 compacta e sem rolagem lateral."""
+    import os
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert ".painel-top20 { width: 100%; max-width: none;" in site and ".vazio-wrap { max-width: none;" in site
+    assert ".tabela-top20 td.cli { min-width: 150px; white-space: normal;" in site
+    assert "@media (max-width: 1500px) { .corpo-top20 { flex-direction: column; }" in site
+    html = open(analise.caminho_html, encoding="utf-8").read()
+    assert "max-width:1800px; border:1px solid var(--linha)" not in html and ".card { background:#FFFFFF; margin:16px 16px; padding:20px 22px; max-width:none;" in html
+    assert "#view-executivo .card { max-width:1800px;" in html
