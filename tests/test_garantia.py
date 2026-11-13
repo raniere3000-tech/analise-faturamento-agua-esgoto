@@ -257,7 +257,7 @@ def test_aumentos_e_quedas_e_explicacao_em_dados(sessao):
 def test_resumo_somente_grupos_liberados(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert 'id="garSoLiberados"' in html and "function gruposLiberados()" in html
-    assert "if (lib && !(d && lib.has(normGrupo(d.grupo)))) return;" in html
+    assert "return garVisivel(d) && !(lib && !(d && lib.has(normGrupo(d.grupo))));" in html
 
 
 def test_garantia_ignora_correcao_da_etapa_2(pasta_pequena):
@@ -318,3 +318,17 @@ def test_conferencia_faturado_x_pedido_e_popup_do_grupo(sessao):
                    'id="garConferencia"', "id=\"garSoDivergentes\"", "function garBaixarConferencia()",
                    'data-gar-grupo="${garEsc(g)}"', "function garAbrirGrupo(g)", "dlg.showModal();"):
         assert trecho in html, trecho
+
+
+def test_regras_novas_da_garantia(sessao):
+    """Garantia = Fat. ajustado − Fat. anterior (queda e aumento), até R$ 1,00 = 0; só conformes e retorno sem volume entram;
+    divergente, em análise/sem fatura e sem retorno ficam fora (em cinza, com o valor que dariam)."""
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    for trecho in ("const GAR_ZERA_ATE = 1;", "const entra = cf.st === 'ok' || cf.st === 'sem';",
+                   "const bruto = atual != null && it.anterior != null ? atual - it.anterior : null;",
+                   "const calc = garCalculado(d, vol != null ? vol : it.media);", "['calc', 'Pedido (R$)', 'n'",
+                   "['dif', 'Garantia (R$)', 'n'", "rot: '⚠ Divergente — não seguiu o solicitado'", "não entra no resultado",
+                   "function garLinhasFora(fora)", "(fora do resultado)", "<th class=\"num\">Fora do resultado</th>"):
+        assert trecho in html, trecho
+    # a conta antiga do aumento (atual − calculado) e a coluna mista saíram
+    assert "at - calc" not in html and "Ajustado / calculado" not in html

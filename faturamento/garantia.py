@@ -225,7 +225,8 @@ def gera_aba_garantia_html(ctx):
     de prazo (D+10 a partir do dia da análise) do Resumo de Ganhos. Tudo fica salvo na pasta para todos.
     <b>Análises feitas antes do painel:</b> no Excel, selecione as linhas da planilha de garantia <i>com o cabeçalho</i>, copie e cole no
     campo acima. Entram com o selo <b>Histórico</b>, o Fat. anterior da planilha, a média, o motivo, o retorno e a O.S. (“abrir O.S.” na
-    observação). <b>Faturado × pedido</b> confere o consumo faturado do mês com o volume pedido no retorno (ex.: “FATURAR MÉDIA 311 m³”;
+    observação). <b>Pedido (R$)</b> = tarifa do volume pedido no retorno (sem número no retorno, a média digitada). <b>Garantia</b> =
+    Fat. ajustado − Fat. anterior (até R$ 1,00 = 0; em cinza quando não entra no resultado). <b>Faturado × pedido</b> confere o consumo faturado do mês com o volume pedido no retorno (ex.: “FATURAR MÉDIA 311 m³”;
     sem número, a média preenchida): ✓ conforme, ⚠ divergente (faturado × pedido), ⏳ conta ainda em análise ou sem fatura, ? retorno sem volume.</p>
     <div class="gar-conf-barra" id="garConferencia" hidden></div>
     <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaAnalise"><thead></thead><tbody></tbody></table></div>
@@ -236,9 +237,11 @@ def gera_aba_garantia_html(ctx):
   <div class="card" id="garantia-resumo-card">
     <div class="gar-topo"><h2>Resumo de ganhos — garantia — {e(ctx.mes_atual)}</h2>
     <button type="button" class="btn-just gar-filtro" id="garSoLiberados" aria-pressed="false" title="Considerar só os grupos com situação Liberado (manual ou automática), sem mexer no filtro de grupos das outras abas">Somente grupos liberados</button></div>
-    <p class="nota-secao"><b>Queda de consumo:</b> garantia = faturado ajustado (atual) − faturado anterior (foto).
-    <b>Aumento de consumo:</b> garantia = faturado ajustado (atual) − valor pela média (estrutura tarifária), o que deixou de ser
-    perdido com o desconto pela média. Em análise = Situação Conta EM ANALISE <b>ou</b> Situação Lançamento com “RETIDA” no nome em grupo ainda não liberado (Situação do grupo na aba Diretas, que pode ser ajustada à mão); liberadas = as demais.</p>
+    <p class="nota-secao"><b>Garantia</b> (queda e aumento de consumo) = <b>Fat. ajustado</b> (faturado real atual) − <b>Fat. anterior</b>
+    (foto do faturado quando a matrícula entrou na análise); diferença de até R$ 1,00 conta como R$ 0,00. Entram no resultado as matrículas
+    em que o faturado seguiu o pedido (✓ conforme: até 1 m³ ou 1% do volume pedido no retorno) e as de retorno sem volume (? — ex.:
+    contrato de demanda). Ficam <b>fora do resultado</b>, só para conhecimento (em cinza, com o valor que dariam): ⚠ divergente (não seguiu o
+    solicitado), ⏳ conta em análise ou sem fatura no mês, e sem retorno. Em análise = Situação Conta EM ANALISE <b>ou</b> Situação Lançamento com “RETIDA” no nome em grupo ainda não liberado (Situação do grupo na aba Diretas, que pode ser ajustada à mão); liberadas = as demais.</p>
     <div id="garResumo"></div>
   </div>
 </div>
