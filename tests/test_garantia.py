@@ -321,11 +321,13 @@ def test_conferencia_faturado_x_pedido_e_popup_do_grupo(sessao):
 
 
 def test_regras_novas_da_garantia(sessao):
-    """Garantia = Fat. ajustado − Fat. anterior (queda e aumento), até R$ 1,00 = 0; só conformes e retorno sem volume entram;
+    """Garantia: queda = Fat. ajustado − Fat. anterior; aumento = Fat. ajustado − Valor da média; até R$ 1,00 = 0; só conformes e retorno sem volume entram;
     divergente, em análise/sem fatura e sem retorno ficam fora (em cinza, com o valor que dariam)."""
     html = open(sessao.caminho_html, encoding="utf-8").read()
     for trecho in ("const GAR_ZERA_ATE = 1;", "const entra = cf.st === 'ok' || cf.st === 'sem';",
-                   "const bruto = atual != null && it.anterior != null ? atual - it.anterior : null;",
+                   "const base = it.motivo === 'AUMENTO' ? vmed : it.anterior;",
+                   "const bruto = atual != null && base != null ? atual - base : null;",
+                   "['vmed', 'Valor da média (R$)', 'n'", "const vmed = garCalculado(d, it.media);",
                    "const calc = garCalculado(d, vol != null ? vol : it.media);", "['calc', 'Pedido (R$)', 'n'",
                    "['dif', 'Garantia (R$)', 'n'", "rot: '⚠ Divergente — não seguiu o solicitado'", "não entra no resultado",
                    "function garLinhasFora(fora)", "(fora do resultado)", "<th class=\"num\">Fora do resultado</th>"):

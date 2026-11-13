@@ -875,6 +875,10 @@ tr.gar-grupo-lin:focus-visible { outline:2px solid var(--azul-claro); outline-of
 .gar-dlg-corpo > .gar-topo .gar-espaco { flex:1; }
 .gar-dlg .tabela-garantia { width:100%; font-size:12px; }
 .gar-dlg .tabela-garantia td { white-space:normal; }
+.gar-dlg .tabela-garantia { font-size:11px; }
+.gar-dlg .tabela-garantia th { white-space:normal; line-height:1.2; vertical-align:bottom; padding:5px 4px; }
+.gar-dlg .tabela-garantia td { padding:3px 4px; }
+.gar-dlg .gar-conf { white-space:normal; max-width:110px; }
 /* garantia fora do resultado (divergente, em análise / sem fatura, sem retorno): em cinza, com a observação */
 td.gar-fora { color:#94A3B8; }
 td.gar-fora small { display:block; font-size:9.5px; line-height:1.15; color:#94A3B8; font-weight:500; white-space:normal; }
