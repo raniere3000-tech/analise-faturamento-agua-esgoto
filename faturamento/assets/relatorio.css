@@ -888,4 +888,11 @@ td.gar-fora small { display:block; font-size:9.5px; line-height:1.15; color:#94A
 tr.gar-fora-item > td { color:#64748B; }
 tr.gar-fora-lin > td { color:#64748B; font-style:italic; background:#F8FAFC; }
 .gar-conf small { display:block; font-weight:500; font-size:10px; opacity:.9; }
+/* Fat. anterior editável, com a origem (foto / planilha / à mão) e o alerta de foto suspeita */
+#garTabelaAnalise .gar-anterior { width:66px; text-align:right; }
+.gar-ant-td small, .gar-ant-orig { display:block; font-size:9.5px; color:#64748B; line-height:1.15; white-space:normal; max-width:84px; margin-left:auto; }
+.gar-ant-alerta { color:#B45309 !important; font-weight:700; }
+td.gar-ant-susp { background:#FFFBEB !important; box-shadow:inset 0 0 0 1px #F59E0B; }
+td.gar-ant-susp .gar-anterior { border-color:#F59E0B; }
+.gar-ant-filtro { border-color:#F59E0B; color:#92400E; }
 

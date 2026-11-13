@@ -979,6 +979,8 @@ def _aba_garantia(ctx):
                       "Fora do resultado (aparecem em cinza, com o valor que dariam): ⚠ divergente (não seguiu o solicitado), ⏳ conta em análise ou sem fatura, sem retorno",
                       "Divergente: o valor mostrado é a perda por não seguir o pedido — queda = Fat. ajustado − valor da média (sem média: o pedido do retorno em R$); aumento = Fat. ajustado − Fat. anterior",
                       "Pedido (R$) = tarifa do volume pedido no retorno (sem número: a média digitada)",
+                      "Fat. anterior: foto tirada uma vez (ao entrar na análise ou na primeira fatura do mês), salva na pasta; editável (fica 'à mão'); planilha sem anterior não tira foto",
+                      "Queda conforme com Fat. anterior vazio ou igual ao ajustado: fora do resultado até ser conferida (⚠ conferir)",
                       "Liberadas = Situação Conta diferente de EM ANALISE",
                       "Motivo em branco: fora da soma (continua no controle de O.S.)",
                       "Consolidado geral: as importadas do Excel (selo Histórico) e as feitas no painel entram juntas",

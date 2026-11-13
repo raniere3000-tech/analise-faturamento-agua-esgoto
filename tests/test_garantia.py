@@ -324,7 +324,7 @@ def test_regras_novas_da_garantia(sessao):
     """Garantia: queda = Fat. ajustado − Fat. anterior; aumento = Fat. ajustado − Valor da média; até R$ 1,00 = 0; só conformes e retorno sem volume entram;
     divergente, em análise/sem fatura e sem retorno ficam fora (em cinza, com o valor que dariam)."""
     html = open(sessao.caminho_html, encoding="utf-8").read()
-    for trecho in ("const GAR_ZERA_ATE = 1;", "const entra = cf.st === 'ok' || cf.st === 'sem';",
+    for trecho in ("const GAR_ZERA_ATE = 1;", "const entra = (cf.st === 'ok' || cf.st === 'sem') && !antSusp;",
                    "? (it.motivo === 'AUMENTO' ? it.anterior : (vmed != null ? vmed : calc))",   # divergente: perda
                    ": (it.motivo === 'AUMENTO' ? vmed : it.anterior);",
                    "Divergentes — não seguiram o solicitado · perda",
@@ -336,3 +336,15 @@ def test_regras_novas_da_garantia(sessao):
         assert trecho in html, trecho
     # a conta antiga do aumento (atual − calculado) e a coluna mista saíram
     assert "at - calc" not in html and "Ajustado / calculado" not in html
+
+
+def test_foto_do_fat_anterior_editavel_e_suspeita(sessao):
+    """Fat. anterior: editável (fica "à mão"), com a origem; queda conforme com anterior vazio ou igual ao ajustado fica fora
+    do resultado ("⚠ conferir"); importada sem anterior não tira foto."""
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    for trecho in ("function garAnteriorSuspeito(it, cf, atual)", "function garOrigemAnterior(it)", 'data-campo="anterior"',
+                   "if (campo === 'anterior') { it.anterior_manual = new Date().toISOString(); delete it.sem_foto; }",
+                   "if (it.anterior == null && atual != null && !it.sem_foto && !it.anterior_manual) {",
+                   "else if (it.anterior == null) it.sem_foto = true;", 'id="garSoAntSusp"', "Fat. anterior a conferir",
+                   "'Origem do Fat. anterior', 'Fat. anterior a conferir'"):
+        assert trecho in html, trecho
