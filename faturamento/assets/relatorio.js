@@ -2534,12 +2534,28 @@ function garAdicionar(ligs) {
         + (fora.length ? ` Sem dados no mês atual: ${fora.slice(0, 5).join(', ')}${fora.length > 5 ? '…' : ''}` : '');
     garRedesenhar();
 }
+// Pedido (R$) = tarifa do volume pedido no retorno ("MANTER 119 m³" → 119 m³); sem número no retorno, a média digitada
 function garCalcItem(it) {
     const d = GAR.porLig.get(it.lig);
-    const calc = garCalculado(d, it.media);
+    const vol = garPedidoVolume(it);
+    const calc = garCalculado(d, vol != null ? vol : it.media);
     const atual = d ? d.val : null;
-    const dif = atual != null && it.anterior != null ? atual - it.anterior : null;
-    return { d, calc, atual, dif };
+    const g = garGanhoItem(it, d, atual);
+    return { d, calc, atual, dif: g.gar, ganho: g };
+}
+// Garantia (queda e aumento) = Fat. ajustado − Fat. anterior; |diferença| até R$ 1,00 = R$ 0,00. Entram no resultado só as
+// conformes e as de retorno sem volume (?); divergentes, ⏳ (em análise / sem fatura) e sem retorno ficam fora (garantia 0 nas
+// somas), mas aparecem na tabela e no popup com o valor que dariam, em cinza.
+const GAR_ZERA_ATE = 1;
+const GAR_FORA_ROT = { div: 'Divergentes — não seguiram o solicitado', esp: 'Aguardando (conta em análise ou sem fatura)', vazio: 'Sem retorno da superintendência' };
+function garGanhoItem(it, d, atual) {
+    if (d === undefined) d = GAR.porLig.get(it.lig);
+    if (atual === undefined) atual = d ? d.val : null;
+    const cf = garConferencia(it);
+    const bruto = atual != null && it.anterior != null ? atual - it.anterior : null;
+    const valor = bruto == null ? null : (Math.abs(bruto) <= GAR_ZERA_ATE + 1e-9 ? 0 : Math.round(bruto * 100) / 100);
+    const entra = cf.st === 'ok' || cf.st === 'sem';
+    return { cf, bruto, valor, entra, gar: entra ? (valor || 0) : 0 };
 }
 // colunas da Análise de Garantia (todas ordenáveis pelo cabeçalho): [campo, título, n = número / t = texto, dica]
 const GAR_COLS_ANALISE = [
@@ -2547,9 +2563,10 @@ const GAR_COLS_ANALISE = [
     ['res', 'Res.', 'n'], ['com', 'Com.', 'n'], ['ind', 'Ind.', 'n'], ['pub', 'Púb.', 'n'], ['tot', 'Total', 'n'],
     ['grupo', 'Grupo', 't'], ['rota', 'Rota', 't'], ['sit', 'Situação conta', 't'],
     ['media', 'Média volume fat. (m³)', 'n', 'Média faturada do sistema (m³) — preenchida manualmente'],
-    ['calc', 'Fat. calculado (R$)', 'n', 'Valor da média pela estrutura tarifária'],
+    ['calc', 'Pedido (R$)', 'n', 'Tarifa do volume pedido no retorno (sem número no retorno: a média digitada)'],
     ['anterior', 'Fat. anterior (R$)', 'n', 'Foto do faturado quando a matrícula entrou na análise'],
-    ['atual', 'Fat. ajustado (R$)', 'n', 'Faturado atual (muda quando a fatura é liberada)'], ['dif', 'Dif. (R$)', 'n'],
+    ['atual', 'Fat. ajustado (R$)', 'n', 'Faturado real atual (muda quando a fatura é liberada)'],
+    ['dif', 'Garantia (R$)', 'n', 'Fat. ajustado − Fat. anterior (até R$ 1,00 = 0); divergente, em análise/sem fatura e sem retorno não entram no resultado'],
     ['motivo', 'Motivo', 't'], ['retorno', 'Retorno superintendência', 't'],
     ['conf', 'Faturado × pedido', 't', 'Consumo faturado no mês × volume pedido no retorno (m³)'],
     ['obs', 'O.S.', 't', 'Abrir O.S.: a matrícula entra no controle de prazo (D+10) do Resumo de Ganhos'],
@@ -2562,7 +2579,7 @@ function garValorAnalise(it, c) {
         case 'tot': return d ? (d.res || 0) + (d.com || 0) + (d.ind || 0) + (d.pub || 0) : null;
         case 'sit': return d ? (garEmAnalise(d) ? garRotSit(d) : (d.sit || '')) : '';
         case 'media': return it.media; case 'calc': return calc; case 'anterior': return it.anterior;
-        case 'atual': return atual; case 'dif': return dif;
+        case 'atual': return atual; case 'dif': return dif;   // garantia que entra (0 quando fica fora)
         case 'motivo': return it.motivo === 'QUEDA' ? 'Queda de consumo' : it.motivo === 'AUMENTO' ? 'Aumento de consumo' : '';
         case 'retorno': return it.retorno || '';
         case 'obs': return (it.obs || '') + (it.os_num ? ' ' + it.os_num : '');
@@ -2585,14 +2602,20 @@ function garConferencia(it) {
     const d = GAR.porLig.get(it.lig), pedido = garPedidoVolume(it);
     const fat = d && d.cons != null ? +d.cons : null;
     const base = { pedido, fat, dif: pedido != null && fat != null ? fat - pedido : null };
-    if (!String(it.retorno || '').trim()) return { ...base, st: 'vazio', rot: '—', dica: 'Sem retorno da superintendência' };
+    if (!String(it.retorno || '').trim()) return { ...base, st: 'vazio', rot: 'Sem retorno', dica: 'Sem retorno da superintendência: não entra no resultado' };
     if (pedido == null) return { ...base, st: 'sem', rot: '? Sem volume', dica: 'O retorno não traz volume em m³ para conferir' };
-    if (!d || fat == null) return { ...base, st: 'esp', rot: '⏳ Sem fatura', dica: 'Matrícula sem fatura no mês' };
-    if (garEmAnalise(d)) return { ...base, st: 'esp', rot: '⏳ Em análise', dica: `Conta ainda em análise: faturado hoje ${fmtBR(fat, 0)} m³, pedido ${fmtBR(pedido, 0)} m³` };
+    if (!d || fat == null) return { ...base, st: 'esp', rot: '⏳ Sem fatura', dica: 'Matrícula sem fatura no mês: não entra no resultado até ser conferida' };
+    if (garEmAnalise(d)) return { ...base, st: 'esp', rot: '⏳ Em análise', dica: `Conta ainda em análise (faturado hoje ${fmtBR(fat, 0)} m³, pedido ${fmtBR(pedido, 0)} m³): não entra no resultado até ser liberada` };
     if (Math.abs(fat - pedido) <= GAR_CONF_TOL(pedido)) return { ...base, st: 'ok', rot: '✓ Conforme', dica: `Faturado ${fmtBR(fat, 0)} m³ = pedido ${fmtBR(pedido, 0)} m³` };
-    return { ...base, st: 'div', rot: `⚠ ${fmtBR(fat, 0)} × ${fmtBR(pedido, 0)} m³`, dica: `Faturado ${fmtBR(fat, 0)} m³, pedido ${fmtBR(pedido, 0)} m³ (diferença ${fat - pedido > 0 ? '+' : ''}${fmtBR(fat - pedido, 0)} m³)` };
+    return { ...base, st: 'div', rot: '⚠ Divergente — não seguiu o solicitado', det: `${fmtBR(fat, 0)} × ${fmtBR(pedido, 0)} m³`,
+        dica: `Faturado ${fmtBR(fat, 0)} m³, pedido ${fmtBR(pedido, 0)} m³ (diferença ${fat - pedido > 0 ? '+' : ''}${fmtBR(fat - pedido, 0)} m³): não entra no resultado` };
 }
 const GAR_CONF_ORDEM = { div: 0, esp: 1, sem: 2, ok: 3, vazio: 4 };
+const garSeloConf = (cf) => `<span class="gar-conf gar-conf-${cf.st}" title="${garEsc(cf.dica)}">${garEsc(cf.rot)}${cf.det ? `<small>${garEsc(cf.det)}</small>` : ''}</span>`;
+// célula da garantia: fora do resultado em cinza, com a observação
+const garCelGarantia = (g) => (g.entra
+    ? `<td class="num ${g.valor < 0 ? 'gar-neg' : ''}" data-f="dif"><b>${garR(g.valor)}</b></td>`
+    : `<td class="num gar-fora" data-f="dif" title="Não entra no resultado (${garEsc(g.cf.rot)})">${garR(g.valor)}<small>não entra no resultado</small></td>`);
 function garOrdenarAnalise(itens) {
     const { campo, desc } = GAR.ordemAnalise;
     if (!campo) return itens;
@@ -2639,10 +2662,10 @@ function garDesenharAnalise() {
             + `<td>${garEsc(d && d.rota)}</td><td>${sit}</td>`
             + `<td class="num"><input class="gar-in gar-media" data-campo="media" inputmode="decimal" value="${it.media == null ? '' : fmtBR(it.media, it.media % 1 ? 2 : 0)}"></td>`
             + `<td class="num" data-f="calc">${garR(calc)}</td><td class="num">${garR(it.anterior)}</td><td class="num" data-f="atual">${garR(atual)}</td>`
-            + `<td class="num ${dif < 0 ? 'gar-neg' : ''}" data-f="dif">${garR(dif)}</td>`
+            + garCelGarantia(garCalcItem(it).ganho)
             + `<td><select class="gar-in" data-campo="motivo">${opt('', '—')}${opt('QUEDA', 'Queda de consumo')}${opt('AUMENTO', 'Aumento de consumo')}</select></td>`
             + `<td><input class="gar-in gar-texto" data-campo="retorno" value="${garEsc(it.retorno)}" placeholder="ex.: FATURAR MÉDIA 311 m³"></td>`
-            + `<td data-f="conf"><span class="gar-conf gar-conf-${cf.st}" title="${garEsc(cf.dica)}">${garEsc(cf.rot)}</span></td>`
+            + `<td data-f="conf">${garSeloConf(cf)}</td>`
             + `<td><select class="gar-in" data-campo="obs">${optOS('', '—')}${optOS(OS_ABRIR, OS_ABRIR)}${optOS(OS_NAO, OS_NAO)}${it.obs && it.obs !== OS_ABRIR && it.obs !== OS_NAO ? optOS(it.obs, it.obs) : ''}</select>`
             + (it.obs === OS_ABRIR ? `<input class="gar-in gar-os-num" data-campo="os_num" inputmode="numeric" value="${garEsc(it.os_num || '')}" placeholder="Nº da O.S." title="Número da O.S. aberta" aria-label="Número da O.S. da matrícula ${garEsc(it.lig)}">` : '') + '</td>'
             + `<td><button type="button" class="btn-just gar-remover" title="Tirar da análise" aria-label="Tirar a matrícula ${garEsc(it.lig)} da análise">✕</button></td></tr>`;
@@ -2664,15 +2687,16 @@ function garDesenharConferencia(conta) {
 }
 function garBaixarConferencia() {
     const cols = ['Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'Rota', 'SUP', 'Situação conta', 'Motivo', 'Retorno superintendência',
-        'Média volume fat. (m³)', 'Volume pedido (m³)', 'Consumo faturado no mês (m³)', 'Diferença (m³)', 'Conferência', 'Fat. anterior (R$)', 'Fat. ajustado (R$)', 'Dif. (R$)', 'O.S.', 'Nº O.S.'];
-    const rotSt = { ok: 'Conforme', div: 'Divergente', esp: 'Aguardando (conta em análise ou sem fatura)', sem: 'Sem volume no retorno', vazio: 'Sem retorno' };
+        'Média volume fat. (m³)', 'Volume pedido (m³)', 'Consumo faturado no mês (m³)', 'Diferença (m³)', 'Conferência', 'Pedido (R$)', 'Fat. anterior (R$)', 'Fat. ajustado (R$)',
+        'Garantia (R$)', 'Entra no resultado', 'O.S.', 'Nº O.S.'];
+    const rotSt = { ok: 'Conforme', div: 'Divergente — não seguiu o solicitado', esp: 'Aguardando (conta em análise ou sem fatura)', sem: 'Sem volume no retorno', vazio: 'Sem retorno' };
     const r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
     const itens = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)))
         .sort((a, b) => GAR_CONF_ORDEM[garConferencia(a).st] - GAR_CONF_ORDEM[garConferencia(b).st]);
-    const linhas = itens.map((it) => { const { d, atual, dif } = garCalcItem(it), c = garConferencia(it), x = d || {};
+    const linhas = itens.map((it) => { const { d, calc, atual, ganho } = garCalcItem(it), c = ganho.cf, x = d || {};
         return [it.lig, x.nome || '', x.cat || '', x.loc || '', x.grupo || '', x.rota || '', x.sup || '', d ? (garEmAnalise(d) ? garRotSit(d) : (d.sit || '')) : 'não encontrada',
             it.motivo === 'QUEDA' ? 'Queda de consumo' : it.motivo === 'AUMENTO' ? 'Aumento de consumo' : '', it.retorno || '', it.media, c.pedido, c.fat, r2(c.dif), rotSt[c.st],
-            r2(it.anterior), r2(atual), r2(dif), it.obs || '', it.os_num || '']; });
+            r2(calc), r2(it.anterior), r2(atual), ganho.valor, ganho.entra ? 'Sim' : 'Não', it.obs || '', it.os_num || '']; });
     baixarPlanilha(cols, linhas, `Garantia_conferencia_faturamento_${GAR.ref.replace('/', '-')}.xlsx`);
 }
 document.addEventListener('click', (e) => {
@@ -2700,9 +2724,11 @@ document.addEventListener('input', (e) => {
         const c = garCalcItem({ lig: tr.dataset.lig, ...it });
         tr.querySelector('[data-f="calc"]').textContent = garR(c.calc);
     }
-    if (campo === 'media' || campo === 'retorno') {   // conferência faturado × pedido da linha e contagem acima (sem redesenhar a tabela)
-        const cf = garConferencia({ lig: tr.dataset.lig, ...it }), td = tr.querySelector('[data-f="conf"]');
-        if (td) td.innerHTML = `<span class="gar-conf gar-conf-${cf.st}" title="${garEsc(cf.dica)}">${garEsc(cf.rot)}</span>`;
+    if (campo === 'media' || campo === 'retorno') {   // pedido, conferência e garantia da linha e contagem acima (sem redesenhar a tabela)
+        const c = garCalcItem({ lig: tr.dataset.lig, ...it }), cf = c.ganho.cf, td = tr.querySelector('[data-f="conf"]');
+        tr.querySelector('[data-f="calc"]').textContent = garR(c.calc);
+        if (td) td.innerHTML = garSeloConf(cf);
+        const tg = tr.querySelector('[data-f="dif"]'); if (tg) tg.outerHTML = garCelGarantia(c.ganho);
         tr.classList.toggle('gar-conf-div-lin', cf.st === 'div');
         const conta = { ok: 0, div: 0, esp: 0, sem: 0, vazio: 0 };
         garItensDoMes().filter((x) => garVisivel(GAR.porLig.get(x.lig))).forEach((x) => { conta[garConferencia(x).st]++; });
@@ -3081,27 +3107,38 @@ document.addEventListener('toggle', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('gar-os-obs')) e.preventDefault(); });
 
 // --- Resumo de Ganhos ---
-function garTotais() {
-    const t = { AUMENTO: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 }, QUEDA: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 } }, porGrupo = {};
+// Resumo: só as matrículas que entram no resultado (garGanhoItem); as de fora são contadas à parte, com o valor que dariam
+function garItensResumo() {
     const lib = GAR.soLiberados ? gruposLiberados() : null;
-    garItensDoMes().forEach((it) => {
-        if (!t[it.motivo]) return;
-        const { d, calc, atual } = garCalcItem(it);
-        if (!garVisivel(d)) return;
-        if (lib && !(d && lib.has(normGrupo(d.grupo)))) return;            // só grupos com situação Liberado
-        const x = t[it.motivo], ant = it.anterior || 0, at = atual || 0;
-        const ajust = it.motivo === 'AUMENTO' ? (calc || 0) : at;
-        const gar = it.motivo === 'AUMENTO' ? (calc == null ? 0 : at - calc) : at - ant;
-        x.n++; if (d && !garEmAnalise(d)) x.lib++;
-        x.orig += ant; x.ajust += ajust; x.gar += gar;
-        const g = (d && d.grupo) || '—', pg = porGrupo[g] = porGrupo[g] || { n: 0, QUEDA: 0, AUMENTO: 0 };
-        pg.n++; pg[it.motivo] += gar;
+    return garItensDoMes().filter((it) => {
+        if (it.motivo !== 'QUEDA' && it.motivo !== 'AUMENTO') return false;
+        const d = GAR.porLig.get(it.lig);
+        return garVisivel(d) && !(lib && !(d && lib.has(normGrupo(d.grupo))));   // só grupos com situação Liberado
     });
-    return { t, porGrupo };
+}
+const garForaVazio = () => ({ div: { n: 0, v: 0 }, esp: { n: 0, v: 0 }, vazio: { n: 0, v: 0 } });
+function garTotais() {
+    const t = { AUMENTO: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 }, QUEDA: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 } }, porGrupo = {}, fora = garForaVazio();
+    garItensResumo().forEach((it) => {
+        const { d, atual, ganho } = garCalcItem(it);
+        const g = (d && d.grupo) || '—', pg = porGrupo[g] = porGrupo[g] || { n: 0, QUEDA: 0, AUMENTO: 0, fora: 0 };
+        if (!ganho.entra) { fora[ganho.cf.st].n++; fora[ganho.cf.st].v += ganho.valor || 0; pg.fora++; return; }
+        const x = t[it.motivo];
+        x.n++; if (d && !garEmAnalise(d)) x.lib++;
+        x.orig += it.anterior || 0; x.ajust += atual || 0; x.gar += ganho.gar;
+        pg.n++; pg[it.motivo] += ganho.gar;
+    });
+    return { t, porGrupo, fora };
+}
+// linhas "fora do resultado" (resumo e popup): N matrículas e o valor que dariam
+function garLinhasFora(fora) {                      // tabela do resumo: Resumo | Ligações | Liberadas | Fat. anterior | Fat. ajustado | Garantia
+    return Object.keys(GAR_FORA_ROT).filter((k) => fora[k].n).map((k) => `<tr class="gar-fora-lin"><td>${GAR_FORA_ROT[k]} (fora do resultado)</td>`
+        + `<td class="num">${fora[k].n}</td><td></td><td></td><td></td><td class="num gar-fora" title="O que daria se entrasse">${garR(fora[k].v)}</td></tr>`).join('');
 }
 function garDesenharResumo() {
     const el = document.getElementById('garResumo'); if (!el || !GAR.dados) return;
-    const { t, porGrupo } = garTotais();
+    const { t, porGrupo, fora } = garTotais();
+    const nFora = fora.div.n + fora.esp.n + fora.vazio.n;
     const tot = ['n', 'lib', 'orig', 'ajust', 'gar'].reduce((o, k) => (o[k] = t.AUMENTO[k] + t.QUEDA[k], o), {});
     const lin = (nome, x, cls) => `<tr class="${cls || ''}"><td>${nome}</td><td class="num">${x.n}</td><td class="num">${x.lib}</td><td class="num">${garR(x.orig)}</td>`
         + `<td class="num">${garR(x.ajust)}</td><td class="num ${x.gar < 0 ? 'gar-neg' : 'gar-ganho'}"><b>${garR(x.gar)}</b></td></tr>`;
@@ -3113,52 +3150,48 @@ function garDesenharResumo() {
         b.textContent = GAR.soLiberados ? `Só grupos liberados (${ng}) — ver todos` : 'Somente grupos liberados';
     }
     el.innerHTML = '<div class="gar-kpis">'
-        + `<div class="gar-kpi"><span>Garantia total${GAR.soLiberados ? ' — grupos liberados' : ''}</span><b>${garR(tot.gar)}</b><small>${tot.n} matrícula(s) · ${tot.lib} liberada(s)</small></div>`
+        + `<div class="gar-kpi"><span>Garantia total${GAR.soLiberados ? ' — grupos liberados' : ''}</span><b>${garR(tot.gar)}</b><small>${tot.n} matrícula(s) · ${tot.lib} liberada(s)${nFora ? ` · ${nFora} fora do resultado` : ''}</small></div>`
         + `<div class="gar-kpi"><span>Queda de consumo</span><b>${garR(t.QUEDA.gar)}</b><small>${t.QUEDA.n} matrícula(s)</small></div>`
         + `<div class="gar-kpi"><span>Aumento de consumo</span><b>${garR(t.AUMENTO.gar)}</b><small>${t.AUMENTO.n} matrícula(s)</small></div>` + '</div>'
         + '<div class="tabela-wrap"><table class="tabela-garantia gar-resumo"><thead><tr><th>Resumo</th><th class="num">Ligações</th><th class="num">Liberadas</th>'
-        + '<th class="num">Valor original</th><th class="num">Valor ajustado / média</th><th class="num">Garantia</th></tr></thead><tbody>'
-        + lin('Aumento de consumo', t.AUMENTO) + lin('Queda de consumo', t.QUEDA) + lin('<b>Total</b>', tot, 'linha-media') + '</tbody></table></div>'
+        + '<th class="num">Fat. anterior</th><th class="num">Fat. ajustado</th><th class="num">Garantia</th></tr></thead><tbody>'
+        + lin('Aumento de consumo', t.AUMENTO) + lin('Queda de consumo', t.QUEDA) + lin('<b>Total</b>', tot, 'linha-media') + garLinhasFora(fora) + '</tbody></table></div>'
         + (grupos.length ? '<h3 class="gar-h3">Por grupo</h3><div class="tabela-wrap"><table class="tabela-garantia gar-resumo"><thead><tr><th>Grupo</th><th class="num">Ligações</th>'
-            + '<th class="num">Garantia queda</th><th class="num">Garantia aumento</th><th class="num">Total</th></tr></thead><tbody>'
-            + grupos.map((g) => { const p = porGrupo[g]; return `<tr class="gar-grupo-lin" data-gar-grupo="${garEsc(g)}" tabindex="0" title="Clique para ver as matrículas da análise de garantia do grupo ${garEsc(g)}"><td>${garEsc(g)}</td><td class="num">${p.n}</td><td class="num">${garR(p.QUEDA)}</td><td class="num">${garR(p.AUMENTO)}</td><td class="num"><b>${garR(p.QUEDA + p.AUMENTO)}</b></td></tr>`; }).join('')
+            + '<th class="num">Garantia queda</th><th class="num">Garantia aumento</th><th class="num">Total</th><th class="num">Fora do resultado</th></tr></thead><tbody>'
+            + grupos.map((g) => { const p = porGrupo[g]; return `<tr class="gar-grupo-lin" data-gar-grupo="${garEsc(g)}" tabindex="0" title="Clique para ver as matrículas da análise de garantia do grupo ${garEsc(g)}"><td>${garEsc(g)}</td><td class="num">${p.n}</td><td class="num">${garR(p.QUEDA)}</td><td class="num">${garR(p.AUMENTO)}</td><td class="num"><b>${garR(p.QUEDA + p.AUMENTO)}</b></td><td class="num gar-fora">${p.fora || ''}</td></tr>`; }).join('')
             + '</tbody></table></div>' : '<p class="nota-secao">Nenhuma matrícula com motivo preenchido na Análise de Garantia.</p>');
 }
 // Resumo › Por grupo: o clique na linha abre as matrículas da análise de garantia do grupo (os mesmos filtros e a mesma conta do resumo)
-function garGanhoItem(it) {
-    const { d, calc, atual } = garCalcItem(it), ant = it.anterior || 0, at = atual || 0;
-    return { d, calc, atual, ajust: it.motivo === 'AUMENTO' ? calc : atual, gar: it.motivo === 'AUMENTO' ? (calc == null ? 0 : at - calc) : at - ant };
-}
 function garAbrirGrupo(g) {
-    const lib = GAR.soLiberados ? gruposLiberados() : null;
-    const itens = garItensDoMes().filter((it) => {
-        const d = GAR.porLig.get(it.lig);
-        return (it.motivo === 'QUEDA' || it.motivo === 'AUMENTO') && garVisivel(d) && ((d && d.grupo) || '—') === g && !(lib && !(d && lib.has(normGrupo(d.grupo))));
-    });
+    const itens = garItensResumo().filter((it) => { const d = GAR.porLig.get(it.lig); return ((d && d.grupo) || '—') === g; });
     let dlg = document.getElementById('garGrupoDlg');
     if (!dlg) {
         dlg = document.createElement('dialog'); dlg.id = 'garGrupoDlg'; dlg.className = 'gar-dlg';
         dlg.addEventListener('click', (e) => { if (e.target === dlg || e.target.closest('.gar-dlg-fechar')) dlg.close(); });
         document.body.appendChild(dlg);
     }
-    const tot = { QUEDA: 0, AUMENTO: 0 };
+    const tot = { QUEDA: 0, AUMENTO: 0, n: 0 }, fora = garForaVazio();
     const linhas = itens.map((it) => {
-        const x = garGanhoItem(it), d = x.d || {}, cf = garConferencia(it);
-        tot[it.motivo] += x.gar;
+        const x = garCalcItem(it), gn = x.ganho, d = x.d || {};
+        if (gn.entra) { tot[it.motivo] += gn.gar; tot.n++; } else { fora[gn.cf.st].n++; fora[gn.cf.st].v += gn.valor || 0; }
         const sit = x.d ? (garEmAnalise(x.d) ? garRotSit(x.d) : (x.d.sit || '')) : 'não encontrada';
-        return `<tr><td><b>${garEsc(it.lig)}</b></td><td class="gar-cli">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td><td>${garEsc(sit)}</td>`
-            + `<td>${it.motivo === 'QUEDA' ? 'Queda' : 'Aumento'}</td><td>${garEsc(it.retorno || '')}</td><td class="num">${it.media == null ? '–' : fmtBR(it.media, 0)}</td>`
-            + `<td><span class="gar-conf gar-conf-${cf.st}" title="${garEsc(cf.dica)}">${garEsc(cf.rot)}</span></td>`
-            + `<td class="num">${garR(it.anterior)}</td><td class="num">${garR(x.ajust)}</td><td class="num ${x.gar < 0 ? 'gar-neg' : 'gar-ganho'}"><b>${garR(x.gar)}</b></td>`
-            + `<td>${garEsc(it.obs || '')}${it.os_num ? ' ' + garEsc(it.os_num) : ''}</td></tr>`;
+        return `<tr${gn.entra ? '' : ' class="gar-fora-item"'}><td><b>${garEsc(it.lig)}</b></td><td class="gar-cli">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td><td>${garEsc(sit)}</td>`
+            + `<td>${it.motivo === 'QUEDA' ? 'Queda' : 'Aumento'}</td><td>${garEsc(it.retorno || '')}</td>`
+            + `<td>${garSeloConf(gn.cf)}</td><td class="num">${garR(x.calc)}</td><td class="num">${garR(it.anterior)}</td><td class="num">${garR(x.atual)}</td>`
+            + garCelGarantia(gn) + `<td>${garEsc(it.obs || '')}${it.os_num ? ' ' + garEsc(it.os_num) : ''}</td></tr>`;
     }).join('');
+    const totLin = `<tr class="linha-media"><td colspan="10"><b>Total no resultado</b> (${tot.n} ${tot.n === 1 ? 'matrícula' : 'matrículas'})</td>`
+        + `<td class="num"><b>${garR(tot.QUEDA + tot.AUMENTO)}</b></td><td></td></tr>`
+        + Object.keys(GAR_FORA_ROT).filter((k) => fora[k].n).map((k) => `<tr class="gar-fora-lin"><td colspan="10">${GAR_FORA_ROT[k]} (fora do resultado): `
+            + `${fora[k].n === 1 ? '1 matrícula' : fora[k].n + ' matrículas'}</td><td class="num gar-fora">${garR(fora[k].v)}</td><td></td></tr>`).join('');
     dlg.innerHTML = `<div class="gar-dlg-corpo"><div class="gar-topo"><h2>Grupo ${garEsc(g)} — análise de garantia · ${itens.length} ${itens.length === 1 ? 'matrícula' : 'matrículas'}</h2><span class="gar-espaco"></span>`
         + '<button type="button" class="btn-just gar-dlg-fechar" aria-label="Fechar">✕ Fechar</button></div>'
         + `<p class="nota-secao">Garantia queda <b>${garR(tot.QUEDA)}</b> · garantia aumento <b>${garR(tot.AUMENTO)}</b> · total <b>${garR(tot.QUEDA + tot.AUMENTO)}</b>`
-        + `${GAR.soLiberados ? ' · só grupos liberados' : ''}. Queda: garantia = faturado ajustado − faturado anterior; aumento: faturado atual − calculado pela média.</p>`
+        + `${GAR.soLiberados ? ' · só grupos liberados' : ''}. Garantia = Fat. ajustado − Fat. anterior (até R$ 1,00 = R$ 0,00). Divergentes, em análise/sem fatura e sem retorno`
+        + ' aparecem para conhecimento, mas não entram no resultado.</p>'
         + '<div class="tabela-wrap"><table class="tabela-garantia"><thead><tr><th>Matrícula</th><th>Cliente</th><th>Categoria</th><th>Situação conta</th><th>Motivo</th>'
-        + '<th>Retorno superintendência</th><th class="num">Média (m³)</th><th>Faturado × pedido</th><th class="num">Fat. anterior</th><th class="num">Ajustado / calculado</th>'
-        + `<th class="num">Garantia</th><th>O.S.</th></tr></thead><tbody>${linhas || '<tr><td colspan="12" class="gar-vazio">Nenhuma matrícula.</td></tr>'}</tbody></table></div></div>`;
+        + '<th>Retorno superintendência</th><th>Faturado × pedido</th><th class="num">Pedido (R$)</th><th class="num">Fat. anterior</th><th class="num">Fat. ajustado</th>'
+        + `<th class="num">Garantia</th><th>O.S.</th></tr></thead><tbody>${linhas || '<tr><td colspan="12" class="gar-vazio">Nenhuma matrícula.</td></tr>'}${linhas ? totLin : ''}</tbody></table></div></div>`;
     dlg.showModal();
 }
 document.addEventListener('click', (e) => {
