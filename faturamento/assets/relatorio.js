@@ -2549,7 +2549,7 @@ function garCalcItem(it) {
 // conformes e as de retorno sem volume (?); divergentes, ⏳ (em análise / sem fatura) e sem retorno ficam fora (garantia 0 nas
 // somas), mas aparecem na tabela e no popup com o valor que dariam, em cinza.
 const GAR_ZERA_ATE = 1;
-const GAR_FORA_ROT = { div: 'Divergentes — não seguiram o solicitado · perda', esp: 'Aguardando (conta em análise ou sem fatura)', vazio: 'Sem retorno da superintendência' };
+const GAR_FORA_ROT = { ant: 'Fat. anterior a conferir (vazio ou igual ao ajustado numa queda conforme)', div: 'Divergentes — não seguiram o solicitado · perda', esp: 'Aguardando (conta em análise ou sem fatura)', vazio: 'Sem retorno da superintendência' };
 function garGanhoItem(it, d, atual, vmed, calc) {
     if (d === undefined) d = GAR.porLig.get(it.lig);
     if (atual === undefined) atual = d ? d.val : null;
@@ -2563,8 +2563,24 @@ function garGanhoItem(it, d, atual, vmed, calc) {
         : (it.motivo === 'AUMENTO' ? vmed : it.anterior);
     const bruto = atual != null && base != null ? atual - base : null;
     const valor = bruto == null ? null : (Math.abs(bruto) <= GAR_ZERA_ATE + 1e-9 ? 0 : Math.round(bruto * 100) / 100);
-    const entra = cf.st === 'ok' || cf.st === 'sem';
-    return { cf, base, bruto, valor, entra, gar: entra ? (valor || 0) : 0 };
+    // queda conforme com o Fat. anterior vazio ou igual ao ajustado: a foto foi tirada depois do refaturamento (ou não existe) —
+    // fica fora até alguém conferir/corrigir o Fat. anterior (digitar no campo marca "à mão" e tira o alerta)
+    const antSusp = garAnteriorSuspeito(it, cf, atual);
+    const entra = (cf.st === 'ok' || cf.st === 'sem') && !antSusp;
+    return { cf, base, bruto, valor, entra, antSusp, fk: antSusp ? 'ant' : cf.st, gar: entra ? (valor || 0) : 0 };
+}
+function garAnteriorSuspeito(it, cf, atual) {
+    if (it.motivo !== 'QUEDA' || it.anterior_manual || !(cf.st === 'ok' || cf.st === 'sem')) return false;
+    if (it.anterior == null) return true;
+    return atual != null && Math.abs(atual - it.anterior) <= GAR_ZERA_ATE + 1e-9;
+}
+// origem do Fat. anterior (embaixo do valor): foto dd/mm, planilha, à mão dd/mm
+function garOrigemAnterior(it) {
+    const dm = (iso) => { const m = String(iso || '').match(/^\d{4}-(\d{2})-(\d{2})/); return m ? `${m[2]}/${m[1]}` : ''; };
+    if (it.anterior_manual) return `à mão ${dm(it.anterior_manual)}`;
+    if (it.anterior == null) return it.sem_foto ? 'preencha o Fat. anterior' : '';
+    if (it.historico && !it.foto) return 'planilha';
+    return it.foto ? `foto ${dm(it.foto)}` : '';
 }
 // colunas da Análise de Garantia (todas ordenáveis pelo cabeçalho): [campo, título, n = número / t = texto, dica]
 const GAR_COLS_ANALISE = [
@@ -2620,12 +2636,17 @@ function garConferencia(it) {
     return { ...base, st: 'div', rot: '⚠ Divergente — não seguiu o solicitado', det: `${fmtBR(fat, 0)} × ${fmtBR(pedido, 0)} m³`,
         dica: `Faturado ${fmtBR(fat, 0)} m³, pedido ${fmtBR(pedido, 0)} m³ (diferença ${fat - pedido > 0 ? '+' : ''}${fmtBR(fat - pedido, 0)} m³): não entra no resultado` };
 }
+// Fat. anterior: campo para corrigir à mão (o original do sistema), com a origem do valor e o alerta de foto suspeita
+const garCelAnterior = (it, g) => `<td class="num gar-ant-td${g.antSusp ? ' gar-ant-susp' : ''}" data-f="anterior">`
+    + `<input class="gar-in gar-anterior" data-campo="anterior" inputmode="decimal" value="${it.anterior == null ? '' : fmtBR(it.anterior, 2)}" `
+    + `aria-label="Fat. anterior da matrícula ${garEsc(it.lig)}" title="Faturado original (antes do refaturamento). Digite para corrigir: fica salvo como corrigido à mão.">`
+    + `<small>${garEsc(garOrigemAnterior(it))}</small>${g.antSusp ? `<small class="gar-ant-alerta" title="Queda conforme com o Fat. anterior ${it.anterior == null ? 'vazio' : 'igual ao ajustado'}: a foto pode ter sido tirada depois do refaturamento. Confira o valor original e digite (ou redigite) no campo.">⚠ conferir</small>` : ''}</td>`;
 const GAR_CONF_ORDEM = { div: 0, esp: 1, sem: 2, ok: 3, vazio: 4 };
 const garSeloConf = (cf) => `<span class="gar-conf gar-conf-${cf.st}" title="${garEsc(cf.dica)}">${garEsc(cf.rot)}${cf.det ? `<small>${garEsc(cf.det)}</small>` : ''}</span>`;
 // célula da garantia: fora do resultado em cinza, com a observação
 const garCelGarantia = (g) => (g.entra
     ? `<td class="num ${g.valor < 0 ? 'gar-neg' : ''}" data-f="dif"><b>${garR(g.valor)}</b></td>`
-    : `<td class="num gar-fora" data-f="dif" title="${g.cf.st === 'div' ? 'Perda por não seguir o solicitado (queda: Fat. ajustado − valor da média; aumento: Fat. ajustado − Fat. anterior). ' : ''}Não entra no resultado (${garEsc(g.cf.rot)})">${garR(g.valor)}<small>${g.cf.st === 'div' ? 'perda · ' : ''}não entra no resultado</small></td>`);
+    : `<td class="num gar-fora" data-f="dif" title="${g.antSusp ? 'Fat. anterior a conferir: vazio ou igual ao ajustado numa queda conforme. ' : ''}${g.cf.st === 'div' ? 'Perda por não seguir o solicitado (queda: Fat. ajustado − valor da média; aumento: Fat. ajustado − Fat. anterior). ' : ''}Não entra no resultado (${garEsc(g.cf.rot)})">${garR(g.valor)}<small>${g.cf.st === 'div' ? 'perda · ' : ''}não entra no resultado</small></td>`);
 function garOrdenarAnalise(itens) {
     const { campo, desc } = GAR.ordemAnalise;
     if (!campo) return itens;
@@ -2654,13 +2675,13 @@ function garDesenharAnalise() {
     tab.tHead.innerHTML = '<tr>' + GAR_COLS_ANALISE.map(([c, t, tipo, dica]) => `<th class="gar-ord ${tipo === 'n' ? 'num' : ''}" data-ord-an="${c}" tabindex="0" title="${garEsc((dica ? dica + ' — ' : '') + 'clique para ordenar')}">${t}${c === campo ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '<th></th></tr>';
     let mudouFoto = false;
     const todos = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)));
-    const conta = { ok: 0, div: 0, esp: 0, sem: 0, vazio: 0 }; todos.forEach((it) => { conta[garConferencia(it).st]++; });
-    garDesenharConferencia(conta);
-    const itens = garOrdenarAnalise(GAR.soDivergentes ? todos.filter((it) => garConferencia(it).st === 'div') : todos);
+    garDesenharConferencia(garContaConferencia());
+    const itens = garOrdenarAnalise(GAR.soDivergentes ? todos.filter((it) => garConferencia(it).st === 'div')
+        : GAR.soAntSusp ? todos.filter((it) => garGanhoItem(it).antSusp) : todos);
     tab.tBodies[0].innerHTML = itens.map((it) => {
         const { d, calc, atual, dif } = garCalcItem(it);
         const cf = garConferencia(it);
-        if (it.anterior == null && atual != null) { garItens[garChave(it.lig)].anterior = atual; garItens[garChave(it.lig)].foto = new Date().toISOString(); it.anterior = atual; mudouFoto = true; }
+        if (it.anterior == null && atual != null && !it.sem_foto && !it.anterior_manual) { garItens[garChave(it.lig)].anterior = atual; garItens[garChave(it.lig)].foto = new Date().toISOString(); it.anterior = atual; mudouFoto = true; }
         const tot = d ? (d.res || 0) + (d.com || 0) + (d.ind || 0) + (d.pub || 0) : null;
         const sit = !d ? '<span class="gar-sit">não encontrada</span>' : d.sit ? `<span class="gar-sit ${garEmAnalise(d) ? 'gar-sit-analise' : 'gar-sit-lib'}">${garEsc(garEmAnalise(d) ? garRotSit(d) : d.sit)}</span>` : '<span class="gar-sit">sem fatura no mês</span>';
         const opt = (v, t) => `<option value="${v}" ${it.motivo === v ? 'selected' : ''}>${t}</option>`;
@@ -2672,7 +2693,7 @@ function garDesenharAnalise() {
             + `<td>${garEsc(d && d.rota)}</td><td>${sit}</td>`
             + `<td class="num"><input class="gar-in gar-media" data-campo="media" inputmode="decimal" value="${it.media == null ? '' : fmtBR(it.media, it.media % 1 ? 2 : 0)}"></td>`
             + `<td class="num" data-f="vmed">${garR(garCalcItem(it).vmed)}</td>`
-            + `<td class="num" data-f="calc">${garR(calc)}</td><td class="num">${garR(it.anterior)}</td><td class="num" data-f="atual">${garR(atual)}</td>`
+            + `<td class="num" data-f="calc">${garR(calc)}</td>${garCelAnterior(it, garCalcItem(it).ganho)}<td class="num" data-f="atual">${garR(atual)}</td>`
             + garCelGarantia(garCalcItem(it).ganho)
             + `<td><select class="gar-in" data-campo="motivo">${opt('', '—')}${opt('QUEDA', 'Queda de consumo')}${opt('AUMENTO', 'Aumento de consumo')}</select></td>`
             + `<td><input class="gar-in gar-texto" data-campo="retorno" value="${garEsc(it.retorno)}" placeholder="ex.: FATURAR MÉDIA 311 m³"></td>`
@@ -2684,9 +2705,14 @@ function garDesenharAnalise() {
     if (mudouFoto) garSalvar();
 }
 // barra acima da tabela: contagem da conferência, filtro "Somente divergentes" e download
+function garContaConferencia() {
+    const conta = { ok: 0, div: 0, esp: 0, sem: 0, vazio: 0, ant: 0 };
+    garItensDoMes().filter((x) => garVisivel(GAR.porLig.get(x.lig))).forEach((x) => { const g = garGanhoItem(x); conta[g.cf.st]++; if (g.antSusp) conta.ant++; });
+    return conta;
+}
 function garDesenharConferencia(conta) {
     const el = document.getElementById('garConferencia'); if (!el) return;
-    const n = Object.values(conta).reduce((a, b) => a + b, 0);
+    const n = conta.ok + conta.div + conta.esp + conta.sem + conta.vazio;
     if (!n) { el.hidden = true; return; }
     el.hidden = false;
     const chip = (st, rot) => `<span class="gar-conf gar-conf-${st}">${rot}: <b>${conta[st]}</b></span>`;
@@ -2694,11 +2720,14 @@ function garDesenharConferencia(conta) {
         + chip('esp', '⏳ Aguardando') + chip('sem', '? Sem volume no retorno') + (conta.vazio ? chip('vazio', 'Sem retorno') : '')
         + `<span class="gar-espaco"></span><button type="button" class="btn-just gar-filtro${GAR.soDivergentes ? ' ativo' : ''}" id="garSoDivergentes" aria-pressed="${!!GAR.soDivergentes}">`
         + (GAR.soDivergentes ? `Mostrando só divergentes (${conta.div}) — ver todas` : `Somente divergentes (${conta.div})`) + '</button>'
+        + (conta.ant || GAR.soAntSusp ? `<button type="button" class="btn-just gar-filtro gar-ant-filtro${GAR.soAntSusp ? ' ativo' : ''}" id="garSoAntSusp" aria-pressed="${!!GAR.soAntSusp}" `
+            + 'title="Quedas conformes com o Fat. anterior vazio ou igual ao ajustado: a foto pode ter sido tirada depois do refaturamento">'
+            + (GAR.soAntSusp ? `Mostrando Fat. anterior a conferir (${conta.ant}) — ver todas` : `⚠ Fat. anterior a conferir (${conta.ant})`) + '</button>' : '')
         + '<button type="button" class="btn-just" id="garBaixarConf" title="Excel com todas as matrículas da análise: volume pedido, consumo faturado, diferença e situação">⬇ Baixar conferência</button>';
 }
 function garBaixarConferencia() {
     const cols = ['Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'Rota', 'SUP', 'Situação conta', 'Motivo', 'Retorno superintendência',
-        'Média volume fat. (m³)', 'Volume pedido (m³)', 'Consumo faturado no mês (m³)', 'Diferença (m³)', 'Conferência', 'Valor da média (R$)', 'Pedido (R$)', 'Fat. anterior (R$)', 'Fat. ajustado (R$)',
+        'Média volume fat. (m³)', 'Volume pedido (m³)', 'Consumo faturado no mês (m³)', 'Diferença (m³)', 'Conferência', 'Valor da média (R$)', 'Pedido (R$)', 'Fat. anterior (R$)', 'Origem do Fat. anterior', 'Fat. anterior a conferir', 'Fat. ajustado (R$)',
         'Garantia (R$)', 'Entra no resultado', 'O.S.', 'Nº O.S.'];
     const rotSt = { ok: 'Conforme', div: 'Divergente — não seguiu o solicitado', esp: 'Aguardando (conta em análise ou sem fatura)', sem: 'Sem volume no retorno', vazio: 'Sem retorno' };
     const r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
@@ -2707,11 +2736,12 @@ function garBaixarConferencia() {
     const linhas = itens.map((it) => { const { d, calc, vmed, atual, ganho } = garCalcItem(it), c = ganho.cf, x = d || {};
         return [it.lig, x.nome || '', x.cat || '', x.loc || '', x.grupo || '', x.rota || '', x.sup || '', d ? (garEmAnalise(d) ? garRotSit(d) : (d.sit || '')) : 'não encontrada',
             it.motivo === 'QUEDA' ? 'Queda de consumo' : it.motivo === 'AUMENTO' ? 'Aumento de consumo' : '', it.retorno || '', it.media, c.pedido, c.fat, r2(c.dif), rotSt[c.st],
-            r2(vmed), r2(calc), r2(it.anterior), r2(atual), ganho.valor, ganho.entra ? 'Sim' : 'Não', it.obs || '', it.os_num || '']; });
+            r2(vmed), r2(calc), r2(it.anterior), garOrigemAnterior(it), ganho.antSusp ? 'Sim' : 'Não', r2(atual), ganho.valor, ganho.entra ? 'Sim' : 'Não', it.obs || '', it.os_num || '']; });
     baixarPlanilha(cols, linhas, `Garantia_conferencia_faturamento_${GAR.ref.replace('/', '-')}.xlsx`);
 }
 document.addEventListener('click', (e) => {
-    if (e.target.id === 'garSoDivergentes') { GAR.soDivergentes = !GAR.soDivergentes; garDesenharAnalise(); return; }
+    if (e.target.id === 'garSoDivergentes') { GAR.soDivergentes = !GAR.soDivergentes; GAR.soAntSusp = false; garDesenharAnalise(); return; }
+    if (e.target.id === 'garSoAntSusp') { GAR.soAntSusp = !GAR.soAntSusp; GAR.soDivergentes = false; garDesenharAnalise(); return; }
     if (e.target.id === 'garBaixarConf') garBaixarConferencia();
 });
 function garLerNumero(t) {
@@ -2725,7 +2755,8 @@ document.addEventListener('input', (e) => {
     const inp = e.target.closest && e.target.closest('#garTabelaAnalise .gar-in'); if (!inp) return;
     const tr = inp.closest('tr'), it = garItens[garChave(tr.dataset.lig)]; if (!it) return;
     const campo = inp.dataset.campo;
-    it[campo] = campo === 'media' ? garLerNumero(inp.value) : inp.value;
+    it[campo] = campo === 'media' || campo === 'anterior' ? garLerNumero(inp.value) : inp.value;
+    if (campo === 'anterior') { it.anterior_manual = new Date().toISOString(); delete it.sem_foto; }
     if (campo === 'obs') {
         if (inp.value === OS_ABRIR) { if (!it.os_data) it.os_data = garHoje(); delete it.os_status; }
         else { delete it.os_data; delete it.os_status; delete it.os_realizada; delete it.os_num; delete it.os_exoc; delete it.os_retram; delete it.os_retram_n; delete it.os_obs; }
@@ -2735,16 +2766,17 @@ document.addEventListener('input', (e) => {
         const c = garCalcItem({ lig: tr.dataset.lig, ...it });
         tr.querySelector('[data-f="calc"]').textContent = garR(c.calc);
     }
-    if (campo === 'media' || campo === 'retorno') {   // pedido, conferência e garantia da linha e contagem acima (sem redesenhar a tabela)
+    if (campo === 'media' || campo === 'retorno' || campo === 'anterior') {   // pedido, conferência e garantia da linha e contagem acima (sem redesenhar a tabela)
         const c = garCalcItem({ lig: tr.dataset.lig, ...it }), cf = c.ganho.cf, td = tr.querySelector('[data-f="conf"]');
         tr.querySelector('[data-f="calc"]').textContent = garR(c.calc);
         tr.querySelector('[data-f="vmed"]').textContent = garR(c.vmed);
         if (td) td.innerHTML = garSeloConf(cf);
         const tg = tr.querySelector('[data-f="dif"]'); if (tg) tg.outerHTML = garCelGarantia(c.ganho);
+        const ta = tr.querySelector('[data-f="anterior"]');
+        if (ta) { ta.classList.toggle('gar-ant-susp', !!c.ganho.antSusp); ta.querySelectorAll('small').forEach((x) => x.remove());
+            ta.insertAdjacentHTML('beforeend', `<small>${garEsc(garOrigemAnterior(it))}</small>${c.ganho.antSusp ? '<small class="gar-ant-alerta">⚠ conferir</small>' : ''}`); }
         tr.classList.toggle('gar-conf-div-lin', cf.st === 'div');
-        const conta = { ok: 0, div: 0, esp: 0, sem: 0, vazio: 0 };
-        garItensDoMes().filter((x) => garVisivel(GAR.porLig.get(x.lig))).forEach((x) => { conta[garConferencia(x).st]++; });
-        garDesenharConferencia(conta);
+        garDesenharConferencia(garContaConferencia());
     }
     garSalvar(); garDesenharResumo();
     if (campo === 'obs') {                   // mostra/esconde o campo do nº da O.S. na linha
@@ -2861,7 +2893,8 @@ function garImportarExcel(texto) {
         const k = garChave(r.lig), it = garItens[k] || (garItens[k] = { media: null, motivo: '', retorno: '', obs: '', anterior: null, foto: null, ordem: base + i });
         if (!GAR.porLig.get(r.lig)) fora.push(r.lig);
         it.historico = true;
-        if (r.anterior != null) { it.anterior = r.anterior; it.foto = null; }
+        if (r.anterior != null) { it.anterior = r.anterior; it.foto = null; delete it.sem_foto; }
+        else if (it.anterior == null) it.sem_foto = true;          // planilha sem Fat. anterior: não pega a fatura de hoje como foto
         if (r.media != null) it.media = r.media;
         if (r.motivo) it.motivo = r.motivo;
         if (r.retorno) it.retorno = r.retorno;
@@ -3128,13 +3161,13 @@ function garItensResumo() {
         return garVisivel(d) && !(lib && !(d && lib.has(normGrupo(d.grupo))));   // só grupos com situação Liberado
     });
 }
-const garForaVazio = () => ({ div: { n: 0, v: 0 }, esp: { n: 0, v: 0 }, vazio: { n: 0, v: 0 } });
+const garForaVazio = () => ({ ant: { n: 0, v: 0 }, div: { n: 0, v: 0 }, esp: { n: 0, v: 0 }, vazio: { n: 0, v: 0 } });
 function garTotais() {
     const t = { AUMENTO: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 }, QUEDA: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 } }, porGrupo = {}, fora = garForaVazio();
     garItensResumo().forEach((it) => {
         const { d, atual, ganho } = garCalcItem(it);
         const g = (d && d.grupo) || '—', pg = porGrupo[g] = porGrupo[g] || { n: 0, QUEDA: 0, AUMENTO: 0, fora: 0 };
-        if (!ganho.entra) { fora[ganho.cf.st].n++; fora[ganho.cf.st].v += ganho.valor || 0; pg.fora++; return; }
+        if (!ganho.entra) { fora[ganho.fk].n++; fora[ganho.fk].v += ganho.valor || 0; pg.fora++; return; }
         const x = t[it.motivo];
         x.n++; if (d && !garEmAnalise(d)) x.lib++;
         x.orig += ganho.base || 0; x.ajust += atual || 0; x.gar += ganho.gar;
@@ -3150,7 +3183,7 @@ function garLinhasFora(fora) {                      // tabela do resumo: Resumo 
 function garDesenharResumo() {
     const el = document.getElementById('garResumo'); if (!el || !GAR.dados) return;
     const { t, porGrupo, fora } = garTotais();
-    const nFora = fora.div.n + fora.esp.n + fora.vazio.n;
+    const nFora = fora.ant.n + fora.div.n + fora.esp.n + fora.vazio.n;
     const tot = ['n', 'lib', 'orig', 'ajust', 'gar'].reduce((o, k) => (o[k] = t.AUMENTO[k] + t.QUEDA[k], o), {});
     const lin = (nome, x, cls) => `<tr class="${cls || ''}"><td>${nome}</td><td class="num">${x.n}</td><td class="num">${x.lib}</td><td class="num">${garR(x.orig)}</td>`
         + `<td class="num">${garR(x.ajust)}</td><td class="num ${x.gar < 0 ? 'gar-neg' : 'gar-ganho'}"><b>${garR(x.gar)}</b></td></tr>`;
@@ -3185,11 +3218,11 @@ function garAbrirGrupo(g) {
     const tot = { QUEDA: 0, AUMENTO: 0, n: 0 }, fora = garForaVazio();
     const linhas = itens.map((it) => {
         const x = garCalcItem(it), gn = x.ganho, d = x.d || {};
-        if (gn.entra) { tot[it.motivo] += gn.gar; tot.n++; } else { fora[gn.cf.st].n++; fora[gn.cf.st].v += gn.valor || 0; }
+        if (gn.entra) { tot[it.motivo] += gn.gar; tot.n++; } else { fora[gn.fk].n++; fora[gn.fk].v += gn.valor || 0; }
         const sit = x.d ? (garEmAnalise(x.d) ? garRotSit(x.d) : (x.d.sit || '')) : 'não encontrada';
         return `<tr${gn.entra ? '' : ' class="gar-fora-item"'}><td><b>${garEsc(it.lig)}</b></td><td class="gar-cli">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td><td>${garEsc(sit)}</td>`
             + `<td>${it.motivo === 'QUEDA' ? 'Queda' : 'Aumento'}</td><td>${garEsc(it.retorno || '')}</td>`
-            + `<td>${garSeloConf(gn.cf)}</td><td class="num">${it.media == null ? '–' : fmtBR(it.media, 0)}</td><td class="num">${garR(x.vmed)}</td><td class="num">${garR(x.calc)}</td><td class="num">${garR(it.anterior)}</td><td class="num">${garR(x.atual)}</td>`
+            + `<td>${garSeloConf(gn.cf)}</td><td class="num">${it.media == null ? '–' : fmtBR(it.media, 0)}</td><td class="num">${garR(x.vmed)}</td><td class="num">${garR(x.calc)}</td><td class="num">${garR(it.anterior)}<small class="gar-ant-orig">${garEsc(garOrigemAnterior(it))}</small>${gn.antSusp ? '<small class="gar-ant-alerta">⚠ conferir</small>' : ''}</td><td class="num">${garR(x.atual)}</td>`
             + garCelGarantia(gn) + `<td>${garEsc(it.obs || '')}${it.os_num ? ' ' + garEsc(it.os_num) : ''}</td></tr>`;
     }).join('');
     const totLin = `<tr class="linha-media"><td colspan="12"><b>Total no resultado</b> (${tot.n} ${tot.n === 1 ? 'matrícula' : 'matrículas'})</td>`
