@@ -339,11 +339,13 @@ def test_regras_novas_da_garantia(sessao):
 
 
 def test_foto_do_fat_anterior_editavel_e_suspeita(sessao):
-    """Fat. anterior: editável (fica "à mão"), com a origem; queda conforme com anterior vazio ou igual ao ajustado fica fora
+    """Fat. anterior: refeito pelo consumo medido (m³) informado, com a origem; queda conforme com anterior vazio ou igual ao ajustado fica fora
     do resultado ("⚠ conferir"); importada sem anterior não tira foto."""
     html = open(sessao.caminho_html, encoding="utf-8").read()
-    for trecho in ("function garAnteriorSuspeito(it, cf, atual)", "function garOrigemAnterior(it)", 'data-campo="anterior"',
-                   "if (campo === 'anterior') { it.anterior_manual = new Date().toISOString(); delete it.sem_foto; }",
+    for trecho in ("function garAnteriorSuspeito(it, cf, atual)", "function garOrigemAnterior(it)", 'data-campo="anterior_medido"',
+                   # o Fat. anterior sai do consumo medido informado, pela estrutura tarifária (Tarifa.valor já aplica o mínimo)
+                   "it.anterior = garCalculado(GAR.porLig.get(tr.dataset.lig), it.anterior_medido);",
+                   "'Medido informado (m³)'",
                    "if (it.anterior == null && atual != null && !it.sem_foto && !it.anterior_manual) {",
                    "else if (it.anterior == null) it.sem_foto = true;", 'id="garSoAntSusp"', "Fat. anterior a conferir",
                    "'Origem do Fat. anterior', 'Fat. anterior a conferir'"):
