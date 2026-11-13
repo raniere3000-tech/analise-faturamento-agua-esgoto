@@ -243,7 +243,8 @@ def gera_aba_garantia_html(ctx):
     Média volume fat.), o que se perderia se o faturamento recalculasse pela média. Diferença de até R$ 1,00 conta como R$ 0,00. Entram no resultado as matrículas
     em que o faturado seguiu o pedido (✓ conforme: até 1 m³ ou 1% do volume pedido no retorno) e as de retorno sem volume (? — ex.:
     contrato de demanda). Ficam <b>fora do resultado</b>, só para conhecimento (em cinza, com o valor que dariam): ⚠ divergente (não seguiu o
-    solicitado), ⏳ conta em análise ou sem fatura no mês, e sem retorno. Em análise = Situação Conta EM ANALISE <b>ou</b> Situação Lançamento com “RETIDA” no nome em grupo ainda não liberado (Situação do grupo na aba Diretas, que pode ser ajustada à mão); liberadas = as demais.</p>
+    solicitado; o valor mostrado é a <b>perda</b>: queda = Fat. ajustado − valor da média, ou o pedido do retorno sem média digitada;
+    aumento = Fat. ajustado − Fat. anterior), ⏳ conta em análise ou sem fatura no mês, e sem retorno. Em análise = Situação Conta EM ANALISE <b>ou</b> Situação Lançamento com “RETIDA” no nome em grupo ainda não liberado (Situação do grupo na aba Diretas, que pode ser ajustada à mão); liberadas = as demais.</p>
     <div id="garResumo"></div>
   </div>
 </div>
