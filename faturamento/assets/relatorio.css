@@ -851,6 +851,13 @@ table.tabela-fech td.f-ruim { background:#FFC7CE; color:#9C0006; }
 .gar-conf-esp { background:#FFF4E5; color:#9a3412; }
 .gar-conf-sem { background:#EEF1F6; color:#475569; }
 #garTabelaAnalise tr.gar-conf-div-lin > td { background:#FFF5F4; }
+#garTabelaAnalise .gar-conf { white-space:normal; max-width:80px; line-height:1.25; text-align:center; padding:1px 5px; }
+#garTabelaAnalise td { padding:3px 3px; }
+#garTabelaAnalise td.gar-cli { min-width:90px; }
+#garTabelaAnalise select.gar-in { max-width:94px; }
+#garTabelaAnalise .gar-remover { padding:2px 6px; }
+#garTabelaAnalise .gar-os-num { width:84px; max-width:94px; box-sizing:border-box; }
+#garTabelaAnalise .gar-texto { min-width:96px; }
 #garTabelaAnalise tr.gar-conf-div-lin > td:first-child { box-shadow:inset 3px 0 0 #B42318; }
 .gar-conf-barra { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin:8px 0; font-size:12.5px; }
 .gar-conf-barra[hidden] { display:none; }
