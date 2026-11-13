@@ -308,3 +308,13 @@ def test_os_abertas_categoria_e_lista_de_prioridade(sessao):
         assert trecho in html, trecho
     # marcar Retramitada não grava mais o status na hora (só a lista copiada/baixada retramita)
     assert "else if (sel.value === OS_RETRAM) { it.os_status = OS_RETRAM;" not in html
+
+
+def test_conferencia_faturado_x_pedido_e_popup_do_grupo(sessao):
+    """Análise de Garantia: selo faturado × pedido (volume do retorno ou a média), filtro de divergentes e download;
+    Resumo › Por grupo: a linha abre as matrículas do grupo."""
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    for trecho in ("function garPedidoVolume(it)", "function garConferencia(it)", "['conf', 'Faturado × pedido', 't'",
+                   'id="garConferencia"', "id=\"garSoDivergentes\"", "function garBaixarConferencia()",
+                   'data-gar-grupo="${garEsc(g)}"', "function garAbrirGrupo(g)", "dlg.showModal();"):
+        assert trecho in html, trecho

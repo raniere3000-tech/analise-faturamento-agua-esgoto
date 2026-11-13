@@ -844,3 +844,35 @@ table.tabela-fech td.f-ruim { background:#FFC7CE; color:#9C0006; }
 /* amostras da aba Dados: nomes de coluna longos (sem espaço) quebram, sem rolagem lateral */
 .val-card .tabela-wrap th { white-space:normal; overflow-wrap:anywhere; min-width:56px; }
 .val-card .tabela-wrap td { white-space:normal; overflow-wrap:anywhere; }
+/* Análise de Garantia: conferência do faturamento (faturado × pedido no retorno) */
+.gar-conf { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; white-space:nowrap; background:#EEF1F6; color:#475569; }
+.gar-conf-ok { background:#E7F6EC; color:#166534; }
+.gar-conf-div { background:#FDECEA; color:#B42318; }
+.gar-conf-esp { background:#FFF4E5; color:#9a3412; }
+.gar-conf-sem { background:#EEF1F6; color:#475569; }
+#garTabelaAnalise tr.gar-conf-div-lin > td { background:#FFF5F4; }
+#garTabelaAnalise .gar-conf { white-space:normal; max-width:80px; line-height:1.25; text-align:center; padding:1px 5px; }
+#garTabelaAnalise td { padding:3px 3px; }
+#garTabelaAnalise td.gar-cli { min-width:90px; }
+#garTabelaAnalise select.gar-in { max-width:94px; }
+#garTabelaAnalise .gar-remover { padding:2px 6px; }
+#garTabelaAnalise .gar-os-num { width:84px; max-width:94px; box-sizing:border-box; }
+#garTabelaAnalise .gar-texto { min-width:96px; }
+#garTabelaAnalise tr.gar-conf-div-lin > td:first-child { box-shadow:inset 3px 0 0 #B42318; }
+.gar-conf-barra { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin:8px 0; font-size:12.5px; }
+.gar-conf-barra[hidden] { display:none; }
+.gar-conf-barra .gar-conf { font-size:12px; padding:3px 9px; }
+.gar-conf-tit { font-weight:700; color:var(--marinho); }
+/* Resumo › Por grupo: linha clicável e janela com as matrículas do grupo */
+tr.gar-grupo-lin { cursor:pointer; }
+tr.gar-grupo-lin:hover > td, tr.gar-grupo-lin:focus-visible > td { background:#EAF3FB; }
+tr.gar-grupo-lin:focus-visible { outline:2px solid var(--azul-claro); outline-offset:-2px; }
+.gar-dlg { border:0; border-radius:12px; padding:0; width:min(1500px, calc(100vw - 32px)); max-height:calc(100vh - 40px); box-shadow:0 18px 50px rgba(17,42,66,.35); }
+.gar-dlg::backdrop { background:rgba(10,25,45,.45); }
+.gar-dlg-corpo { padding:16px 20px; }
+.gar-dlg-corpo > .gar-topo { display:flex; align-items:center; gap:10px; }
+.gar-dlg-corpo > .gar-topo h2 { margin:0; text-wrap:balance; }
+.gar-dlg-corpo > .gar-topo .gar-espaco { flex:1; }
+.gar-dlg .tabela-garantia { width:100%; font-size:12px; }
+.gar-dlg .tabela-garantia td { white-space:normal; }
+

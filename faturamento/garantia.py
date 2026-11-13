@@ -225,7 +225,9 @@ def gera_aba_garantia_html(ctx):
     de prazo (D+10 a partir do dia da análise) do Resumo de Ganhos. Tudo fica salvo na pasta para todos.
     <b>Análises feitas antes do painel:</b> no Excel, selecione as linhas da planilha de garantia <i>com o cabeçalho</i>, copie e cole no
     campo acima. Entram com o selo <b>Histórico</b>, o Fat. anterior da planilha, a média, o motivo, o retorno e a O.S. (“abrir O.S.” na
-    observação).</p>
+    observação). <b>Faturado × pedido</b> confere o consumo faturado do mês com o volume pedido no retorno (ex.: “FATURAR MÉDIA 311 m³”;
+    sem número, a média preenchida): ✓ conforme, ⚠ divergente (faturado × pedido), ⏳ conta ainda em análise ou sem fatura, ? retorno sem volume.</p>
+    <div class="gar-conf-barra" id="garConferencia" hidden></div>
     <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaAnalise"><thead></thead><tbody></tbody></table></div>
   </div>
 </div>
