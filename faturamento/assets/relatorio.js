@@ -1174,6 +1174,21 @@ document.addEventListener('click', function (e) {
     const b = e.target.closest && e.target.closest('.btn-detalhe');
     if (b) baixaDetalhe(b);
 });
+// Validação do escalonamento do esgoto (botão do Comparativo Esgoto): quem gera é o Python da análise carregada no site
+document.addEventListener('click', async (e) => {
+    const b = e.target.closest && e.target.closest('.btn-escalonamento'); if (!b || b.disabled) return;
+    let site = null; try { site = window.parent && window.parent !== window ? window.parent.baixarEscalonamentoSite : null; } catch (er) { site = null; }
+    if (!site) { alert('A validação do escalonamento é gerada pelo site do painel com a pasta conectada (não no relatório aberto como arquivo).'); return; }
+    const g = gruposFiltro(), texto = b.innerHTML;
+    b.disabled = true; b.textContent = '⏳ Gerando…';
+    try {
+        const r = await site({ sup: ESTADO.sup || 'TODAS', grupos: g ? Array.from(g) : null });
+        if (r.erro) alert(r.erro);
+        else if (!r.info.linhas) alert('Nenhuma matrícula com esgoto com os filtros escolhidos.');
+        else avisoNuvem(`Validação do escalonamento: ${r.info.matriculas.toLocaleString('pt-BR')} matrícula(s) com esgoto, ${r.info.meses.length} mês(es).`);
+    } catch (er) { alert('Não foi possível gerar a validação do escalonamento: ' + er.message); }
+    finally { b.disabled = false; b.innerHTML = texto; }
+});
 // botão "Cortadas com consumo" do site (barra de cima): mesmo analítico, sem seta na tela
 window.baixarCortadasConsumo = () => baixaDetalhe({ dataset: { detalhe: 'cortadas' }, closest: () => null });
 

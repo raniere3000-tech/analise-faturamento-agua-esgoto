@@ -10,7 +10,7 @@ const ARQUIVOS_PY = [
   "faturamento/dre.py", "faturamento/dados.py",
   "faturamento/config.py", "faturamento/contexto.py", "faturamento/formatacao.py", "faturamento/leitura.py",
   "faturamento/origem.py", "faturamento/orcado_ciclo.py", "faturamento/previsao.py", "faturamento/projecao_grupos.py", "faturamento/validacao.py", "faturamento/painel_html.py", "faturamento/pipeline.py", "faturamento/progresso.py",
-  "faturamento/relatorio.py", "faturamento/situacao_grupo.py", "faturamento/tarifa.py", "faturamento/garantia.py", "faturamento/plano_acao.py", "faturamento/one_page.py", "faturamento/acompanhamento.py", "faturamento/extrair_base.py", "faturamento/fechamento.py", "faturamento/situacao_lancamento.py", "faturamento/tabelas_html.py", "faturamento/top20.py",
+  "faturamento/relatorio.py", "faturamento/situacao_grupo.py", "faturamento/tarifa.py", "faturamento/garantia.py", "faturamento/plano_acao.py", "faturamento/one_page.py", "faturamento/acompanhamento.py", "faturamento/extrair_base.py", "faturamento/escalonamento.py", "faturamento/fechamento.py", "faturamento/situacao_lancamento.py", "faturamento/tabelas_html.py", "faturamento/top20.py",
   "faturamento/regras.json", "faturamento/assets/relatorio.css", "faturamento/assets/relatorio.js", "faturamento/assets/tarifa.js",
 ];
 const SAIDAS = [
@@ -275,8 +275,25 @@ async function faseExtrair(params, arquivo) {
   } finally { extrair.destroy(); }
 }
 
+// Validação do escalonamento do esgoto (botão do Comparativo Esgoto, no relatório)
+async function faseEscalonamento(params) {
+  const pyodide = await iniciaPyodide();
+  const caminho = "/tmp/escalonamento.bin";
+  const fn = pyodide.globals.get("escalonamento");
+  try {
+    const info = JSON.parse(fn(JSON.stringify(params || {}), caminho));
+    const saida = pyodide.FS.readFile(caminho);
+    avisa("escalonamento", { info, conteudo: saida.buffer }, [saida.buffer]);
+  } finally { fn.destroy(); }
+}
+
 self.onmessage = async (evento) => {
   const { fase, arquivos, ajustes } = evento.data;
+  if (fase === "escalonamento") {
+    try { await faseEscalonamento(evento.data.params); }
+    catch (erro) { avisa("escalonamentoErro", { motivo: String((erro && erro.message) || erro).split("\n").filter(Boolean).slice(-1).join(" ") }); }
+    return;
+  }
   if (fase === "extrair") {
     try { await faseExtrair(evento.data.params, evento.data.arquivo); }
     catch (erro) { avisa("extracaoErro", { motivo: String((erro && erro.message) || erro).split("\n").filter(Boolean).slice(-1).join(" ") }); }

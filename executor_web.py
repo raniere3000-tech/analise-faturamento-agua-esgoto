@@ -68,3 +68,16 @@ def extrair(params_json, arquivo, caminho):
     with open(caminho, "wb") as f:
         f.write(r.pop("conteudo"))
     return json.dumps(r, ensure_ascii=False)
+
+
+def escalonamento(params_json, caminho):
+    """Validação do escalonamento do esgoto (botão do Comparativo Esgoto Mês a Mês). params: {sup, grupos (lista ou null)}.
+    Grava o arquivo em `caminho` e devolve JSON com o nome e o resumo."""
+    from faturamento.escalonamento import gera_escalonamento
+    p = json.loads(params_json or "{}")
+    ctx = _estado["sessao"].contexto_do_mes(None)              # todos os meses da pasta
+    r = gera_escalonamento(ctx, p.get("sup") or "TODAS", p.get("grupos") or None)
+    with open(caminho, "wb") as f:
+        f.write(r.pop("conteudo"))
+    return json.dumps(r, ensure_ascii=False)
+
