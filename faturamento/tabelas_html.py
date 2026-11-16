@@ -74,6 +74,13 @@ def grupos_pendentes(ctx, comp, rubrica):
     return pd.DataFrame(linhas)
 
 
+# Comparativo Esgoto: validação do escalonamento (água, esgoto e % esgoto/água por matrícula, mês a mês) — gerada pelo
+# Python da análise carregada no site (relatorio.js pede ao site, que pede ao worker)
+BOTAO_ESCALONAMENTO = (' <button type="button" class="btn-just btn-escalonamento" title="Validação do escalonamento do esgoto: '
+                       'para cada matrícula com esgoto, o faturado de água, o de esgoto e a % do esgoto sobre a água, mês a mês '
+                       '(Excel; % arredondada; segue a Superintendência e os grupos do cabeçalho)">&#11015; Validação do escalonamento</button>')
+
+
 def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_ant=None, card_attrs="", detalhe="", pendentes=""):
     """pendentes: rubrica ("AGUA"/"ESGOTO") para acrescentar os grupos ainda não lidos (LIS / Aguardando) com o mês anterior."""
     rot_atual = rot_atual or ctx.mes_atual_curto
@@ -213,7 +220,7 @@ def gera_tabela(ctx, comp, titulo, slug, *, com_dias=True, rot_atual=None, rot_a
     """
     return f"""
     <div class="card"{card_attrs}>
-    <h2{' style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"' if detalhe else ""}>{titulo}{(" " + seta_detalhe(detalhe, rotulo="Baixar o analítico por matrícula desta tabela (Excel): de quais matrículas vieram as variações de economias, volume e faturamento")) if detalhe else ""}</h2>
+    <h2{' style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"' if detalhe else ""}>{titulo}{(" " + seta_detalhe(detalhe, rotulo="Baixar o analítico por matrícula desta tabela (Excel): de quais matrículas vieram as variações de economias, volume e faturamento")) if detalhe else ""}{BOTAO_ESCALONAMENTO if slug == "esgoto" else ""}</h2>
     <table class="tabela-comparativo" id="tabela-{slug}">
         <thead>{cabecalho}</thead>
         <tbody>{linhas_html}</tbody>

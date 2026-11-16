@@ -471,7 +471,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v173</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v174</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -678,7 +678,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v173-20261113"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v174-20261116"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -997,6 +997,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     trocandoMes = null;
     if (esperaAcomp) { esperaAcomp({ tipo: "acompanhamentoErro", motivo: "carregamento cancelado" }); esperaAcomp = null; }
     if (esperaExtrair) { esperaExtrair({ tipo: "extracaoErro", motivo: "carregamento cancelado" }); esperaExtrair = null; }
+    if (esperaEscalonamento) { esperaEscalonamento({ tipo: "escalonamentoErro", motivo: "carregamento cancelado" }); esperaEscalonamento = null; }
     fechaRelatorio();
     progresso.hidden = false;
     progresso.classList.add("erro");
@@ -1045,6 +1046,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     else if (msg.tipo === "concluido") { salvaEta(); abreRelatorio(msg); }
     else if (msg.tipo === "acompanhamento" || msg.tipo === "acompanhamentoErro") { if (esperaAcomp) { esperaAcomp(msg); esperaAcomp = null; } }
     else if (msg.tipo === "extracao" || msg.tipo === "extracaoErro") { if (esperaExtrair) { esperaExtrair(msg); esperaExtrair = null; } }
+    else if (msg.tipo === "escalonamento" || msg.tipo === "escalonamentoErro") { if (esperaEscalonamento) { esperaEscalonamento(msg); esperaEscalonamento = null; } }
   }
 
   function abreRelatorio({ saidas, refAtual, refAnterior }) {
@@ -1929,6 +1931,18 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
   // O Python monta a base a partir do que já leu da pasta (todos os meses e grupos); a lista de matrículas fica neste navegador.
   const EXT_LS = "faturamento_extrair_ligs";
   let extArquivo = null, esperaExtrair = null, extUltimo = null;
+  // Validação do escalonamento do esgoto: o relatório (botão do Comparativo Esgoto) pede ao Python da análise carregada
+  let esperaEscalonamento = null;
+  window.baixarEscalonamentoSite = async (params) => {
+    if (!worker || !relPorMes.size) return { erro: "A análise não está carregada (o painel foi reaberto sem reler a pasta). Clique em ↻ Atualizar e tente de novo." };
+    if (esperaEscalonamento) return { erro: "Já está gerando." };
+    const msg = await new Promise((ok) => { esperaEscalonamento = ok; worker.postMessage({ fase: "escalonamento", params }); });
+    if (msg.tipo === "escalonamentoErro") return { erro: "Não foi possível gerar: " + msg.motivo };
+    if (!msg.info.linhas) return { info: msg.info };
+    const xlsx = /\.xlsx$/i.test(msg.info.nome);
+    extBaixa(msg.info.nome, msg.conteudo, xlsx ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "text/csv;charset=utf-8");
+    return { info: msg.info };
+  };
   const extLigsDoTexto = (t) => Array.from(new Set(String(t || "").split(/[\s,;|]+/).map((x) => x.replace(/\.0+$/, "").replace(/\D/g, "").replace(/^0+/, "")).filter(Boolean)));
   function extAtualizaQtd() {
     const n = extLigsDoTexto($("extLigs").value).length;
