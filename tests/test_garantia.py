@@ -350,3 +350,12 @@ def test_foto_do_fat_anterior_editavel_e_suspeita(sessao):
                    "else if (it.anterior == null) it.sem_foto = true;", 'id="garSoAntSusp"', "Fat. anterior a conferir",
                    "'Origem do Fat. anterior', 'Fat. anterior a conferir'"):
         assert trecho in html, trecho
+
+
+def test_print_da_garantia_com_ou_sem_divergentes(sessao):
+    """Prints: "Análise de Garantia" (com a linha dos divergentes) e "— sem divergentes" (sem essa linha, o resto igual)."""
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert "'garantia-sem-div': ['Analise_Garantia_sem_divergentes', 1300]" in html
+    assert """c.querySelectorAll('tr[data-fora="div"]').forEach((x) => x.remove());""" in html and 'data-fora="${k}"' in html
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert 'data-print="garantia">' in site and 'data-print="garantia-sem-div">' in site

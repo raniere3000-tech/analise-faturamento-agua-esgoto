@@ -471,7 +471,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v174</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v175</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -549,7 +549,8 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     <span class="menu-pdf" id="menuPrintWrap"><button type="button" class="btn-top" id="btnPrint" hidden aria-haspopup="true" aria-expanded="false" aria-controls="menuPrint" title="Imagem em alta resolução de um quadro do painel, para colar na apresentação">🖼 Prints ▾</button>
       <span class="menu-pdf-lista" id="menuPrint" role="menu" hidden>
         <button type="button" role="menuitem" data-print="dre">DRE<small>Realizado + Forecast, sem a coluna Forecast</small></button>
-        <button type="button" role="menuitem" data-print="garantia">Análise de Garantia<small>Totais, resumo e garantia por grupo</small></button>
+        <button type="button" role="menuitem" data-print="garantia">Análise de Garantia<small>Totais, resumo e garantia por grupo, com a linha dos divergentes</small></button>
+        <button type="button" role="menuitem" data-print="garantia-sem-div">Análise de Garantia — sem divergentes<small>O mesmo quadro, sem a linha dos divergentes (perda por não seguir o solicitado)</small></button>
         <button type="button" role="menuitem" data-print="indiretas">Faturamento Indireto e Plano de Ação<small>Indiretas (R$) e, abaixo, o plano do mês</small></button>
       </span></span>
     <button type="button" class="btn-top" id="btnOnePage" hidden title="One page (acompanhamento do faturamento em uma página, conforme os filtros da tela)">📊 One page</button>
@@ -678,7 +679,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v174-20261116"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v175-20261116"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
