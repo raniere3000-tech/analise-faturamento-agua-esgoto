@@ -3203,7 +3203,7 @@ function garTotais() {
 }
 // linhas "fora do resultado" (resumo e popup): N matrículas e o valor que dariam
 function garLinhasFora(fora) {                      // tabela do resumo: Resumo | Ligações | Liberadas | Fat. anterior | Fat. ajustado | Garantia
-    return Object.keys(GAR_FORA_ROT).filter((k) => fora[k].n).map((k) => `<tr class="gar-fora-lin"><td>${GAR_FORA_ROT[k]} (fora do resultado)</td>`
+    return Object.keys(GAR_FORA_ROT).filter((k) => fora[k].n).map((k) => `<tr class="gar-fora-lin" data-fora="${k}"><td>${GAR_FORA_ROT[k]} (fora do resultado)</td>`
         + `<td class="num">${fora[k].n}</td><td></td><td></td><td></td><td class="num gar-fora" title="O que daria se entrasse">${garR(fora[k].v)}</td></tr>`).join('');
 }
 function garDesenharResumo() {
@@ -4033,7 +4033,7 @@ document.addEventListener('DOMContentLoaded', () => opDesenhar());
 // 'indiretas' = indiretas (R$) e, logo abaixo, o plano de ação do mês (se houver). Segue os filtros da tela.
 // A folha é montada à parte numa largura fixa (letra do tamanho da tela) e fotografada em escala 3: colada no slide, fica nítida.
 const PRINT_SLIDE = 2.05;      // área livre de um slide 16:9 abaixo do título (largura ÷ altura)
-const PRINT_TIPOS = { dre: ['DRE', 1000], garantia: ['Analise_Garantia', 1300], indiretas: ['Indiretas_Plano', 1300] };
+const PRINT_TIPOS = { dre: ['DRE', 1000], garantia: ['Analise_Garantia', 1300], 'garantia-sem-div': ['Analise_Garantia_sem_divergentes', 1300], indiretas: ['Indiretas_Plano', 1300] };
 function printAviso(texto, ms) {
     let a = document.getElementById('printAviso');
     if (!a) {
@@ -4058,9 +4058,12 @@ async function printItens(tipo) {
         return c;
     };
     if (tipo === 'dre') return [limpa(q(`#view-forecast .prev-bloco[data-sup="${sup}"] table.tabela-previsao`), 'prev-sem-forecast')];
-    if (tipo === 'garantia') {
+    if (tipo === 'garantia' || tipo === 'garantia-sem-div') {
         await garCarregar(); garGrupos = gruposFiltro(); garDesenharResumo();
-        return [limpa(q('#garResumo'))];
+        const c = limpa(q('#garResumo'));
+        // sem divergentes: tira a linha "Divergentes — não seguiram o solicitado · perda" (o resto do quadro fica igual)
+        if (c && tipo === 'garantia-sem-div') c.querySelectorAll('tr[data-fora="div"]').forEach((x) => x.remove());
+        return [c];
     }
     const ind = limpa(q(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] table.tabela-previsao`), 'prev-sem-forecast');
     const plano = limpa(q('#plano-card.tem-dados #planoTabela'));
