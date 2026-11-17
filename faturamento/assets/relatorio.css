@@ -896,4 +896,9 @@ tr.gar-fora-lin > td { color:#64748B; font-style:italic; background:#F8FAFC; }
 td.gar-ant-susp { background:#FFFBEB !important; box-shadow:inset 0 0 0 1px #F59E0B; }
 td.gar-ant-susp .gar-anterior { border-color:#F59E0B; }
 .gar-ant-filtro { border-color:#F59E0B; color:#92400E; }
+/* vazamento corrigido (manter medido): neutro, fora do resultado; sugestão pelo texto do retorno / Obs. da O.S. */
+.gar-conf-vaz { background:#E0F2FE; color:#075985; }
+.gar-conf-sug { background:#F0F9FF; color:#0369A1; border:1px dashed #7DD3FC; }
+.gar-vaz-sug { display:block; margin-top:3px; padding:1px 5px; font-size:10px; line-height:1.2; color:#0369A1; border-color:#7DD3FC; background:#F0F9FF; white-space:normal; max-width:86px; text-align:left; }
+tr.gar-fora-lin[data-fora="vaz"] > td { color:#075985; }
 

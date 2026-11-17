@@ -2564,7 +2564,7 @@ function garCalcItem(it) {
 // conformes e as de retorno sem volume (?); divergentes, ⏳ (em análise / sem fatura) e sem retorno ficam fora (garantia 0 nas
 // somas), mas aparecem na tabela e no popup com o valor que dariam, em cinza.
 const GAR_ZERA_ATE = 1;
-const GAR_FORA_ROT = { ant: 'Fat. anterior a conferir (vazio ou igual ao ajustado numa queda conforme)', div: 'Divergentes — não seguiram o solicitado · perda', esp: 'Aguardando (conta em análise ou sem fatura)', vazio: 'Sem retorno da superintendência' };
+const GAR_FORA_ROT = { vaz: '💧 Vazamento corrigido — mantido o medido (não conta)', ant: 'Fat. anterior a conferir (vazio ou igual ao ajustado numa queda conforme)', div: 'Divergentes — não seguiram o solicitado · perda', esp: 'Aguardando (conta em análise ou sem fatura)', vazio: 'Sem retorno da superintendência' };
 function garGanhoItem(it, d, atual, vmed, calc) {
     if (d === undefined) d = GAR.porLig.get(it.lig);
     if (atual === undefined) atual = d ? d.val : null;
@@ -2580,6 +2580,7 @@ function garGanhoItem(it, d, atual, vmed, calc) {
     const valor = bruto == null ? null : (Math.abs(bruto) <= GAR_ZERA_ATE + 1e-9 ? 0 : Math.round(bruto * 100) / 100);
     // queda conforme com o Fat. anterior vazio ou igual ao ajustado: a foto foi tirada depois do refaturamento (ou não existe) —
     // fica fora até alguém conferir/corrigir o Fat. anterior (digitar no campo marca "à mão" e tira o alerta)
+    if (cf.st === 'vaz') return { cf, base, bruto, valor: null, entra: false, antSusp: false, fk: 'vaz', gar: 0 };
     const antSusp = garAnteriorSuspeito(it, cf, atual);
     const entra = (cf.st === 'ok' || cf.st === 'sem') && !antSusp;
     return { cf, base, bruto, valor, entra, antSusp, fk: antSusp ? 'ant' : cf.st, gar: entra ? (valor || 0) : 0 };
@@ -2625,7 +2626,7 @@ function garValorAnalise(it, c) {
         case 'sit': return d ? (garEmAnalise(d) ? garRotSit(d) : (d.sit || '')) : '';
         case 'media': return it.media; case 'vmed': return garCalcItem(it).vmed; case 'calc': return calc; case 'anterior': return it.anterior;
         case 'atual': return atual; case 'dif': return dif;   // garantia que entra (0 quando fica fora)
-        case 'motivo': return it.motivo === 'QUEDA' ? 'Queda de consumo' : it.motivo === 'AUMENTO' ? 'Aumento de consumo' : '';
+        case 'motivo': return garRotMotivo(it.motivo);
         case 'retorno': return it.retorno || '';
         case 'obs': return (it.obs || '') + (it.os_num ? ' ' + it.os_num : '');
         case 'conf': { const c = garConferencia(it); return GAR_CONF_ORDEM[c.st] * 1e7 + (c.dif == null ? 0 : -Math.abs(c.dif)); }
@@ -2643,7 +2644,23 @@ function garPedidoVolume(it) {
     if (/M[ÉE]DIA/i.test(r) && it.media != null) return +it.media;
     return null;
 }
+// Motivo "Vazamento corrigido (manter medido)": a média subiu por um vazamento que a O.S. achou e corrigiu, então o certo é
+// manter o medido. Não entra no resultado nem conta como perda (fica numa linha neutra do resumo, só com a quantidade).
+const GAR_MOTIVOS = { QUEDA: 'Queda de consumo', AUMENTO: 'Aumento de consumo', VAZAMENTO: 'Vazamento corrigido (manter medido)' };
+const garRotMotivo = (m, vazio) => GAR_MOTIVOS[m] || (vazio == null ? '' : vazio);
+// sugestão (só sugestão: alguém confirma): o retorno ou a Obs. da O.S. falam de vazamento achado/corrigido, sem negação
+// ("não foi encontrado nenhum vazamento", "sem vazamento", "vazamento não constatado" não sugerem)
+function garSugereVazamento(it) {
+    if (it.motivo === 'VAZAMENTO') return false;
+    const t = [it.retorno, it.os_obs, it.obs_texto].filter(Boolean).join(' . ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    if (!/VAZAMENT/.test(t)) return false;
+    return t.split(/[.;\n]+/).some((f) => /VAZAMENT/.test(f)
+        && /(DETECT|IDENTIFIC|ENCONTRAD|CONSTAT|LOCALIZ|CORRIGID|SANAD|REPARAD|CONSERTAD|ELIMINAD|SOLUCIONAD|RESOLVID)/.test(f)
+        && !/\b(NAO|NENHUM\w*|SEM|INEXIST\w*|AUSENCIA|NEGATIV\w*)\b(\W+\w+){0,5}\W+VAZAMENT/.test(f)
+        && !/VAZAMENT\w*(\W+\w+){0,3}\W+(NAO|INEXIST\w*|NEGATIV\w*)\b/.test(f));
+}
 function garConferencia(it) {
+    if (it.motivo === 'VAZAMENTO') return { pedido: null, fat: null, dif: null, st: 'vaz', rot: '💧 Vazamento corrigido', dica: 'Vazamento corrigido: mantido o medido. Não entra no resultado nem conta como perda.' };
     const d = GAR.porLig.get(it.lig), pedido = garPedidoVolume(it);
     const fat = d && d.cons != null ? +d.cons : null;
     const base = { pedido, fat, dif: pedido != null && fat != null ? fat - pedido : null };
@@ -2663,7 +2680,7 @@ const garCelAnterior = (it, g) => `<td class="num gar-ant-td${g.antSusp ? ' gar-
     + `<input class="gar-in gar-anterior" data-campo="anterior_medido" inputmode="decimal" placeholder="medido m³" value="${it.anterior_medido == null ? '' : fmtBR(it.anterior_medido, it.anterior_medido % 1 ? 2 : 0)}" `
     + `aria-label="Consumo medido original (m³) da matrícula ${garEsc(it.lig)}" title="Consumo MEDIDO original (m³), antes do refaturamento: o Fat. anterior é calculado pela estrutura tarifária (abaixo do mínimo da categoria, vale o mínimo).">`
     + `<small>${garEsc(garOrigemAnterior(it))}</small>${g.antSusp ? `<small class="gar-ant-alerta" title="Queda conforme com o Fat. anterior ${it.anterior == null ? 'vazio' : 'igual ao ajustado'}: a foto pode ter sido tirada depois do refaturamento. Confira o valor original e digite (ou redigite) no campo.">⚠ conferir</small>` : ''}</td>`;
-const GAR_CONF_ORDEM = { div: 0, esp: 1, sem: 2, ok: 3, vazio: 4 };
+const GAR_CONF_ORDEM = { div: 0, esp: 1, sem: 2, ok: 3, vaz: 4, vazio: 5 };
 const garSeloConf = (cf) => `<span class="gar-conf gar-conf-${cf.st}" title="${garEsc(cf.dica)}">${garEsc(cf.rot)}${cf.det ? `<small>${garEsc(cf.det)}</small>` : ''}</span>`;
 // célula da garantia: fora do resultado em cinza, com a observação
 const garCelGarantia = (g) => (g.entra
@@ -2717,7 +2734,8 @@ function garDesenharAnalise() {
             + `<td class="num" data-f="vmed">${garR(garCalcItem(it).vmed)}</td>`
             + `<td class="num" data-f="calc">${garR(calc)}</td>${garCelAnterior(it, garCalcItem(it).ganho)}<td class="num" data-f="atual">${garR(atual)}</td>`
             + garCelGarantia(garCalcItem(it).ganho)
-            + `<td><select class="gar-in" data-campo="motivo">${opt('', '—')}${opt('QUEDA', 'Queda de consumo')}${opt('AUMENTO', 'Aumento de consumo')}</select></td>`
+            + `<td><select class="gar-in" data-campo="motivo">${opt('', '—')}${opt('QUEDA', 'Queda de consumo')}${opt('AUMENTO', 'Aumento de consumo')}${opt('VAZAMENTO', '💧 Vazamento corrigido (manter medido)')}</select>`
+            + (garSugereVazamento(it) ? `<button type="button" class="btn-just gar-vaz-sug" data-lig="${garEsc(it.lig)}" title="O retorno ou a Obs. da O.S. falam de vazamento achado/corrigido. Clique para marcar como Vazamento corrigido (manter medido): sai do resultado e não conta como perda.">💧 marcar vazamento</button>` : '') + '</td>'
             + `<td><input class="gar-in gar-texto" data-campo="retorno" value="${garEsc(it.retorno)}" placeholder="ex.: FATURAR MÉDIA 311 m³"></td>`
             + `<td data-f="conf">${garSeloConf(cf)}</td>`
             + `<td><select class="gar-in" data-campo="obs">${optOS('', '—')}${optOS(OS_ABRIR, OS_ABRIR)}${optOS(OS_NAO, OS_NAO)}${it.obs && it.obs !== OS_ABRIR && it.obs !== OS_NAO ? optOS(it.obs, it.obs) : ''}</select>`
@@ -2728,18 +2746,19 @@ function garDesenharAnalise() {
 }
 // barra acima da tabela: contagem da conferência, filtro "Somente divergentes" e download
 function garContaConferencia() {
-    const conta = { ok: 0, div: 0, esp: 0, sem: 0, vazio: 0, ant: 0 };
-    garItensDoMes().filter((x) => garVisivel(GAR.porLig.get(x.lig))).forEach((x) => { const g = garGanhoItem(x); conta[g.cf.st]++; if (g.antSusp) conta.ant++; });
+    const conta = { ok: 0, div: 0, esp: 0, sem: 0, vazio: 0, vaz: 0, ant: 0, sug: 0 };
+    garItensDoMes().filter((x) => garVisivel(GAR.porLig.get(x.lig))).forEach((x) => { const g = garGanhoItem(x); conta[g.cf.st]++; if (g.antSusp) conta.ant++; if (garSugereVazamento(x)) conta.sug++; });
     return conta;
 }
 function garDesenharConferencia(conta) {
     const el = document.getElementById('garConferencia'); if (!el) return;
-    const n = conta.ok + conta.div + conta.esp + conta.sem + conta.vazio;
+    const n = conta.ok + conta.div + conta.esp + conta.sem + conta.vazio + conta.vaz;
     if (!n) { el.hidden = true; return; }
     el.hidden = false;
     const chip = (st, rot) => `<span class="gar-conf gar-conf-${st}">${rot}: <b>${conta[st]}</b></span>`;
     el.innerHTML = '<span class="gar-conf-tit">Faturado × pedido:</span>' + chip('div', '⚠ Divergente') + chip('ok', '✓ Conforme')
-        + chip('esp', '⏳ Aguardando') + chip('sem', '? Sem volume no retorno') + (conta.vazio ? chip('vazio', 'Sem retorno') : '')
+        + chip('esp', '⏳ Aguardando') + chip('sem', '? Sem volume no retorno') + (conta.vazio ? chip('vazio', 'Sem retorno') : '') + (conta.vaz ? chip('vaz', '💧 Vazamento corrigido') : '')
+        + (conta.sug ? `<span class="gar-conf gar-conf-sug" title="O retorno ou a Obs. da O.S. falam de vazamento achado/corrigido: confirme na linha (💧 marcar)">💧 Vazamento a confirmar: <b>${conta.sug}</b></span>` : '')
         + `<span class="gar-espaco"></span><button type="button" class="btn-just gar-filtro${GAR.soDivergentes ? ' ativo' : ''}" id="garSoDivergentes" aria-pressed="${!!GAR.soDivergentes}">`
         + (GAR.soDivergentes ? `Mostrando só divergentes (${conta.div}) — ver todas` : `Somente divergentes (${conta.div})`) + '</button>'
         + (conta.ant || GAR.soAntSusp ? `<button type="button" class="btn-just gar-filtro gar-ant-filtro${GAR.soAntSusp ? ' ativo' : ''}" id="garSoAntSusp" aria-pressed="${!!GAR.soAntSusp}" `
@@ -2751,13 +2770,13 @@ function garBaixarConferencia() {
     const cols = ['Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'Rota', 'SUP', 'Situação conta', 'Motivo', 'Retorno superintendência',
         'Média volume fat. (m³)', 'Volume pedido (m³)', 'Consumo faturado no mês (m³)', 'Diferença (m³)', 'Conferência', 'Valor da média (R$)', 'Pedido (R$)', 'Fat. anterior (R$)', 'Medido informado (m³)', 'Origem do Fat. anterior', 'Fat. anterior a conferir', 'Fat. ajustado (R$)',
         'Garantia (R$)', 'Entra no resultado', 'O.S.', 'Nº O.S.'];
-    const rotSt = { ok: 'Conforme', div: 'Divergente — não seguiu o solicitado', esp: 'Aguardando (conta em análise ou sem fatura)', sem: 'Sem volume no retorno', vazio: 'Sem retorno' };
+    const rotSt = { ok: 'Conforme', div: 'Divergente — não seguiu o solicitado', esp: 'Aguardando (conta em análise ou sem fatura)', sem: 'Sem volume no retorno', vazio: 'Sem retorno', vaz: 'Vazamento corrigido — mantido o medido (não conta)' };
     const r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
     const itens = garItensDoMes().filter((it) => garVisivel(GAR.porLig.get(it.lig)))
         .sort((a, b) => GAR_CONF_ORDEM[garConferencia(a).st] - GAR_CONF_ORDEM[garConferencia(b).st]);
     const linhas = itens.map((it) => { const { d, calc, vmed, atual, ganho } = garCalcItem(it), c = ganho.cf, x = d || {};
         return [it.lig, x.nome || '', x.cat || '', x.loc || '', x.grupo || '', x.rota || '', x.sup || '', d ? (garEmAnalise(d) ? garRotSit(d) : (d.sit || '')) : 'não encontrada',
-            it.motivo === 'QUEDA' ? 'Queda de consumo' : it.motivo === 'AUMENTO' ? 'Aumento de consumo' : '', it.retorno || '', it.media, c.pedido, c.fat, r2(c.dif), rotSt[c.st],
+            garRotMotivo(it.motivo), it.retorno || '', it.media, c.pedido, c.fat, r2(c.dif), rotSt[c.st],
             r2(vmed), r2(calc), r2(it.anterior), it.anterior_medido == null ? null : it.anterior_medido, garOrigemAnterior(it), ganho.antSusp ? 'Sim' : 'Não', r2(atual), ganho.valor, ganho.entra ? 'Sim' : 'Não', it.obs || '', it.os_num || '']; });
     baixarPlanilha(cols, linhas, `Garantia_conferencia_faturamento_${GAR.ref.replace('/', '-')}.xlsx`);
 }
@@ -2765,6 +2784,11 @@ document.addEventListener('click', (e) => {
     if (e.target.id === 'garSoDivergentes') { GAR.soDivergentes = !GAR.soDivergentes; GAR.soAntSusp = false; garDesenharAnalise(); return; }
     if (e.target.id === 'garSoAntSusp') { GAR.soAntSusp = !GAR.soAntSusp; GAR.soDivergentes = false; garDesenharAnalise(); return; }
     if (e.target.id === 'garBaixarConf') garBaixarConferencia();
+});
+document.addEventListener('click', (e) => {               // confirma a sugestão de vazamento corrigido
+    const b = e.target.closest && e.target.closest('.gar-vaz-sug'); if (!b) return;
+    const it = garItens[garChave(b.dataset.lig)]; if (!it) return;
+    it.motivo = 'VAZAMENTO'; garSalvar(); garRedesenhar();
 });
 function garLerNumero(t) {
     t = String(t || '').trim().replace(/\s/g, '').replace(/m³|m3|R\$/gi, '');
@@ -2805,6 +2829,7 @@ document.addEventListener('input', (e) => {
         garDesenharConferencia(garContaConferencia());
     }
     garSalvar(); garDesenharResumo();
+    if (campo === 'motivo') garDesenharAnalise();   // selo, garantia e sugestão de vazamento da linha
     if (campo === 'obs') {                   // mostra/esconde o campo do nº da O.S. na linha
         garDesenharAnalise(); garDesenharOS();
         const n = inp.value === OS_ABRIR && document.querySelector(`#garTabelaAnalise tr[data-lig="${CSS.escape(tr.dataset.lig)}"] .gar-os-num`);
@@ -2950,7 +2975,7 @@ function garExportarEmail() {
     const cols = ['Grupo', 'Nº da Ligação', 'Superintendência', 'Motivo', 'Retorno Superintendência'];
     const nomeSup = (s) => String(s || '').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
     const linhas = itens.map((it) => { const d = GAR.porLig.get(it.lig) || {};
-        return [d.grupo || '', it.lig, nomeSup(d.sup), it.motivo === 'QUEDA' ? 'QUEDA DE CONSUMO' : it.motivo === 'AUMENTO' ? 'AUMENTO DE CONSUMO' : '', it.retorno || '']; });
+        return [d.grupo || '', it.lig, nomeSup(d.sup), garRotMotivo(it.motivo).toUpperCase(), it.retorno || '']; });
     // formatação pedida: sem linhas de grade, Calibri 14, títulos em negrito com fundo cinza-azulado (Texto 2, mais
     // escuro 25% = #333F4F) e fonte branca; demais linhas fonte preta sem preenchimento. Estilo em cada célula (o Outlook
     // ignora CSS de <th>/<style>), com bgcolor para o Outlook desktop.
@@ -3043,7 +3068,7 @@ function garDesenharOS() {
     if (aba) aba.innerHTML = 'Resumo de Ganhos' + (vencidas.length ? ` <span class="gar-badge" title="O.S. com prazo vencido">${vencidas.length}</span>` : '');
     if (!os.length && !feitas.length) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
-    const motivo = (m) => (m === 'QUEDA' ? 'Queda de consumo' : m === 'AUMENTO' ? 'Aumento de consumo' : '–');
+    const motivo = (m) => garRotMotivo(m, '–');
     const historico = feitas.length ? `<details class="gar-os-hist"${GAR.osHistAberto ? ' open' : ''}><summary>O.S. já marcadas como realizadas / EXOC (${feitas.length})</summary>`
         + '<p class="nota-secao">Marcou por engano? Clique em <b>↺ Voltar para o aviso</b>: a O.S. volta para a lista acima (se o prazo já venceu) com os mesmos dados.</p>'
         + '<div class="tabela-wrap"><table class="tabela-garantia"><thead><tr><th>Matrícula</th><th>Cliente</th><th>Categoria</th><th>Grupo</th><th>SUP</th><th>Motivo</th>'
@@ -3101,7 +3126,7 @@ document.addEventListener('change', (e) => {
 });
 // Lista para solicitar prioridade: as O.S. marcadas ficam no aviso (destacadas) até a lista ser copiada ou baixada; aí são
 // retramitadas (hoje) e voltam ao aviso depois de OS_RETRAM_DIAS dias.
-const garOSMotivo = (m) => (m === 'QUEDA' ? 'Queda de consumo' : m === 'AUMENTO' ? 'Aumento de consumo' : '');
+const garOSMotivo = (m) => garRotMotivo(m);
 const garOSAguardando = (os) => (os || garOS()).filter((o) => o.retram && !o.vencida).sort((a, b) => String(b.retram).localeCompare(String(a.retram)));
 function garOSListaAguardando() {
     const itens = garOSAguardando();
@@ -3113,7 +3138,7 @@ function garOSListaAguardando() {
 function garOSLista() {
     const itens = garOS().filter((o) => o.vencida && o.v.os_lista);
     const cols = ['Matrícula', 'Cliente', 'Categoria', 'Grupo', 'SUP', 'Motivo', 'Retorno superintendência', 'Nº O.S.', 'Análise', 'Prazo', 'Dias após o prazo', 'Obs.'];
-    const motivo = (m) => (m === 'QUEDA' ? 'Queda de consumo' : m === 'AUMENTO' ? 'Aumento de consumo' : '');
+    const motivo = (m) => garRotMotivo(m);
     const linhas = itens.map((o) => [o.lig, (o.d && o.d.nome) || '', (o.d && o.d.cat) || '', (o.d && o.d.grupo) || '', (o.d && o.d.sup) || '',
         motivo(o.v.motivo), o.v.retorno || '', o.v.os_num || '', garDataBR(o.data), o.prazo.toLocaleDateString('pt-BR'), o.dias, o.v.os_obs || '']);
     return { itens, cols, linhas };
@@ -3182,12 +3207,12 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.
 function garItensResumo() {
     const lib = GAR.soLiberados ? gruposLiberados() : null;
     return garItensDoMes().filter((it) => {
-        if (it.motivo !== 'QUEDA' && it.motivo !== 'AUMENTO') return false;
+        if (!GAR_MOTIVOS[it.motivo]) return false;
         const d = GAR.porLig.get(it.lig);
         return garVisivel(d) && !(lib && !(d && lib.has(normGrupo(d.grupo))));   // só grupos com situação Liberado
     });
 }
-const garForaVazio = () => ({ ant: { n: 0, v: 0 }, div: { n: 0, v: 0 }, esp: { n: 0, v: 0 }, vazio: { n: 0, v: 0 } });
+const garForaVazio = () => ({ vaz: { n: 0, v: 0 }, ant: { n: 0, v: 0 }, div: { n: 0, v: 0 }, esp: { n: 0, v: 0 }, vazio: { n: 0, v: 0 } });
 function garTotais() {
     const t = { AUMENTO: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 }, QUEDA: { n: 0, lib: 0, orig: 0, ajust: 0, gar: 0 } }, porGrupo = {}, fora = garForaVazio();
     garItensResumo().forEach((it) => {
@@ -3204,12 +3229,12 @@ function garTotais() {
 // linhas "fora do resultado" (resumo e popup): N matrículas e o valor que dariam
 function garLinhasFora(fora) {                      // tabela do resumo: Resumo | Ligações | Liberadas | Fat. anterior | Fat. ajustado | Garantia
     return Object.keys(GAR_FORA_ROT).filter((k) => fora[k].n).map((k) => `<tr class="gar-fora-lin" data-fora="${k}"><td>${GAR_FORA_ROT[k]} (fora do resultado)</td>`
-        + `<td class="num">${fora[k].n}</td><td></td><td></td><td></td><td class="num gar-fora" title="O que daria se entrasse">${garR(fora[k].v)}</td></tr>`).join('');
+        + `<td class="num">${fora[k].n}</td><td></td><td></td><td></td><td class="num gar-fora"${k === 'vaz' ? '>' : ` title="O que daria se entrasse">${garR(fora[k].v)}`}</td></tr>`).join('');
 }
 function garDesenharResumo() {
     const el = document.getElementById('garResumo'); if (!el || !GAR.dados) return;
     const { t, porGrupo, fora } = garTotais();
-    const nFora = fora.ant.n + fora.div.n + fora.esp.n + fora.vazio.n;
+    const nFora = fora.vaz.n + fora.ant.n + fora.div.n + fora.esp.n + fora.vazio.n;
     const tot = ['n', 'lib', 'orig', 'ajust', 'gar'].reduce((o, k) => (o[k] = t.AUMENTO[k] + t.QUEDA[k], o), {});
     const lin = (nome, x, cls) => `<tr class="${cls || ''}"><td>${nome}</td><td class="num">${x.n}</td><td class="num">${x.lib}</td><td class="num">${garR(x.orig)}</td>`
         + `<td class="num">${garR(x.ajust)}</td><td class="num ${x.gar < 0 ? 'gar-neg' : 'gar-ganho'}"><b>${garR(x.gar)}</b></td></tr>`;
@@ -3247,14 +3272,14 @@ function garAbrirGrupo(g) {
         if (gn.entra) { tot[it.motivo] += gn.gar; tot.n++; } else { fora[gn.fk].n++; fora[gn.fk].v += gn.valor || 0; }
         const sit = x.d ? (garEmAnalise(x.d) ? garRotSit(x.d) : (x.d.sit || '')) : 'não encontrada';
         return `<tr${gn.entra ? '' : ' class="gar-fora-item"'}><td><b>${garEsc(it.lig)}</b></td><td class="gar-cli">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td><td>${garEsc(sit)}</td>`
-            + `<td>${it.motivo === 'QUEDA' ? 'Queda' : 'Aumento'}</td><td>${garEsc(it.retorno || '')}</td>`
+            + `<td>${it.motivo === 'QUEDA' ? 'Queda' : it.motivo === 'AUMENTO' ? 'Aumento' : '💧 Vazamento'}</td><td>${garEsc(it.retorno || '')}</td>`
             + `<td>${garSeloConf(gn.cf)}</td><td class="num">${it.media == null ? '–' : fmtBR(it.media, 0)}</td><td class="num">${garR(x.vmed)}</td><td class="num">${garR(x.calc)}</td><td class="num">${garR(it.anterior)}<small class="gar-ant-orig">${garEsc(garOrigemAnterior(it))}</small>${gn.antSusp ? '<small class="gar-ant-alerta">⚠ conferir</small>' : ''}</td><td class="num">${garR(x.atual)}</td>`
             + garCelGarantia(gn) + `<td>${garEsc(it.obs || '')}${it.os_num ? ' ' + garEsc(it.os_num) : ''}</td></tr>`;
     }).join('');
     const totLin = `<tr class="linha-media"><td colspan="12"><b>Total no resultado</b> (${tot.n} ${tot.n === 1 ? 'matrícula' : 'matrículas'})</td>`
         + `<td class="num"><b>${garR(tot.QUEDA + tot.AUMENTO)}</b></td><td></td></tr>`
         + Object.keys(GAR_FORA_ROT).filter((k) => fora[k].n).map((k) => `<tr class="gar-fora-lin"><td colspan="12">${GAR_FORA_ROT[k]} (fora do resultado): `
-            + `${fora[k].n === 1 ? '1 matrícula' : fora[k].n + ' matrículas'}</td><td class="num gar-fora">${garR(fora[k].v)}</td><td></td></tr>`).join('');
+            + `${fora[k].n === 1 ? '1 matrícula' : fora[k].n + ' matrículas'}</td><td class="num gar-fora">${k === 'vaz' ? '' : garR(fora[k].v)}</td><td></td></tr>`).join('');
     dlg.innerHTML = `<div class="gar-dlg-corpo"><div class="gar-topo"><h2>Grupo ${garEsc(g)} — análise de garantia · ${itens.length} ${itens.length === 1 ? 'matrícula' : 'matrículas'}</h2><span class="gar-espaco"></span>`
         + '<button type="button" class="btn-just gar-dlg-fechar" aria-label="Fechar">✕ Fechar</button></div>'
         + `<p class="nota-secao">Garantia queda <b>${garR(tot.QUEDA)}</b> · garantia aumento <b>${garR(tot.AUMENTO)}</b> · total <b>${garR(tot.QUEDA + tot.AUMENTO)}</b>`
@@ -4063,6 +4088,7 @@ async function printItens(tipo) {
         const c = limpa(q('#garResumo'));
         // sem divergentes: tira a linha "Divergentes — não seguiram o solicitado · perda" (o resto do quadro fica igual)
         if (c && tipo === 'garantia-sem-div') c.querySelectorAll('tr[data-fora="div"]').forEach((x) => x.remove());
+        if (c) c.querySelectorAll('tr[data-fora="vaz"]').forEach((x) => x.remove());      // vazamento corrigido: só na tela
         return [c];
     }
     const ind = limpa(q(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] table.tabela-previsao`), 'prev-sem-forecast');
