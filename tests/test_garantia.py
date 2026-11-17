@@ -370,3 +370,13 @@ def test_vazamento_corrigido_fora_do_resultado_e_do_print(sessao):
                    """c.querySelectorAll('tr[data-fora="vaz"]').forEach((x) => x.remove());""", "💧 marcar vazamento",
                    "opt('VAZAMENTO', '💧 Vazamento corrigido (manter medido)')"):
         assert trecho in html, trecho
+
+
+def test_aumento_em_vistoria_fora_do_resultado_e_do_print(sessao):
+    """Motivo "Aumento em vistoria (faturar média)": mesmo tratamento do vazamento (fora do resultado e das perdas, linha neutra
+    fora do print), sugerido em aumento quando o texto fala em vistoria ou em faturar a média, para confirmar."""
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    for trecho in ("VISTORIA: 'Aumento em vistoria (faturar média)'", "function garSugereVistoria(it)",
+                   "if (cf.st === 'vaz' || cf.st === 'vist') return", """tr[data-fora="vaz"], tr[data-fora="vist"]""",
+                   "🔎 marcar vistoria", "opt('VISTORIA', '🔎 Aumento em vistoria (faturar média)')"):
+        assert trecho in html, trecho

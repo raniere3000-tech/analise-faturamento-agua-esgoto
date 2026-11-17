@@ -982,6 +982,7 @@ def _aba_garantia(ctx):
                       "Fat. anterior: foto tirada uma vez (ao entrar na análise ou na primeira fatura do mês), salva na pasta; corrigível pelo consumo medido original (m³) → valor pela estrutura tarifária, com o mínimo da categoria; planilha sem anterior não tira foto",
                       "Queda conforme com Fat. anterior vazio ou igual ao ajustado: fora do resultado até ser conferida (⚠ conferir)",
                       "Motivo 'Vazamento corrigido (manter medido)': fora do resultado e fora das perdas; linha neutra só com a quantidade, sem ir para o print; sugerido (para confirmar) quando o retorno ou a Obs. da O.S. falam de vazamento achado/corrigido sem negação",
+                      "Motivo 'Aumento em vistoria (faturar média)': mesmo tratamento (fora do resultado e das perdas, linha neutra fora do print); sugerido em aumento quando o texto fala em vistoria ou em faturar a média",
                       "Liberadas = Situação Conta diferente de EM ANALISE",
                       "Motivo em branco: fora da soma (continua no controle de O.S.)",
                       "Consolidado geral: as importadas do Excel (selo Histórico) e as feitas no painel entram juntas",
