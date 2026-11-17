@@ -359,3 +359,14 @@ def test_print_da_garantia_com_ou_sem_divergentes(sessao):
     assert """c.querySelectorAll('tr[data-fora="div"]').forEach((x) => x.remove());""" in html and 'data-fora="${k}"' in html
     site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
     assert 'data-print="garantia">' in site and 'data-print="garantia-sem-div">' in site
+
+
+def test_vazamento_corrigido_fora_do_resultado_e_do_print(sessao):
+    """Motivo "Vazamento corrigido (manter medido)": não entra no resultado nem nas perdas; linha neutra só com a quantidade,
+    fora dos dois prints; sugerido pelo texto (vazamento achado/corrigido, sem negação), para confirmar."""
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    for trecho in ("VAZAMENTO: 'Vazamento corrigido (manter medido)'", "function garSugereVazamento(it)",
+                   "if (cf.st === 'vaz') return { cf, base, bruto, valor: null, entra: false, antSusp: false, fk: 'vaz', gar: 0 };",
+                   """c.querySelectorAll('tr[data-fora="vaz"]').forEach((x) => x.remove());""", "💧 marcar vazamento",
+                   "opt('VAZAMENTO', '💧 Vazamento corrigido (manter medido)')"):
+        assert trecho in html, trecho
