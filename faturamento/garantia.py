@@ -251,7 +251,9 @@ def gera_aba_garantia_html(ctx):
     aumento = Fat. ajustado − Fat. anterior), ⏳ conta em análise ou sem fatura no mês, e sem retorno. <b>💧 Vazamento corrigido (manter medido)</b> (opção do Motivo): a
     média subiu por um vazamento que a O.S. achou e corrigiu, então o medido é mantido — não entra no resultado nem conta como perda
     (linha própria no resumo, só com a quantidade; não vai para o print). Quando o retorno ou a Obs. da O.S. falam de vazamento
-    achado/corrigido (sem negação), a linha sugere "💧 marcar vazamento" para confirmar. Também fica fora, até ser conferida, a <b>queda conforme com o Fat. anterior vazio ou igual
+    achado/corrigido (sem negação), a linha sugere "💧 marcar vazamento" para confirmar. Da mesma forma, <b>🔎 Aumento em vistoria (faturar média)</b>: aumento de consumo com
+    vistoria aberta e pedido de faturar a média (mais baixa que o medido) — fora do resultado e das perdas, linha própria só com a
+    quantidade, sugerida ("🔎 marcar vistoria") quando o retorno ou a Obs. da O.S. falam em vistoria ou em faturar a média. Também fica fora, até ser conferida, a <b>queda conforme com o Fat. anterior vazio ou igual
     ao ajustado</b> (⚠ conferir): a foto pode ter sido tirada depois do refaturamento — informe o consumo medido original. Em análise = Situação Conta EM ANALISE <b>ou</b> Situação Lançamento com “RETIDA” no nome em grupo ainda não liberado (Situação do grupo na aba Diretas, que pode ser ajustada à mão); liberadas = as demais.</p>
     <div id="garResumo"></div>
   </div>
