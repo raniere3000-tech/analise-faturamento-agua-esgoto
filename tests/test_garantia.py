@@ -366,8 +366,8 @@ def test_vazamento_corrigido_fora_do_resultado_e_do_print(sessao):
     fora dos dois prints; sugerido pelo texto (vazamento achado/corrigido, sem negação), para confirmar."""
     html = open(sessao.caminho_html, encoding="utf-8").read()
     for trecho in ("VAZAMENTO: 'Vazamento corrigido (manter medido)'", "function garSugereVazamento(it)",
-                   "if (cf.st === 'vaz') return { cf, base, bruto, valor: null, entra: false, antSusp: false, fk: 'vaz', gar: 0 };",
-                   """c.querySelectorAll('tr[data-fora="vaz"]').forEach((x) => x.remove());""", "💧 marcar vazamento",
+                   "if (cf.st === 'vaz' || cf.st === 'vist') return { cf, base, bruto, valor: null, entra: false, antSusp: false, fk: cf.st, gar: 0 };",
+                   """c.querySelectorAll('tr[data-fora="vaz"], tr[data-fora="vist"]').forEach((x) => x.remove());""", "💧 marcar vazamento",
                    "opt('VAZAMENTO', '💧 Vazamento corrigido (manter medido)')"):
         assert trecho in html, trecho
 
