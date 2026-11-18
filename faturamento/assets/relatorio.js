@@ -3372,6 +3372,18 @@ function planoClasseStatus(v) {
     if (/CANCEL|SUSPEN/.test(n)) return 'pl-cancel';
     return 'pl-outro';
 }
+// Planos colados antes da v178 guardaram as quebras do código do Excel como se fossem Enter ("Realizar o pós / cortes em…").
+// Na exibição, junta a linha com a seguinte quando a anterior não termina frase (. : ; ! ?) e a seguinte não começa item de
+// lista (-, •, *, 1. 2) …); colar o plano de novo grava sem essas quebras.
+function planoJuntaQuebras(v) {
+    const ls = String(v).split('\n'), out = [];
+    ls.forEach((l) => {
+        const ant = out[out.length - 1];
+        if (ant != null && !/[.:;!?]$/.test(ant) && !/^([-•*–]|\d+[.)-]\s)/.test(l)) out[out.length - 1] = ant + ' ' + l;
+        else out.push(l);
+    });
+    return out.join('\n');
+}
 function planoDesenhar() {
     const tab = document.getElementById('planoTabela'); if (!tab) return;
     const card = document.getElementById('plano-card'), info = document.getElementById('planoInfo'), inf = planoInfo();
@@ -3415,7 +3427,7 @@ function planoDesenhar() {
             const v = l[i] == null ? '' : String(l[i]);
             if (i === iStatus && v) return `<td${at}><span class="pl-status ${st}">${garEsc(v)}</span></td>`;
             if (i === iPrazo && vencido) return `<td${at.replace(' class="pl-mescla"', '')} class="pl-vencido${at.includes('pl-mescla') ? ' pl-mescla' : ''}" title="Prazo vencido">${garEsc(v)}</td>`;
-            return `<td${at}>${garEsc(v).replace(/\n/g, '<br>')}</td>`;
+            return `<td${at}>${garEsc(plano.quebras === 2 ? v : planoJuntaQuebras(v)).replace(/\n/g, '<br>')}</td>`;
         }).join('') + '</tr>';
     }).join('') || `<tr><td colspan="${cols.length}" class="gar-vazio">Nenhuma ação para os filtros escolhidos.</td></tr>`;
     const quando = plano.atualizado ? new Date(plano.atualizado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -3437,9 +3449,12 @@ function planoDesenhar() {
 function planoLerHtml(html) {
     const doc = new DOMParser().parseFromString(html, 'text/html'), t = doc.querySelector('table');
     if (!t) return null;
+    // O HTML que o Excel põe na área de transferência vem com o código quebrado em linhas de largura fixa, inclusive no meio
+    // do texto da célula: essas quebras são só do código (viram espaço). Quebra de verdade (Alt+Enter na célula) vem como <br>.
     const grade = [], mesclas = [], texto = (td) => {
-        const c = td.cloneNode(true); c.querySelectorAll('br').forEach((b) => b.replaceWith('\n'));
-        return c.textContent.replace(/\u00a0/g, ' ').split('\n').map((x) => x.replace(/[ \t\r]+/g, ' ').trim()).filter(Boolean).join('\n');
+        const c = td.cloneNode(true); c.querySelectorAll('br').forEach((b) => b.replaceWith('\u2029'));
+        return c.textContent.replace(/\u00a0/g, ' ').replace(/[\r\n]+/g, ' ').split('\u2029')
+            .map((x) => x.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join('\n');
     };
     const visivel = (el) => !/display\s*:\s*none/i.test(el.getAttribute('style') || '');
     Array.from(t.rows).filter(visivel).forEach((tr, r) => {
@@ -3491,7 +3506,7 @@ function planoImportar(texto, html) {
     const ja = planoMapa[inf.ref] && (planoMapa[inf.ref].linhas || []).length;
     if (!confirm(`${ja ? 'Substituir' : 'Salvar'} o plano de ação de ${inf.mes} por ${corpo.length} linha(s) e ${colunas.length} coluna(s)?`
         + (mesclas.length ? `\n${mesclas.length} célula(s) mesclada(s) reconhecida(s).` : '') + `\n\nColunas: ${colunas.join(' · ')}`)) return;
-    planoMapa[inf.ref] = { colunas, linhas: corpo, atualizado: new Date().toISOString() };
+    planoMapa[inf.ref] = { colunas, linhas: corpo, atualizado: new Date().toISOString(), quebras: 2 };   // 2 = colado já sem as quebras do código do Excel
     if (mesclas.length) planoMapa[inf.ref].mesclas = mesclas;
     planoSalvar(); planoDesenhar();
     const msg = document.getElementById('planoMsg'); if (msg) msg.textContent = `${corpo.length} linha(s) coladas.`;
