@@ -380,3 +380,12 @@ def test_aumento_em_vistoria_fora_do_resultado_e_do_print(sessao):
                    "if (cf.st === 'vaz' || cf.st === 'vist') return", """tr[data-fora="vaz"], tr[data-fora="vist"]""",
                    "🔎 marcar vistoria", "opt('VISTORIA', '🔎 Aumento em vistoria (faturar média)')"):
         assert trecho in html, trecho
+
+
+def test_plano_de_acao_sem_as_quebras_do_codigo_do_excel(sessao):
+    """Plano colado do Excel: as quebras do código HTML viram espaço (só <br> é quebra de verdade); planos já salvos com
+    essas quebras são juntados na exibição (quebras: 2 marca os colados depois da correção)."""
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    for trecho in ("c.querySelectorAll('br').forEach((b) => b.replaceWith('\\u2029'));", ".replace(/[\\r\\n]+/g, ' ').split('\\u2029')",
+                   "function planoJuntaQuebras(v)", "plano.quebras === 2 ? v : planoJuntaQuebras(v)", "quebras: 2 };"):
+        assert trecho in html, trecho
