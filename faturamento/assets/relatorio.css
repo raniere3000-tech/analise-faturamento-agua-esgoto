@@ -904,4 +904,9 @@ tr.gar-fora-lin[data-fora="vaz"] > td { color:#075985; }
 .gar-conf-vist { background:#F3E8FF; color:#6B21A8; }
 .gar-vist-sug { color:#6B21A8; border-color:#D8B4FE; background:#FAF5FF; }
 tr.gar-fora-lin[data-fora="vist"] > td { color:#6B21A8; }
+/* PDF executivo: média dos dias de leitura no pé do quadro do gráfico do Resumo */
+.exec-dias-leitura { display:flex; align-items:baseline; gap:6px 18px; flex-wrap:wrap; border-top:1px solid var(--linha); margin-top:10px; padding-top:8px; }
+.exec-dias-leitura .exec-dias-tit { color:var(--marinho); font-size:14px; }
+.exec-dias-leitura .exec-dias-val { margin:0; font-size:13px; color:var(--azul); }
+.exec-dias-leitura .exec-dias-val b { color:var(--preto); }
 

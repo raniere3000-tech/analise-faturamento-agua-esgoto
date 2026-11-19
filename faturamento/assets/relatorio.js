@@ -1601,6 +1601,16 @@ function gerarExecutivo(libs, modo) {
         c.querySelectorAll('.btn-remover-item, .btn-prev-linha').forEach(x => x.remove());
         c.querySelectorAll('.prev-meta-edit').forEach(x => x.classList.remove('prev-meta-edit', 'com-meta'));
         if (el.id === 'plano-card') c.classList.add('exec-plano');      // no A4 é fotografado à parte, numa largura própria
+        // gráfico do Resumo: no pé do quadro, a média dos dias de leitura (mês atual × anterior e Δ), como na faixa da tela
+        if (el.querySelector && el.querySelector('#graficoFaturamento')) {
+            const dias = document.querySelector('#view-resumo .card-faixa .obs-dias');
+            if (dias) {
+                const f = document.createElement('div'); f.className = 'exec-dias-leitura';
+                f.innerHTML = '<b class="exec-dias-tit">Dias de leitura (média)</b>';
+                const v = dias.cloneNode(true); v.className = 'exec-dias-val'; f.appendChild(v);
+                c.appendChild(f);
+            }
+        }
         c.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
         c.removeAttribute('id');
         if (celular) c.querySelectorAll('table').forEach(enxugaTabelaCelular);

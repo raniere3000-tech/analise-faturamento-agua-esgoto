@@ -537,9 +537,9 @@ def _kpis_df(resumo):
     s = {c: resumo[c].sum() for c in resumo.columns if c != "Grupo"}
     div = lambda a, b: a / b if b else 0.0
     itens = [
-        ("Faturamento Total", s["Fat_Atual"], s["Fat_Anterior"], "Água + Esgoto"),
-        ("Faturamento Água", s["FatAgua_Atual"], s["FatAgua_Anterior"], "soma de Valor (R$) da rubrica de água"),
-        ("Faturamento Esgoto", s["FatEsgoto_Atual"], s["FatEsgoto_Anterior"], "soma de Valor (R$) da rubrica de esgoto"),
+        ("Faturamento Diretas Total", s["Fat_Atual"], s["Fat_Anterior"], "Água + Esgoto"),
+        ("Faturamento Diretas Água", s["FatAgua_Atual"], s["FatAgua_Anterior"], "soma de Valor (R$) da rubrica de água"),
+        ("Faturamento Diretas Esgoto", s["FatEsgoto_Atual"], s["FatEsgoto_Anterior"], "soma de Valor (R$) da rubrica de esgoto"),
         ("Economias Faturadas", s["Eco_Atual"], s["Eco_Anterior"], "soma, por grupo, do maior valor entre economias de água e de esgoto"),
         ("Volume Faturado (m³)", s["VolFat_Atual"], s["VolFat_Anterior"], "soma do Consumo Faturado de água (Consumo > 0)"),
         ("Tarifa Média (R$/m³)", div(s["Fat_Atual"], s["VolFat_Atual"]), div(s["Fat_Anterior"], s["VolFat_Anterior"]), "(Água + Esgoto) ÷ volume"),

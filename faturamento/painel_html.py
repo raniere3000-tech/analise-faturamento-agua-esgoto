@@ -45,9 +45,9 @@ def gera_cards_kpis_html(df_resumo):
         """.replace(".1f}", ".1f}".replace(",", "."))
 
     cards = ""
-    cards += card("", "Faturamento Total", "fattotal", t_fatagua_at + t_fatesgoto_at, t_fatagua_ant + t_fatesgoto_ant, moeda=True)
-    cards += card("", "Faturamento Água", "fatagua", t_fatagua_at, t_fatagua_ant, moeda=True)
-    cards += card("", "Faturamento Esgoto", "fatesgoto", t_fatesgoto_at, t_fatesgoto_ant, moeda=True)
+    cards += card("", "Faturamento Diretas Total", "fattotal", t_fatagua_at + t_fatesgoto_at, t_fatagua_ant + t_fatesgoto_ant, moeda=True)
+    cards += card("", "Faturamento Diretas Água", "fatagua", t_fatagua_at, t_fatagua_ant, moeda=True)
+    cards += card("", "Faturamento Diretas Esgoto", "fatesgoto", t_fatesgoto_at, t_fatesgoto_ant, moeda=True)
     cards += card("", "Economias Faturadas", "eco", t_eco_at, t_eco_ant)
     cards += card("", "Volume Faturado", "volfat", t_vol_at, t_vol_ant, sufixo=" m³")
     cards += card("", "Tarifa Média", "tarifa", tarifa_at, tarifa_ant, moeda=True)
