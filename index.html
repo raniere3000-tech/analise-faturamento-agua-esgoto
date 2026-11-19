@@ -364,6 +364,11 @@ body.view-base #quadroRelatorio { display: none; }
 .nuvem:hover, .nuvem:focus-visible { background: rgba(255,255,255,.18); outline: none; }
 .nuvem svg { width: 26px; height: 18px; display: block; }
 .nuvem .marca-ok { color: #86efac; } .nuvem .marca-erro { color: #fca5a5; }
+.nuvem-msg { margin-left: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; color: #86efac; opacity: 0;
+  max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: opacity .3s ease; pointer-events: none; }
+.nuvem-msg.mostra { opacity: 1; }
+.nuvem-msg.some { opacity: 0; transition: opacity 1.2s ease; }
+@media (max-width: 760px) { .nuvem-msg { max-width: 150px; } }
 .nuvem.girando svg { animation: nuvemPulsa 1s ease-in-out infinite; }
 @keyframes nuvemPulsa { 50% { opacity: .45; } }
 #avisoSite { display: none; position: fixed; right: 16px; bottom: 16px; z-index: 9999; background: #1A2740; color: #fff; padding: 9px 14px;
@@ -471,7 +476,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v179</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v180</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button><span class="nuvem-msg" id="nuvemMsg" role="status" aria-live="polite"></span></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -679,7 +684,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v179-20261119"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v180-20261119"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -815,6 +820,17 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     nuvem.classList.toggle("nuvem-erro", !ok);
     nuvem.title = texto + " — clique para sincronizar e salvar";
     nuvem.setAttribute("aria-label", nuvem.title);
+  };
+  // "Salvo" de cada alteração: texto curto ao lado da nuvem do cabeçalho (some sozinho), em vez do aviso grande no canto da
+  // tela, que ficava por cima da tabela enquanto a pessoa digitava. Erros continuam no aviso grande.
+  let nuvemMsgT = null;
+  window.salvoNuvem = (texto) => {
+    const m = $("nuvemMsg"); if (!m) return false;
+    const h = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    m.textContent = "✓ " + texto + " · " + h; m.title = texto + " às " + h;
+    m.classList.remove("some"); m.classList.add("mostra");
+    clearTimeout(nuvemMsgT); nuvemMsgT = setTimeout(() => { m.classList.add("some"); }, 3500);
+    return true;
   };
   function nuvemInicial() {
     if (!pastaHandle) window.estadoNuvem(false, "Sem pasta conectada: as alterações ficam só neste navegador");
