@@ -176,7 +176,7 @@ def test_kpi_faturamento_total_antes_de_agua_e_esgoto(sessao_pipeline=None):
     df = pd.DataFrame([{"FatAgua_Atual": 100.0, "FatAgua_Anterior": 80.0, "FatEsgoto_Atual": 50.0, "FatEsgoto_Anterior": 40.0,
                         "Eco_Atual": 10, "Eco_Anterior": 10, "VolFat_Atual": 5, "VolFat_Anterior": 5, "Acima_Atual": 1, "Acima_Ant": 1}])
     h = gera_cards_kpis_html(df)
-    assert h.index("Faturamento Total") < h.index("Faturamento Água") < h.index("Faturamento Esgoto")
+    assert h.index("Faturamento Diretas Total") < h.index("Faturamento Diretas Água") < h.index("Faturamento Diretas Esgoto")
     assert "R$ 150,00" in h
 
 
@@ -412,3 +412,11 @@ def test_painel_usa_a_largura_toda(analise):
     html = open(analise.caminho_html, encoding="utf-8").read()
     assert "max-width:1800px; border:1px solid var(--linha)" not in html and ".card { background:#FFFFFF; margin:16px 16px; padding:20px 22px; max-width:none;" in html
     assert "#view-executivo .card { max-width:1800px;" in html
+
+
+def test_executivo_com_dias_de_leitura_e_kpis_diretas(analise):
+    """PDF executivo: a média dos dias de leitura no pé do quadro do gráfico do Resumo; KPIs "Faturamento Diretas …"."""
+    html = open(analise.caminho_html, encoding="utf-8").read()
+    assert "if (el.querySelector && el.querySelector('#graficoFaturamento')) {" in html and "f.className = 'exec-dias-leitura';" in html
+    assert ".exec-dias-leitura {" in html
+    assert "Faturamento Diretas Total" in html and "Faturamento Diretas Água" in html and "Faturamento Diretas Esgoto" in html
