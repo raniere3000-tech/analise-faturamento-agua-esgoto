@@ -2103,7 +2103,10 @@ const pendentesNuvem = new Set();
 function marcaNuvem(nome, r) {
     const comp = compartilhado();
     if (r.ok) pendentesNuvem.delete(nome); else pendentesNuvem.add(nome);
-    avisoNuvem(r.ok ? `${nome}: alteração salva na pasta "${comp ? comp.pasta() : ''}" — vale para todos` : `${nome}: salvo só neste navegador (${r.motivo})`, !r.ok);
+    // salvo: texto curto ao lado da nuvem do cabeçalho do site (não cobre a tabela); erro: aviso grande, que precisa ser visto
+    let noCabecalho = false;
+    if (r.ok) { try { const p = window.parent; noCabecalho = !!(p && p !== window && p.salvoNuvem && p.salvoNuvem(`Salvo: ${nome}`)); } catch (e) { noCabecalho = false; } }
+    if (!noCabecalho) avisoNuvem(r.ok ? `${nome}: alteração salva na pasta "${comp ? comp.pasta() : ''}" — vale para todos` : `${nome}: salvo só neste navegador (${r.motivo})`, !r.ok);
     try {
         const p = window.parent;
         if (p && p !== window && p.estadoNuvem) p.estadoNuvem(!pendentesNuvem.size,

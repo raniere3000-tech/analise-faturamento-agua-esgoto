@@ -420,3 +420,14 @@ def test_executivo_com_dias_de_leitura_e_kpis_diretas(analise):
     assert "if (el.querySelector && el.querySelector('#graficoFaturamento')) {" in html and "f.className = 'exec-dias-leitura';" in html
     assert ".exec-dias-leitura {" in html
     assert "Faturamento Diretas Total" in html and "Faturamento Diretas Água" in html and "Faturamento Diretas Esgoto" in html
+
+
+def test_aviso_de_salvo_no_cabecalho(analise):
+    """Alteração salva na pasta: texto curto ao lado da nuvem do cabeçalho do site (não cobre a tabela); erro: aviso grande,
+    que deixa os cliques passarem."""
+    import os
+    site = open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8").read()
+    assert 'id="nuvemMsg"' in site and "window.salvoNuvem = (texto) =>" in site
+    html = open(analise.caminho_html, encoding="utf-8").read()
+    assert "p.salvoNuvem(`Salvo: ${nome}`)" in html and "if (!noCabecalho) avisoNuvem(" in html
+    assert "#avisoNuvem { display:none; pointer-events:none;" in html
