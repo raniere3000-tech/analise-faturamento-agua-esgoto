@@ -687,3 +687,42 @@ def test_eventos_indiretas_contam_ligacoes_distintas_por_linha_do_quadro():
     mes = dre._indiretas_mes(SimpleNamespace(avulso=av), dre.TODAS, "09/2026")
     assert mes["SANÇÃO"] == (3, 101.0)        # 2 ligações + 1 lançamento sem número; o valor soma todas as rubricas
     assert mes["CORTE"] == (1, 5.0)           # a mesma ligação em outra linha do quadro conta lá também
+
+
+def test_andamento_do_mes_nas_indiretas_com_orcado_sup_padrao(sessao):
+    import html as H
+    import json
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    ind = html[html.index('id="view-indiretas"'):html.index('id="view-tabelas"')]
+    bloco = ind[ind.index('data-sup="TODAS" data-mes="09/2026"'):]
+    bloco = bloco[:bloco.index('class="sup-bloco"')]
+    assert bloco.index('class="card ritmo-card"') < bloco.index("Indiretas — financeiro (R$)")
+    d = json.loads(H.unescape(bloco.split('data-ritmo="', 1)[1].split('"', 1)[0]))
+    assert d["padrao"] == "RF SUP" and "RF01T26" in d["fontes"]
+    assert len(d["dias"]) == sum(1 for _ in d["dias"]) and 0 <= d["auto"] <= len(d["dias"])
+    assert [l["k"] for l in d["fin"]] == ["iA", "ri_CORTE", "ri_RELIGAÇÃO", "ri_LNA", "ri_SANÇÃO", "ri_OUTROS", "iE", "tot"]
+    assert [l["k"] for l in d["ev"]][-1] == "ev_tot"
+    real = dre._indiretas_mes(sessao.ctx, dre.TODAS, "09/2026")
+    corte = next(l for l in d["fin"] if l["k"] == "ri_CORTE")
+    assert corte["real"] == pytest.approx(real["CORTE"][1])
+    assert next(l for l in d["ev"] if l["k"] == "ev_ri_CORTE")["real"] == real["CORTE"][0]
+    assert corte["orc"]["RF01T26"] == pytest.approx(dre.orcado(sessao.ctx, "RF01T26", dre.TODAS, "09/2026")["ri_CORTE"])
+    assert "prev-card" not in bloco[bloco.index("ritmo-card") - 20:bloco.index("ritmo-card")]   # não vai para o PDF executivo
+
+
+def test_andamento_dias_uteis_de_novembro_e_dia_automatico():
+    import datetime as dt
+    from faturamento.previsao import lista_dias_uteis
+    dias = lista_dias_uteis("11/2026")
+    assert len(dias) == 19 and sum(c for _, c in dias) == 15          # feriados 2/11 e 20/11; sem sextas e vésperas
+    assert sum(1 for d, _ in dias if d <= dt.date(2026, 11, 22)) == 13
+
+
+def test_andamento_filtros_e_prints_separados():
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(raiz, "faturamento", "assets", "relatorio.js"), encoding="utf-8").read()
+    idx = open(os.path.join(raiz, "index.html"), encoding="utf-8").read()
+    for campo in ('data-campo="fonte"', 'data-campo="dia"', 'data-campo="cortes"', "só os dias de corte", "Automático ("):
+        assert campo in js, campo
+    assert "'ind-ritmo': ['Indiretas_Andamento_valores'" in js and "'ind-ritmo-ev': ['Indiretas_Andamento_eventos'" in js
+    assert 'data-print="ind-ritmo"' in idx and 'data-print="ind-ritmo-ev"' in idx

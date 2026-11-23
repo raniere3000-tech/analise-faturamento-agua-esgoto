@@ -566,7 +566,7 @@ def seta_avulso(sup, ref):
 
 
 def gera_aba_indiretas_html(ctx):
-    from .previsao import data_corte, eventos_orcados, indiretas_previsao_html, painel_dias_uteis_html
+    from .previsao import data_corte, eventos_orcados, indiretas_previsao_html, painel_dias_uteis_html, ritmo_indiretas_html
     prepara(ctx)
     if not len(ctx.avulso):
         return '<div class="card"><h2>Indiretas</h2><p>Nenhum arquivo de serviço avulso encontrado na pasta (o nome precisa conter "avulso").</p></div>'
@@ -575,7 +575,7 @@ def gera_aba_indiretas_html(ctx):
     for ref in lista_meses(ctx):
         for sup in lista_sups(ctx):
             nome = html.escape(_nome_sup(sup))
-            fin, eventos, ev, no_mes = indiretas_previsao_html(ctx, sup, ref)
+            fin, eventos, ev, no_mes, real = indiretas_previsao_html(ctx, sup, ref, com_real=True)
             acoes = ('<span class="prev-acoes"><button type="button" class="btn-just btn-prev-restaurar" '
                      'onclick="previsaoRestaurar(this)">↺ Restaurar automático</button>'
                      '<button type="button" class="btn-just btn-prev-toggle" onclick="previsaoAlternar(this)">Ocultar forecast</button>'
@@ -590,6 +590,7 @@ def gera_aba_indiretas_html(ctx):
                        if arq_ev else "")
             blocos.append(_bloco(sup, ref, (
                 (f'<div class="card">{painel_dias_uteis_html(ref, data_corte(ctx))}</div>' if no_mes else "") +
+                ritmo_indiretas_html(ctx, sup, ref, real, ev) +
                 f'<div class="card prev-card"><h2 class="prev-titulo">Indiretas — financeiro (R$) — {nome} — {nome_mes(ref)}{seta_avulso(sup, ref)}{acoes}</h2>'
                 '<p class="nota-secao prev-nota">Realizado = valor do serviço avulso do mês até D-1, por classe. Forecast = o mesmo da aba '
                 'Forecast (ritmo por dia útil × dias úteis que faltam; Cortes pelos dias de corte) — editar aqui muda lá também.'
