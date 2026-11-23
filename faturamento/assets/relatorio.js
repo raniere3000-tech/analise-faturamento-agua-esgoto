@@ -3280,8 +3280,8 @@ function garDesenharResumo() {
         + '<th class="num" title="Queda: Fat. anterior (foto). Aumento: valor da média pela tarifa">Referência (queda: Fat. anterior · aumento: valor da média)</th><th class="num">Fat. ajustado</th><th class="num">Garantia</th></tr></thead><tbody>'
         + lin('Aumento de consumo', t.AUMENTO) + lin('Queda de consumo', t.QUEDA) + lin('<b>Total</b>', tot, 'linha-media') + garLinhasFora(fora) + '</tbody></table></div>'
         + (grupos.length ? '<h3 class="gar-h3">Por grupo</h3><div class="tabela-wrap"><table class="tabela-garantia gar-resumo"><thead><tr><th>Grupo</th><th class="num">Ligações</th>'
-            + '<th class="num">Garantia queda</th><th class="num">Garantia aumento</th><th class="num">Total</th><th class="num">Fora do resultado</th></tr></thead><tbody>'
-            + grupos.map((g) => { const p = porGrupo[g]; return `<tr class="gar-grupo-lin" data-gar-grupo="${garEsc(g)}" tabindex="0" title="Clique para ver as matrículas da análise de garantia do grupo ${garEsc(g)}"><td>${garEsc(g)}</td><td class="num">${p.n}</td><td class="num">${garR(p.QUEDA)}</td><td class="num">${garR(p.AUMENTO)}</td><td class="num"><b>${garR(p.QUEDA + p.AUMENTO)}</b></td><td class="num gar-fora">${p.fora || ''}</td></tr>`; }).join('')
+            + '<th class="num">Garantia queda</th><th class="num">Garantia aumento</th><th class="num">Total</th><th class="num gar-col-fora">Fora do resultado</th></tr></thead><tbody>'
+            + grupos.map((g) => { const p = porGrupo[g]; return `<tr class="gar-grupo-lin" data-gar-grupo="${garEsc(g)}" tabindex="0" title="Clique para ver as matrículas da análise de garantia do grupo ${garEsc(g)}"><td>${garEsc(g)}</td><td class="num">${p.n}</td><td class="num">${garR(p.QUEDA)}</td><td class="num">${garR(p.AUMENTO)}</td><td class="num"><b>${garR(p.QUEDA + p.AUMENTO)}</b></td><td class="num gar-fora gar-col-fora">${p.fora || ''}</td></tr>`; }).join('')
             + '</tbody></table></div>' : '<p class="nota-secao">Nenhuma matrícula com motivo preenchido na Análise de Garantia.</p>');
 }
 // Resumo › Por grupo: o clique na linha abre as matrículas da análise de garantia do grupo (os mesmos filtros e a mesma conta do resumo)
@@ -4130,7 +4130,8 @@ async function printItens(tipo) {
         const c = limpa(q('#garResumo'));
         // sem divergentes: tira a linha "Divergentes — não seguiram o solicitado · perda" (o resto do quadro fica igual)
         if (c && tipo === 'garantia-sem-div') c.querySelectorAll('tr[data-fora="div"]').forEach((x) => x.remove());
-        if (c) c.querySelectorAll('tr[data-fora="vaz"], tr[data-fora="vist"]').forEach((x) => x.remove());   // vazamento / vistoria: só na tela
+        // só na tela (não vão para a apresentação): vazamento, vistoria, sem retorno e a coluna "Fora do resultado" do quadro por grupo
+        if (c) c.querySelectorAll('tr[data-fora="vaz"], tr[data-fora="vist"], tr[data-fora="vazio"], .gar-col-fora').forEach((x) => x.remove());
         return [c];
     }
     const ind = limpa(q(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] table.tabela-previsao`), 'prev-sem-forecast');

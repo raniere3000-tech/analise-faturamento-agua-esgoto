@@ -332,7 +332,7 @@ def test_regras_novas_da_garantia(sessao):
                    "['vmed', 'Valor da média (R$)', 'n'", "const vmed = garCalculado(d, it.media);",
                    "const calc = garCalculado(d, vol != null ? vol : it.media);", "['calc', 'Pedido (R$)', 'n'",
                    "['dif', 'Garantia (R$)', 'n'", "rot: '⚠ Divergente — não seguiu o solicitado'", "não entra no resultado",
-                   "function garLinhasFora(fora)", "(fora do resultado)", "<th class=\"num\">Fora do resultado</th>"):
+                   "function garLinhasFora(fora)", "(fora do resultado)", "<th class=\"num gar-col-fora\">Fora do resultado</th>"):
         assert trecho in html, trecho
     # a conta antiga do aumento (atual − calculado) e a coluna mista saíram
     assert "at - calc" not in html and "Ajustado / calculado" not in html
@@ -367,7 +367,7 @@ def test_vazamento_corrigido_fora_do_resultado_e_do_print(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     for trecho in ("VAZAMENTO: 'Vazamento corrigido (manter medido)'", "function garSugereVazamento(it)",
                    "if (cf.st === 'vaz' || cf.st === 'vist') return { cf, base, bruto, valor: null, entra: false, antSusp: false, fk: cf.st, gar: 0 };",
-                   """c.querySelectorAll('tr[data-fora="vaz"], tr[data-fora="vist"]').forEach((x) => x.remove());""", "💧 marcar vazamento",
+                   """c.querySelectorAll('tr[data-fora="vaz"], tr[data-fora="vist"], tr[data-fora="vazio"], .gar-col-fora').forEach((x) => x.remove());""", "💧 marcar vazamento",
                    "opt('VAZAMENTO', '💧 Vazamento corrigido (manter medido)')"):
         assert trecho in html, trecho
 
@@ -389,3 +389,10 @@ def test_plano_de_acao_sem_as_quebras_do_codigo_do_excel(sessao):
     for trecho in ("c.querySelectorAll('br').forEach((b) => b.replaceWith('\\u2029'));", ".replace(/[\\r\\n]+/g, ' ').split('\\u2029')",
                    "function planoJuntaQuebras(v)", "plano.quebras === 2 ? v : planoJuntaQuebras(v)", "quebras: 2 };"):
         assert trecho in html, trecho
+
+
+def test_print_da_garantia_sem_linha_sem_retorno_e_sem_coluna_fora(sessao):
+    """Prints da garantia (apresentação semanal): sem a linha "Sem retorno" e sem a coluna "Fora do resultado" do quadro por grupo."""
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    assert """tr[data-fora="vaz"], tr[data-fora="vist"], tr[data-fora="vazio"], .gar-col-fora""" in html
+    assert '<th class="num gar-col-fora">Fora do resultado</th>' in html and "gar-fora gar-col-fora" in html
