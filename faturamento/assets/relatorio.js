@@ -4100,7 +4100,8 @@ document.addEventListener('DOMContentLoaded', () => opDesenhar());
 // 'indiretas' = indiretas (R$) e, logo abaixo, o plano de ação do mês (se houver). Segue os filtros da tela.
 // A folha é montada à parte numa largura fixa (letra do tamanho da tela) e fotografada em escala 3: colada no slide, fica nítida.
 const PRINT_SLIDE = 2.05;      // área livre de um slide 16:9 abaixo do título (largura ÷ altura)
-const PRINT_TIPOS = { dre: ['DRE', 1000], garantia: ['Analise_Garantia', 1300], 'garantia-sem-div': ['Analise_Garantia_sem_divergentes', 1300], indiretas: ['Indiretas_Plano', 1300] };
+const PRINT_TIPOS = { dre: ['DRE', 1000], garantia: ['Analise_Garantia', 1300], 'garantia-sem-div': ['Analise_Garantia_sem_divergentes', 1300], indiretas: ['Indiretas_Plano', 1300],
+    'ind-ritmo': ['Indiretas_Andamento_valores', 1300], 'ind-ritmo-ev': ['Indiretas_Andamento_eventos', 1300] };
 function printAviso(texto, ms) {
     let a = document.getElementById('printAviso');
     if (!a) {
@@ -4132,6 +4133,16 @@ async function printItens(tipo) {
         if (c && tipo === 'garantia-sem-div') c.querySelectorAll('tr[data-fora="div"]').forEach((x) => x.remove());
         // só na tela (não vão para a apresentação): vazamento, vistoria, sem retorno e a coluna "Fora do resultado" do quadro por grupo
         if (c) c.querySelectorAll('tr[data-fora="vaz"], tr[data-fora="vist"], tr[data-fora="vazio"], .gar-col-fora').forEach((x) => x.remove());
+        return [c];
+    }
+    if (tipo === 'ind-ritmo' || tipo === 'ind-ritmo-ev') {
+        // andamento do mês: título, resumo do dia útil e só a tabela pedida (valores ou eventos), sem os seletores
+        const c = limpa(q(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .ritmo-card`));
+        if (!c) return [null];
+        c.querySelectorAll('.ritmo-filtros, .nota-secao').forEach((x) => x.remove());
+        c.querySelectorAll(tipo === 'ind-ritmo' ? '.ritmo-ev, .ritmo-sub' : '.ritmo-fin').forEach((x) => x.remove());
+        if (tipo === 'ind-ritmo-ev') { const h = c.querySelector('h2'); if (h) h.textContent = h.textContent.replace('Andamento do mês', 'Andamento do mês — eventos faturados'); c.querySelector('.ritmo-sub')?.remove(); }
+        c.removeAttribute('data-ritmo');
         return [c];
     }
     const ind = limpa(q(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] table.tabela-previsao`), 'prev-sem-forecast');
@@ -4687,3 +4698,102 @@ var syncFechamento = criaSync('fechamento', 'Fechamento', () => fechMapa,
     (m) => { fechMapa = m; try { localStorage.setItem(FECH_LS, JSON.stringify(fechMapa)); } catch (e) {} },
     () => fechDesenhar(),
     () => !!(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('fech-in')));
+
+// ===== Andamento do mês (aba Indiretas): realizado × o que deveria estar no dia útil =====
+// O Python manda os dados em data-ritmo (dias úteis do mês, dia útil automático pela data D-1, orçados de cada planilha e
+// realizado em R$ e eventos); aqui as duas tabelas são montadas e refeitas a cada filtro do quadro.
+// Filtros (lembrados neste navegador): orçado (padrão: o orçado SUP), dia útil de referência (automático por padrão; um escolhido
+// à mão vale só para aquele mês) e Cortes pelos dias úteis normais ou só pelos dias de corte.
+const RITMO_LS = 'faturamento_ind_ritmo';
+let ritmoPref = { fonte: '', cortes: 'uteis', dia: {} };
+try { ritmoPref = Object.assign(ritmoPref, JSON.parse(localStorage.getItem(RITMO_LS) || '{}') || {}); } catch (e) { /* sem armazenamento */ }
+function ritmoSalva() { try { localStorage.setItem(RITMO_LS, JSON.stringify(ritmoPref)); } catch (e) { /* ignora */ } }
+const RITMO_FILHOS = { iA: ['ri_CORTE', 'ri_RELIGAÇÃO', 'ri_LNA', 'ri_SANÇÃO', 'ri_OUTROS'], tot: ['iA', 'iE'] };
+function ritmoFmt(v, ev, compacto) {
+    if (v == null || !isFinite(v)) return '-';
+    if (ev) return Math.round(v).toLocaleString('pt-BR');
+    if (compacto) return 'R$ ' + (Math.abs(v) >= 1e6 ? (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mi'
+        : (v / 1e3).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' mil');
+    return 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+}
+const ritmoCor = (at) => (at == null ? '' : at >= 1 ? 'ritmo-ok' : at >= 0.9 ? 'ritmo-atencao' : 'ritmo-baixo');
+// contas de uma tabela: linhas simples pelo próprio orçado; Fat. de água - Indireto e Total somam as linhas de baixo
+function ritmoContas(linhas, fonte, n, tot, nCorte, totCorte, soCorte, ev) {
+    const pre = ev ? 'ev_' : '', porK = {};
+    const simples = (l) => {
+        const o = l.orc[fonte], r = l.real || 0, corte = soCorte && l.k === pre + 'ri_CORTE';
+        const nn = corte ? nCorte : n, tt = corte ? totCorte : tot;
+        if (o == null) return { o: null, r, esp: null, ritmo: nn ? r / nn : null, prec: null, proj: nn ? r / nn * tt : null, falta: tt - nn };
+        return { o, r, esp: tt ? o * nn / tt : null, ritmo: nn ? r / nn : null, prec: tt - nn > 0 ? Math.max(o - r, 0) / (tt - nn) : null,
+                 proj: nn ? r / nn * tt : null, falta: tt - nn };
+    };
+    const soma = (k) => {
+        if (porK[k]) return porK[k];
+        const l = linhas.find((x) => x.k === pre + k);
+        const filhos = RITMO_FILHOS[k];
+        if (!filhos) return (porK[k] = l ? simples(l) : null);
+        const fs = filhos.map(soma).filter(Boolean), s = (c) => (fs.some((x) => x[c] != null) ? fs.reduce((a, x) => a + (x[c] || 0), 0) : null);
+        const o = l ? l.orc[fonte] : null, r = l ? l.real || 0 : 0;
+        const esp = s('esp'), prec = s('prec');
+        return (porK[k] = { o: o != null ? o : s('o'), r, esp, ritmo: s('ritmo'), prec, proj: s('proj'), falta: tot - n });
+    };
+    return linhas.map((l) => ({ l, c: soma(l.k.replace(/^ev_/, '')) }));
+}
+function ritmoTabela(D, linhas, fonte, n, nCorte, soCorte, ev) {
+    const tot = D.dias.length, totCorte = D.dias.filter((d) => d[1]).length;
+    // eventos por dia útil podem ser poucos: uma casa decimal (1,4 por dia) em vez de arredondar para 1
+    const Fd = (v) => (ev && v != null && isFinite(v) ? v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : ritmoFmt(v, ev));
+    const F = (v) => ritmoFmt(v, ev), Fc = (v) => ritmoFmt(v, ev, true), P = (v) => (v == null || !isFinite(v) ? '-' : Math.round(v * 100) + '%');
+    const cab = `<tr><th>Classe</th><th>Orçado<br>do mês</th><th class="ritmo-dia">Esperado até<br>o ${n}º dia útil</th><th>Realizado</th>`
+        + '<th class="ritmo-dia">Diferença</th><th class="ritmo-dia">% do<br>esperado</th><th>Faz por<br>dia útil</th>'
+        + `<th>Precisa por dia útil<br><small>faltam ${tot - n}</small></th><th class="ritmo-sit">Situação</th></tr>`;
+    const corpo = ritmoContas(linhas, fonte, n, tot, nCorte, totCorte, soCorte, ev).map(({ l, c }) => {
+        const at = c.esp ? c.r / c.esp : null, cls = ritmoCor(at);
+        let sit = '';
+        if (c.o != null && c.o > 0) {
+            if (c.r >= c.o) sit = '<span class="ritmo-ok">orçado do mês já batido</span>';
+            else if (c.falta <= 0) sit = `<span class="ritmo-baixo">fechou em ${P(c.r / c.o)} do orçado</span>`;
+            else if (at != null && at >= 1) sit = `<span class="ritmo-ok">no ritmo: fecha o mês com ${Fc(c.proj)}</span>`;
+            else sit = `<span class="${cls}">no ritmo atual fecha com ${Fc(c.proj)} (${P(c.proj / c.o)} do orçado)</span>`;
+        }
+        const dif = c.esp != null ? c.r - c.esp : null;
+        const corte = soCorte && l.k.endsWith('ri_CORTE') ? ' <small class="ritmo-tag" title="Esperado e ritmo pelos dias de corte">dias de corte</small>' : '';
+        return `<tr class="${l.forte ? 'dre-forte' : 'dre-abertura'}"><td class="dre-rotulo">${String(l.rot).replace(/&/g, '&amp;').replace(/</g, '&lt;')}${corte}</td><td class="num">${F(c.o)}</td>`
+            + `<td class="num">${F(c.esp)}</td><td class="num"><b>${F(c.r)}</b></td>`
+            + `<td class="num ${dif == null ? '' : dif >= 0 ? 'ritmo-ok' : 'ritmo-baixo'}">${dif == null ? '-' : (dif > 0 ? '+' : dif < 0 ? '−' : '') + F(Math.abs(dif))}</td>`
+            + `<td class="num"><span class="ritmo-pct ${cls}">${P(at)}</span></td><td class="num">${Fd(c.ritmo)}</td>`
+            + `<td class="num">${c.prec == null ? '-' : c.r >= (c.o || 0) && c.o != null ? '—' : Fd(c.prec)}</td><td class="ritmo-sit">${sit}</td></tr>`;
+    }).join('');
+    return `<div class="tabela-wrap"><table class="tabela-dre ritmo-tabela"><thead>${cab}</thead><tbody>${corpo}</tbody></table></div>`;
+}
+function ritmoDesenhar(card) {
+    let D; try { D = JSON.parse(card.dataset.ritmo); } catch (e) { return; }
+    const e = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    const tot = D.dias.length, auto = Math.min(D.auto, tot);
+    const fonte = D.fontes.includes(ritmoPref.fonte) ? ritmoPref.fonte : D.padrao;
+    const manual = ritmoPref.dia[D.ref], n = manual >= 1 && manual <= tot ? manual : auto, soCorte = ritmoPref.cortes === 'corte';
+    const nCorte = D.dias.slice(0, n).filter((d) => d[1]).length;
+    const dm = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+    const quadros = D.dias.map((d, i) => `<i class="${i < n ? 'ritmo-passou' : ''}${d[1] ? '' : ' ritmo-sem-corte'}" title="${i + 1}º dia útil · ${dm(d[0])}${d[1] ? '' : ' (sem corte)'}"></i>`).join('');
+    const opDia = `<option value="">Automático (${auto}º · dados até ${dm(D.corte)})</option>`
+        + D.dias.map((d, i) => `<option value="${i + 1}"${manual === i + 1 ? ' selected' : ''}>${i + 1}º dia útil (${dm(d[0])})</option>`).join('');
+    const opF = D.fontes.map((f) => `<option value="${e(f)}"${f === fonte ? ' selected' : ''}>${e(f)}${f === D.padrao ? ' (padrão)' : ''}</option>`).join('');
+    card.querySelector('.ritmo-barra').innerHTML = `<span class="ritmo-dias" aria-hidden="true">${quadros}</span>`
+        + `<span class="ritmo-resumo"><b>${n}º</b> de ${tot} dias úteis · ${n < tot ? `faltam ${tot - n}` : 'mês completo'} · dados até ${dm(D.corte)} (D-1)`
+        + `${manual ? ' · <b class="ritmo-manual">dia útil escolhido à mão</b>' : ''} · orçado ${e(fonte || '-')}${soCorte ? ' · Cortes pelos dias de corte' : ''}</span>`
+        + '<span class="ritmo-filtros">'
+        + `<label>Orçado <select class="ritmo-sel" data-campo="fonte">${opF}</select></label>`
+        + `<label>Dia útil de referência <select class="ritmo-sel" data-campo="dia">${opDia}</select></label>`
+        + `<label>Cortes <select class="ritmo-sel" data-campo="cortes"><option value="uteis">dias úteis normais</option>`
+        + `<option value="corte"${soCorte ? ' selected' : ''}>só os dias de corte (${D.dias.filter((d) => d[1]).length})</option></select></label></span>`;
+    if (!D.fontes.length) card.querySelector('.ritmo-barra').insertAdjacentHTML('beforeend', '<span class="ritmo-baixo">Sem planilha de orçado na pasta.</span>');
+    card.querySelector('.ritmo-fin').innerHTML = ritmoTabela(D, D.fin, fonte, n, nCorte, soCorte, false);
+    card.querySelector('.ritmo-ev').innerHTML = ritmoTabela(D, D.ev, fonte, n, nCorte, soCorte, true);
+    card.querySelectorAll('.ritmo-sel').forEach((s) => s.addEventListener('change', () => {
+        const c = s.dataset.campo;
+        if (c === 'dia') { if (s.value) ritmoPref.dia[D.ref] = +s.value; else delete ritmoPref.dia[D.ref]; }
+        else ritmoPref[c] = s.value;
+        ritmoSalva(); document.querySelectorAll('.ritmo-card[data-ritmo]').forEach(ritmoDesenhar);
+    }));
+}
+document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('.ritmo-card[data-ritmo]').forEach(ritmoDesenhar));

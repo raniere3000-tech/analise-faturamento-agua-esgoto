@@ -413,7 +413,7 @@ def mes_com_forecast(ctx, ref):
     return ref == ctx.ref_atual or (bool(meses) and ref == meses[-1])
 
 
-def indiretas_previsao_html(ctx, sup, ref):
+def indiretas_previsao_html(ctx, sup, ref, com_real=False):
     """As duas tabelas da aba Indiretas (financeiro e eventos) para uma SUP × mês. No mês em andamento, o forecast é editável
     e é o mesmo da aba Forecast (mesmo cálculo e mesma edição, guardada por mês × SUP × linha)."""
     from .dre import realizado
@@ -431,7 +431,7 @@ def indiretas_previsao_html(ctx, sup, ref):
     fin = tabela_previsao_html(ctx, sup, ref, LINHAS_IND_FIN, real, falta, editavel, "Classe")
     eventos = tabela_previsao_html(ctx, sup, ref, LINHAS_IND_EV, ev["real"], ev["falta"] if editavel else {}, editavel,
                                    "Classe", orcados=ev["orcado"], colunas_extra=[("Ticket médio<br>3 meses (R$)", tk)])
-    return fin, eventos, ev, editavel
+    return (fin, eventos, ev, editavel, real) if com_real else (fin, eventos, ev, editavel)
 
 
 def gera_aba_forecast_html(ctx):
@@ -444,3 +444,48 @@ def gera_aba_forecast_html(ctx):
         ctx.progresso.etapa(i, len(sups), 92, 94, f"Criando aba Forecast: {_nome_sup(sup)}")
         blocos.append(f'<div class="prev-bloco" data-sup="{html.escape(sup, quote=True)}">{previsao_html(ctx, sup)}</div>')
     return "".join(blocos)
+
+
+# ---------- Andamento do mês (aba Indiretas): realizado × o que deveria estar no dia útil ----------
+def lista_dias_uteis(ref):
+    """[(data, é dia de corte)] dos dias úteis do mês `ref` (MM/AAAA), na ordem."""
+    m, a = int(ref[:2]), int(ref[3:])
+    fer = feriados(a) | feriados(a + 1)
+    dias = [dt.date(a, m, n) for n in range(1, calendar.monthrange(a, m)[1] + 1)]
+    return [(d, d.weekday() != 4 and (d + dt.timedelta(days=1)) not in fer) for d in dias if _eh_util(d, fer)]
+
+
+def ritmo_indiretas_dados(ctx, sup, ref, real, ev):
+    """Dados do quadro "Andamento do mês" (o navegador monta as tabelas e refaz as contas a cada filtro):
+    dias úteis do mês (com os de corte), dia útil automático pela data dos dados (D-1), orçados de cada planilha
+    (padrão: o orçado SUP) e o realizado em R$ e em eventos de cada linha das indiretas."""
+    corte = data_corte(ctx)
+    fontes, _ = _fontes(ctx)
+    orc = _orcados_do_mes(ctx, sup, ref, fontes)
+    sups = [f for f in fontes if (ctx.orcado.get(f) or {}).get("tipo") == "sup"]
+    num = lambda v: None if v is None else round(float(v), 4)
+
+    def linhas(defs, atual, orcs):
+        return [{"k": k, "rot": r, "forte": bool(n), "real": num(_valor_linha(atual, k)),
+                 "orc": {f: num(_valor_linha(orcs.get(f) or {}, k)) for f in fontes}} for k, r, _, n, _c in defs]
+    dias = lista_dias_uteis(ref)
+    return {"ref": ref, "mes": nome_mes(ref), "corte": corte.isoformat(),
+            "dias": [[d.isoformat(), 1 if c else 0] for d, c in dias],
+            "auto": sum(1 for d, _ in dias if d <= corte),
+            "fontes": fontes, "padrao": (sups or fontes or [""])[0],
+            "fin": linhas(LINHAS_IND_FIN, real, orc), "ev": linhas(LINHAS_IND_EV, ev["real"], ev["orcado"])}
+
+
+def ritmo_indiretas_html(ctx, sup, ref, real, ev):
+    import json
+    d = ritmo_indiretas_dados(ctx, sup, ref, real, ev)
+    nome = html.escape(_nome_sup(sup))
+    dados = html.escape(json.dumps(d, ensure_ascii=False), quote=True)
+    return (f'<div class="card ritmo-card" data-ritmo="{dados}">'
+            f'<h2>Andamento do mês — realizado × esperado no dia útil — {nome} — {html.escape(nome_mes(ref))}</h2>'
+            '<p class="nota-secao">Esperado = orçado do mês ÷ dias úteis do mês × dias úteis que já passaram. '
+            'Faz por dia útil = realizado ÷ dias úteis que já passaram. Precisa por dia útil = o que falta para o orçado ÷ '
+            'dias úteis que faltam. O dia útil anda sozinho pela data dos dados (D-1); escolha outro no seletor para fechar '
+            'um mês depois que ele acabou.</p>'
+            '<div class="ritmo-barra"></div><div class="ritmo-tab ritmo-fin"></div>'
+            '<h3 class="ritmo-sub">Eventos faturados (quantidade)</h3><div class="ritmo-tab ritmo-ev"></div></div>')

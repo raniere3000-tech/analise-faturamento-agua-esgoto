@@ -476,7 +476,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v181</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button><span class="nuvem-msg" id="nuvemMsg" role="status" aria-live="polite"></span></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v182</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button><span class="nuvem-msg" id="nuvemMsg" role="status" aria-live="polite"></span></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -557,6 +557,8 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         <button type="button" role="menuitem" data-print="garantia">Análise de Garantia<small>Totais, resumo e garantia por grupo, com a linha dos divergentes</small></button>
         <button type="button" role="menuitem" data-print="garantia-sem-div">Análise de Garantia — sem divergentes<small>O mesmo quadro, sem a linha dos divergentes (perda por não seguir o solicitado)</small></button>
         <button type="button" role="menuitem" data-print="indiretas">Faturamento Indireto e Plano de Ação<small>Indiretas (R$) e, abaixo, o plano do mês</small></button>
+        <button type="button" role="menuitem" data-print="ind-ritmo">Indiretas — andamento do mês (R$)<small>Realizado × esperado no dia útil, em valores</small></button>
+        <button type="button" role="menuitem" data-print="ind-ritmo-ev">Indiretas — andamento do mês (eventos)<small>Realizado × esperado no dia útil, em eventos faturados</small></button>
       </span></span>
     <button type="button" class="btn-top" id="btnOnePage" hidden title="One page (acompanhamento do faturamento em uma página, conforme os filtros da tela)">📊 One page</button>
     <button type="button" class="btn-top" id="btnCortadas" hidden title="Baixar o analítico (Excel) das ligações cortadas com Consumo Medido acima de 0 no mês, conforme os filtros da tela">✂ Cortadas com consumo</button>
@@ -684,7 +686,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v181-20261123"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v182-20261123"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
