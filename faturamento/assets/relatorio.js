@@ -2338,7 +2338,7 @@ function garValorCol(d, c) {
 }
 function garLinhasTop() {
     const busca = GAR.busca;                             // filtro por matrícula (parte do número; várias separadas por espaço)
-    let ls = GAR.lista.filter((d) => garVisivel(d) && (!GAR.soAnalise || garEmAnalise(d)) && (!GAR_CAT_TOP.cats || GAR_CAT_TOP.cats.has(garCat(d)))
+    let ls = GAR.lista.filter((d) => garVisivel(d) && (!GAR.soAnalise || garEmAnalise(d)) && !garOcultaAnalisada(d) && (!GAR_CAT_TOP.cats || GAR_CAT_TOP.cats.has(garCat(d)))
         && (!busca.length || busca.some((t) => String(d.lig).includes(t))));
     const { campo, desc } = GAR.ordem;
     const num = GAR_COLS_TOP.find((c) => c[0] === campo)?.[2] !== 't';
@@ -2407,15 +2407,15 @@ function garDesenharTop() {
         const forte = (dc != null && Math.abs(dc) > 0.3) || (dv != null && Math.abs(dv) > 0.3);
         const sit = garSitCelula(d, '<span class="gar-sit">sem fatura no mês</span>');
         const lig = String(d.lig);
-        return `<tr class="${forte ? 'gar-linha-forte' : ''}"><td class="num">${d.rank}</td><td class="${forte ? 'gar-forte' : ''}">${garEsc(lig)}</td>`
+        return `<tr class="${forte ? 'gar-linha-forte' : ''}${garAnalisada(lig) ? ' gar-tr-analisada' : ''}"><td class="num">${d.rank}</td><td class="${forte ? 'gar-forte' : ''}">${garEsc(lig)}</td>`
             + `<td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td><td>${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td>${garEsc(d.sup)}</td>`
             + `<td class="num">${garN(garValorCol(d, 'eco'))}</td><td class="num">${garN(d.mMed, 1)}</td><td class="num">${garN(d.mCons, 1)}</td><td class="num">${garN(d.cons, 1)}</td>${pctCel(dc)}`
             + `<td class="num">${garR(d.mVal)}</td><td class="num">${garR(d.val)}</td>${difCel(garValorCol(d, 'dValR'), dv)}${pctCel(dv)}<td>${sit}</td>`
-            + `<td><button type="button" class="btn-just gar-add" data-lig="${garEsc(lig)}" ${naAnalise.has(lig) ? 'disabled title="Já está na Análise de Garantia"' : 'title="Levar para a Análise de Garantia"'}>${naAnalise.has(lig) ? '✓' : '+ Análise'}</button></td></tr>`;
+            + `<td>${garAcoes(lig, naAnalise)}</td></tr>`;
     }).join('') || `<tr><td colspan="${GAR_COLS_TOP.length + 1}" class="gar-vazio">${GAR.busca.length && !GAR.busca.some((t) => GAR.lista.some((d) => String(d.lig).includes(t)))
         ? 'Matrícula fora do Top ' + GAR.top + ': para analisá-la, use a sub-aba Análise de Garantia.' : 'Nenhuma matrícula com os filtros escolhidos.'}</td></tr>`;
     const emAnalise = GAR.lista.filter((d) => garVisivel(d) && garEmAnalise(d)).length;
-    document.getElementById('garTopContagem').textContent = `${ls.length} matrícula(s) na tela · ${emAnalise} em análise`;
+    document.getElementById('garTopContagem').textContent = `${ls.length} matrícula(s) na tela · ${emAnalise} em análise · ${GAR.lista.filter((d) => garVisivel(d) && garAnalisada(d.lig)).length} analisada(s)`;
     const b = document.getElementById('garSoAnalise');
     b.classList.toggle('ativo', GAR.soAnalise); b.setAttribute('aria-pressed', GAR.soAnalise ? 'true' : 'false');
     b.textContent = GAR.soAnalise ? `Mostrando só em análise (${emAnalise}) — ver todas` : `Somente em análise (${emAnalise})`;
@@ -2433,7 +2433,7 @@ function garVarBase() {
 const garDifVal = (d) => d.val - d.vAnt;
 function garVarLista(tipo) {
     const s = tipo === 'aumento' ? 1 : -1;
-    return garVarBase().filter((d) => garVisivel(d) && (!GAR_VAR.soAnalise || garEmAnalise(d))
+    return garVarBase().filter((d) => garVisivel(d) && (!GAR_VAR.soAnalise || garEmAnalise(d)) && !garOcultaAnalisada(d)
             && (!GAR_CAT_VAR.cats || GAR_CAT_VAR.cats.has(garCat(d))) && s * garDifVal(d) > 0)
         .sort((a, b) => s * (garDifVal(b) - garDifVal(a)));
 }
@@ -2481,13 +2481,13 @@ function garDesenharVar() {
             const dc = (d.cons != null && d.cAnt != null) ? d.cons - d.cAnt : null, dv = garDifVal(d), pv = d.vAnt ? dv / d.vAnt : null;
             const sit = garSitCelula(d, '');
             const lig = String(d.lig), cls = dv < 0 ? 'gar-queda' : 'gar-aumento';
-            return `<tr><td class="num">${r}</td><td>${garEsc(lig)}</td><td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td>`
+            return `<tr${garAnalisada(lig) ? ' class="gar-tr-analisada"' : ''}><td class="num">${r}</td><td>${garEsc(lig)}</td><td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td><td>${garEsc(d.cat)}</td>`
                 + `<td>${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td>${garEsc(d.sup)}</td><td class="num">${garN(garValorCol(d, 'eco'))}</td>`
                 + `<td class="num">${garN(d.mdAnt, 1)}</td><td class="num">${garN(d.med, 1)}</td>`
                 + `<td class="num">${garN(d.cAnt, 1)}</td><td class="num">${garN(d.cons, 1)}</td><td class="num ${dc < 0 ? 'gar-neg' : ''}">${garN(dc, 1)}</td>`
                 + `<td class="num">${garR(d.vAnt)}</td><td class="num">${garR(d.val)}</td><td class="num gar-forte ${cls}">${garR(dv)}</td>`
                 + `<td class="num ${cls}">${pv == null ? '–' : (pv > 0 ? '+' : '') + fmtBR(pv * 100, 1) + '%'}</td><td>${sit}</td>`
-                + `<td><button type="button" class="btn-just gar-add" data-lig="${garEsc(lig)}" ${naAnalise.has(lig) ? 'disabled title="Já está na Análise de Garantia"' : 'title="Levar para a Análise de Garantia"'}>${naAnalise.has(lig) ? '✓' : '+ Análise'}</button></td></tr>`;
+                + `<td>${garAcoes(lig, naAnalise)}</td></tr>`;
         }).join('') || `<tr><td colspan="${GAR_COLS_VAR.length + 1}" class="gar-vazio">${busca.length ? 'Matrícula fora deste Top 100 (com os filtros escolhidos).' : 'Nenhuma matrícula com os filtros escolhidos.'}</td></tr>`;
     });
     const emAnalise = garVarBase().filter((d) => garVisivel(d) && garEmAnalise(d)).length;
@@ -2531,6 +2531,157 @@ document.addEventListener('input', (e) => {
     if (e.target.id !== 'garVarBusca') return;
     GAR_VAR.busca = e.target.value.match(/\d+/g) || [];
     clearTimeout(GAR_VAR.t); GAR_VAR.t = setTimeout(garDesenharVar, 150);
+});
+
+// --- Analisada: matrícula já olhada que não precisou ir para a garantia ---
+// Botão nas tabelas da aba (Top 1000, Aumentos e quedas, Situação de lançamento): a marca vale para o mês e aparece em todas
+// as tabelas em que a matrícula estiver. Fica na seção "garantiaAnalisadas" do ajustes_relatorio.json (vale para todos).
+const GAR_AN_LS = 'faturamento_gar_analisadas';
+let garAnalisadas = {};
+try { garAnalisadas = JSON.parse(localStorage.getItem(GAR_AN_LS) || '{}') || {}; } catch (e) { garAnalisadas = {}; }
+const garAnalisada = (lig) => !!garAnalisadas[`${GAR.ref}|${lig}`];
+const garOcultaAnalisada = (d) => GAR.ocultaAnalisadas && garAnalisada(d.lig);
+function garAcoes(lig, naAnalise) {
+    const l = garEsc(lig);
+    if (naAnalise.has(lig)) return '<button type="button" class="btn-just gar-add" disabled title="Já está na Análise de Garantia">✓</button>';
+    const add = `<button type="button" class="btn-just gar-add" data-lig="${l}" title="Levar para a Análise de Garantia">+ Análise</button>`;
+    const quando = garAnalisadas[`${GAR.ref}|${lig}`];
+    const an = quando
+        ? `<span class="gar-an-selo" title="Marcada como analisada em ${garEsc(new Date(quando).toLocaleDateString('pt-BR'))}">✓ Analisada</span>`
+          + `<button type="button" class="gar-an-btn gar-lib-desfaz" data-an-lig="${l}" title="Desfazer: tirar a marca de analisada">↺</button>`
+        : `<button type="button" class="gar-an-btn" data-an-lig="${l}" title="Já analisei e não precisa ir para a garantia: marca em todas as tabelas">Analisada</button>`;
+    return `<span class="gar-acoes">${add}${an}</span>`;
+}
+var syncGarAnalisadas = criaSync('garantiaAnalisadas', 'Matrículas analisadas', () => garAnalisadas,
+    (m) => { garAnalisadas = m; try { localStorage.setItem(GAR_AN_LS, JSON.stringify(garAnalisadas)); } catch (e) {} },
+    () => garRedesenhar());
+document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('.gar-an-btn');
+    if (b) {
+        const k = `${GAR.ref}|${b.dataset.anLig}`;
+        if (garAnalisadas[k]) delete garAnalisadas[k]; else garAnalisadas[k] = new Date().toISOString();
+        try { localStorage.setItem(GAR_AN_LS, JSON.stringify(garAnalisadas)); } catch (er) { /* sem armazenamento */ }
+        syncGarAnalisadas.agendar();
+        garRedesenhar(); return;
+    }
+    const o = e.target.closest && e.target.closest('.gar-oculta-an');
+    if (o) { GAR.ocultaAnalisadas = !GAR.ocultaAnalisadas; garRedesenhar(); }
+});
+function garBotoesOcultar() {
+    const n = Object.keys(garAnalisadas).filter((k) => k.startsWith(GAR.ref + '|')).length;
+    document.querySelectorAll('.gar-oculta-an').forEach((b) => {
+        b.classList.toggle('ativo', !!GAR.ocultaAnalisadas); b.setAttribute('aria-pressed', GAR.ocultaAnalisadas ? 'true' : 'false');
+        b.textContent = GAR.ocultaAnalisadas ? `Analisadas ocultas (${n}) — mostrar` : `Ocultar analisadas (${n})`;
+    });
+}
+
+// --- Situação de lançamento: as listas da visão sintética (aba Análise) por leitura da situação, sem baixar ---
+const GAR_SITL = { grupo: null, soAnalise: false, busca: [], ordem: { campo: null, desc: false }, limite: 200 };
+const GAR_SITL_ORDEM = ['Aumento de Consumo', 'Queda de Consumo', 'Retida', 'Público', 'Não Entregue', 'Entregue', 'Outros'];
+let garSitlMapa = null;
+function garSitlGrupo(d) {
+    if (!garSitlMapa) { try { garSitlMapa = JSON.parse(document.getElementById('sitl-agregados').textContent).grupo || {}; } catch (e) { garSitlMapa = {}; } }
+    const c = String(d.lanc || '').trim();
+    return c ? (garSitlMapa[c] || 'Outros') : null;
+}
+const GAR_CAT_SITL = garFiltroCategoria('garScat', () => garSitlBase(), () => { GAR_SITL.limite = 200; garDesenharSitl(); });
+function garSitlBase() {
+    if (!GAR.sitl_base) GAR.sitl_base = (GAR.dados || []).filter((d) => garSitlGrupo(d));
+    return GAR.sitl_base;
+}
+const GAR_COLS_SITL = [['lig', 'Matrícula', 't'], ['nome', 'Cliente', 't'], ['cat', 'Categoria', 't'], ['loc', 'Localidade', 't'],
+    ['grupo', 'Grupo', 't'], ['eco', 'Econ.', 'n'], ['lanc', 'Situação lançamento', 't'], ['mCons', 'Média fat. (m³)', 'n'],
+    ['med', 'Medido atual (m³)', 'n'], ['cons', 'Fat. atual (m³)', 'n'], ['dCons', 'Δ% cons.', 'n'],
+    ['mVal', 'Média fat. (R$)', 'n'], ['val', 'Fat. atual (R$)', 'n'], ['dValR', 'Δ R$', 'n'], ['dVal', 'Δ% R$', 'n'], ['sit', 'Situação conta', 't']];
+function garSitlLista() {
+    const base = garSitlBase().filter((d) => garVisivel(d) && (!GAR_CAT_SITL.cats || GAR_CAT_SITL.cats.has(garCat(d))));
+    const conta = {};
+    base.forEach((d) => { const g = garSitlGrupo(d); conta[g] = (conta[g] || 0) + 1; });
+    const grupos = GAR_SITL_ORDEM.filter((g) => conta[g]).concat(Object.keys(conta).filter((g) => !GAR_SITL_ORDEM.includes(g)).sort());
+    if (!conta[GAR_SITL.grupo]) GAR_SITL.grupo = grupos[0] || null;      // começa (ou volta) no primeiro grupo com matrículas
+    const busca = GAR_SITL.busca;
+    const ls = base.filter((d) => garSitlGrupo(d) === GAR_SITL.grupo && (!GAR_SITL.soAnalise || garEmAnalise(d)) && !garOcultaAnalisada(d)
+        && (!busca.length || busca.some((t) => String(d.lig).includes(t))));
+    const { campo, desc } = GAR_SITL.ordem;
+    if (!campo) ls.sort((a, b) => Math.abs(garValorCol(b, 'dValR') || 0) - Math.abs(garValorCol(a, 'dValR') || 0) || (b.val || 0) - (a.val || 0));
+    else {
+        const num = GAR_COLS_SITL.find((c) => c[0] === campo)[2] === 'n';
+        ls.sort((a, b) => {
+            let x = garValorCol(a, campo), y = garValorCol(b, campo);
+            if (num) { x = x == null ? -Infinity : x; y = y == null ? -Infinity : y; return desc ? y - x : x - y; }
+            return desc ? String(y || '').localeCompare(String(x || '')) : String(x || '').localeCompare(String(y || ''));
+        });
+    }
+    return { ls, conta, grupos, base };
+}
+function garDesenharSitl() {
+    const tab = document.getElementById('garTabelaSitl'); if (!tab || !GAR.dados) return;
+    garGrupos = gruposFiltro();
+    GAR_CAT_SITL.montar();
+    const { ls, conta, grupos, base } = garSitlLista();
+    const an = (g) => base.filter((d) => garSitlGrupo(d) === g && garAnalisada(d.lig)).length;
+    document.getElementById('garSitlGrupos').innerHTML = grupos.map((g) => `<button type="button" class="gar-sitl-chip${g === GAR_SITL.grupo ? ' ativo' : ''}" data-sitl-grupo="${garEsc(g)}" aria-pressed="${g === GAR_SITL.grupo}">`
+        + `${garEsc(g)} <b>${fmtBR(conta[g], 0)}</b>${an(g) ? `<small>${fmtBR(an(g), 0)} analisada(s)</small>` : ''}</button>`).join('')
+        || '<span class="gar-vazio">A fatura do mês não tem Situação Lançamento para os filtros escolhidos.</span>';
+    const { campo, desc } = GAR_SITL.ordem;
+    tab.tHead.innerHTML = '<tr><th class="num">#</th>' + GAR_COLS_SITL.map(([c, t, tipo]) => `<th class="gar-ord ${tipo === 'n' ? 'num' : ''}" data-ord-sitl="${c}" tabindex="0" title="Clique para ordenar">${t}${c === campo ? (desc ? ' ▼' : ' ▲') : ''}</th>`).join('') + '<th></th></tr>';
+    const naAnalise = new Set(Object.keys(garItens).filter((k) => k.startsWith(GAR.ref + '|')).map((k) => k.slice(GAR.ref.length + 1)));
+    const pctCel = (p) => (p == null ? '<td class="num">–</td>'
+        : `<td class="num ${Math.abs(p) > 0.3 ? 'gar-forte ' + (p < 0 ? 'gar-queda' : 'gar-aumento') : ''}">${(p > 0 ? '+' : '') + fmtBR(p * 100, 1)}%</td>`);
+    tab.tBodies[0].innerHTML = ls.slice(0, GAR_SITL.limite).map((d, i) => {
+        const lig = String(d.lig), dc = garVar(d.cons, d.mCons), dv = garVar(d.val, d.mVal), dr = garValorCol(d, 'dValR');
+        return `<tr${garAnalisada(lig) ? ' class="gar-tr-analisada"' : ''}><td class="num">${i + 1}</td><td>${garEsc(lig)}</td><td class="gar-cli" title="${garEsc(d.nome)}">${garEsc(d.nome)}</td>`
+            + `<td class="gar-quebra">${garEsc(d.cat)}</td><td class="gar-quebra">${garEsc(d.loc)}</td><td>${garEsc(d.grupo)}</td><td class="num">${garN(garValorCol(d, 'eco'))}</td>`
+            + `<td class="gar-lanc">${garEsc(d.lanc)}</td><td class="num">${garN(d.mCons, 1)}</td><td class="num">${garN(d.med, 1)}</td><td class="num">${garN(d.cons, 1)}</td>${pctCel(dc)}`
+            + `<td class="num">${garR(d.mVal)}</td><td class="num">${garR(d.val)}</td>`
+            + `<td class="num ${dv != null && Math.abs(dv) > 0.3 ? 'gar-forte ' + (dr < 0 ? 'gar-queda' : 'gar-aumento') : ''}">${garR(dr)}</td>${pctCel(dv)}`
+            + `<td>${garSitCelula(d, '')}</td><td>${garAcoes(lig, naAnalise)}</td></tr>`;
+    }).join('') || `<tr><td colspan="${GAR_COLS_SITL.length + 2}" class="gar-vazio">Nenhuma matrícula com os filtros escolhidos.</td></tr>`;
+    const resto = ls.length - Math.min(ls.length, GAR_SITL.limite);
+    document.getElementById('garSitlMais').innerHTML = resto > 0
+        ? `<button type="button" class="btn-just" id="garSitlMaisBtn">Mostrar mais ${fmtBR(Math.min(resto, 200), 0)} (faltam ${fmtBR(resto, 0)})</button>` : '';
+    const emAnalise = ls.filter((d) => garEmAnalise(d)).length;
+    document.getElementById('garSitlContagem').textContent = `${GAR_SITL.grupo || '–'}: ${fmtBR(ls.length, 0)} matrícula(s) na tela · ${emAnalise} em análise`;
+    const b = document.getElementById('garSitlSoAnalise');
+    b.classList.toggle('ativo', GAR_SITL.soAnalise); b.setAttribute('aria-pressed', GAR_SITL.soAnalise ? 'true' : 'false');
+    b.textContent = GAR_SITL.soAnalise ? 'Mostrando só em análise — ver todas' : 'Somente em análise';
+    garBotoesOcultar();
+}
+function garBaixarSitl() {
+    const { ls } = garSitlLista();
+    const cols = ['Matrícula', 'Cliente', 'Categoria', 'Localidade', 'Grupo', 'Rota', 'SUP', 'Econ. total', 'Tem esgoto', 'Leitura da situação',
+        'Situação lançamento', 'Situação conta', 'Média cons. medido (m³)', 'Média cons. faturado (m³)', 'Cons. medido atual (m³)', 'Cons. faturado atual (m³)',
+        'Média faturado (R$)', 'Faturado atual (R$)', 'Δ R$', 'Analisada', 'Posição no Top 1000'];
+    const r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
+    const linhas = ls.map((d) => [d.lig, d.nome, d.cat, d.loc, d.grupo, d.rota, d.sup, garValorCol(d, 'eco'), d.esg ? 'Sim' : 'Não', garSitlGrupo(d),
+        d.lanc || '', d.sit || '', d.mMed, d.mCons, d.med, d.cons, d.mVal, d.val, r2(garValorCol(d, 'dValR')), garAnalisada(d.lig) ? 'Sim' : '',
+        d.rank && d.rank <= GAR.top ? d.rank : '']);
+    baixarPlanilha(cols, linhas, `Garantia_Situacao_${String(GAR_SITL.grupo || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_')}_${GAR.ref.replace('/', '-')}.csv`);
+}
+function garSitlOrdenar(th) {
+    const c = th.dataset.ordSitl, o = GAR_SITL.ordem, primeiro = GAR_COLS_SITL.find((x) => x[0] === c)[2] === 'n';
+    GAR_SITL.ordem = o.campo !== c ? { campo: c, desc: primeiro } : o.desc === primeiro ? { campo: c, desc: !primeiro } : { campo: null, desc: false };
+    garDesenharSitl();
+}
+document.addEventListener('click', (e) => {
+    const t = e.target.closest && e.target;
+    if (!t) return;
+    const chip = t.closest('[data-sitl-grupo]');
+    if (chip) { GAR_SITL.grupo = chip.dataset.sitlGrupo; GAR_SITL.limite = 200; garDesenharSitl(); return; }
+    const th = t.closest('th[data-ord-sitl]'); if (th) { garSitlOrdenar(th); return; }
+    if (t.id === 'garSitlMaisBtn') { GAR_SITL.limite += 200; garDesenharSitl(); return; }
+    if (t.id === 'garSitlSoAnalise') { GAR_SITL.soAnalise = !GAR_SITL.soAnalise; GAR_SITL.limite = 200; garDesenharSitl(); return; }
+    if (t.id === 'garSitlBaixar') { garBaixarSitl(); return; }
+    if (t.id === 'garSitlLimpar') { const i = document.getElementById('garSitlBusca'); i.value = ''; GAR_SITL.busca = []; garDesenharSitl(); i.focus(); }
+});
+document.addEventListener('keydown', (e) => {
+    const th = (e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('th[data-ord-sitl]');
+    if (th) { e.preventDefault(); garSitlOrdenar(th); }
+});
+document.addEventListener('input', (e) => {
+    if (e.target.id !== 'garSitlBusca') return;
+    GAR_SITL.busca = e.target.value.match(/\d+/g) || [];
+    clearTimeout(GAR_SITL.t); GAR_SITL.t = setTimeout(garDesenharSitl, 150);
 });
 
 // --- Análise de Garantia ---
@@ -3327,7 +3478,7 @@ document.addEventListener('keydown', (e) => {
 function garRedesenhar() {
     if (!GAR.dados) return;
     garGrupos = gruposFiltro();
-    garDesenharTop(); garDesenharVar(); garDesenharAnalise(); garDesenharResumo(); garDesenharOS();
+    garDesenharTop(); garDesenharVar(); garDesenharSitl(); garDesenharAnalise(); garDesenharResumo(); garDesenharOS(); garBotoesOcultar();
 }
 var syncGarLiberadas = criaSync('garantiaLiberadas', 'Matrículas liberadas (manual)', () => garLibManual,
     (m) => { garLibManual = m; try { localStorage.setItem(GAR_LIB_LS, JSON.stringify(garLibManual)); } catch (e) {} },
@@ -3344,7 +3495,7 @@ var syncGarantia = criaSync('garantia', 'Análise de garantia', () => garItens,
     (m) => { garItens = m; try { localStorage.setItem(GAR_LS, JSON.stringify(garItens)); } catch (e) {} },
     () => garRedesenhar(),
     () => !!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#garTabelaAnalise, #garAvisoOS')));
-garCarregar().then(() => { garRedesenhar(); syncGarantia.puxar(); syncGarLiberadas.puxar(); }).catch((e) => console.warn('Garantia: dados não carregaram', e));
+garCarregar().then(() => { garRedesenhar(); syncGarantia.puxar(); syncGarLiberadas.puxar(); syncGarAnalisadas.puxar(); }).catch((e) => console.warn('Garantia: dados não carregaram', e));
 
 // ===== Aba Plano de ação: tabela colada da planilha =====
 // Cada referência (mês) tem um plano { colunas, linhas, atualizado } na seção "plano" do ajustes_relatorio.json — o

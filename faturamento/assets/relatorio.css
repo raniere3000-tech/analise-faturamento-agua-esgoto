@@ -931,3 +931,25 @@ tr.gar-fora-lin[data-fora="vist"] > td { color:#6B21A8; }
 .ritmo-pct.ritmo-ok { background:#dcfce7; } .ritmo-pct.ritmo-atencao { background:#ffedd5; } .ritmo-pct.ritmo-baixo { background:#FFE4D5; }
 .ritmo-tag { font-weight:400; color:var(--azul-claro); }
 .ritmo-sub { margin:18px 0 8px; font-size:15px; color:var(--marinho); text-wrap:balance; }
+
+/* Garantia: botão/selo "Analisada" (todas as tabelas) e a sub-aba Situação de lançamento */
+.gar-acoes { display:inline-flex; align-items:center; gap:4px; flex-wrap:nowrap; }
+.gar-an-btn { border:1px solid #C9D3E0; background:#fff; color:#334155; border-radius:6px; font:inherit; font-size:10px; font-weight:600; padding:2px 6px; cursor:pointer; white-space:nowrap; transition:background-color .12s; }
+.gar-an-btn:hover { background:#EEF2F7; }
+.gar-an-selo { font-size:10px; font-weight:700; color:#5B21B6; background:#EDE9FE; border-radius:10px; padding:1px 7px; white-space:nowrap; }
+tr.gar-tr-analisada td { color:#64748b; background-color:#F8F7FC; }
+tr.gar-tr-analisada td.gar-forte { font-weight:400; }
+.gar-sitl-grupos { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+.gar-sitl-chip { display:inline-flex; align-items:baseline; gap:6px; min-height:36px; padding:6px 12px; border:1px solid var(--linha); border-radius:18px; background:#fff;
+  font:inherit; font-size:13px; color:var(--azul); cursor:pointer; transition:background-color .12s, border-color .12s; }
+.gar-sitl-chip b { color:var(--preto); font-variant-numeric:tabular-nums; }
+.gar-sitl-chip small { color:#5B21B6; font-size:11px; }
+.gar-sitl-chip:hover { background:#F3F6F9; }
+.gar-sitl-chip.ativo { background:var(--marinho); border-color:var(--marinho); color:#fff; }
+.gar-sitl-chip.ativo b, .gar-sitl-chip.ativo small { color:#fff; }
+.gar-mais { margin-top:8px; text-align:center; }
+#garTabelaSitl .gar-add { font-size:10.5px; padding:2px 6px; }
+@media print { .gar-an-btn, .gar-sitl-grupos, .gar-mais { display:none !important; } }
+#garTabelaSitl td.gar-lanc { white-space:normal; min-width:120px; max-width:170px; font-size:11.5px; }
+#garTabelaSitl th { white-space:normal; }
+#garTabelaSitl td.gar-quebra { white-space:normal; max-width:110px; }
