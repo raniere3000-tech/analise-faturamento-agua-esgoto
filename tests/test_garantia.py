@@ -396,3 +396,20 @@ def test_print_da_garantia_sem_linha_sem_retorno_e_sem_coluna_fora(sessao):
     html = open(sessao.caminho_html, encoding="utf-8").read()
     assert """tr[data-fora="vaz"], tr[data-fora="vist"], tr[data-fora="vazio"], .gar-col-fora""" in html
     assert '<th class="num gar-col-fora">Fora do resultado</th>' in html and "gar-fora gar-col-fora" in html
+
+
+def test_sub_aba_situacao_de_lancamento_e_botao_analisada(sessao):
+    import os
+    html = open(sessao.caminho_html, encoding="utf-8").read()
+    gar = html[html.index('data-gar-aba="top"'):]
+    pos = [gar.index(f'data-gar-aba="{a}"') for a in ("top", "variacao", "situacao", "analise", "resumo")]
+    assert pos == sorted(pos)
+    for t in ('id="garTabelaSitl"', 'id="garSitlGrupos"', 'id="garSitlBusca"', 'id="garSitlBaixar"'):
+        assert t in html, t
+    assert html.count('class="btn-just gar-filtro gar-oculta-an"') == 3       # Top, Aumentos e quedas e Situação de lançamento
+    assert 'id="sitl-agregados"' in html                                    # mapa código → leitura da situação (visão sintética)
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(raiz, "faturamento", "assets", "relatorio.js"), encoding="utf-8").read()
+    assert "criaSync('garantiaAnalisadas'" in js and "syncGarAnalisadas.puxar()" in js
+    assert js.count("${garAcoes(lig, naAnalise)}") == 3                      # o botão Analisada nas três tabelas
+    assert "garDesenharSitl(); garDesenharAnalise()" in js

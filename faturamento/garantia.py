@@ -171,12 +171,14 @@ def gera_aba_garantia_html(ctx):
   <div class="gar-topo">
     <h2>Garantia — {e(ctx.mes_atual)}</h2>
     <span class="gar-sub" role="tablist" aria-label="Partes da análise de garantia">
-      <button type="button" data-gar-aba="top" class="ativo" aria-pressed="true">Top {TOP}</button><button type="button" data-gar-aba="variacao" aria-pressed="false">Aumentos e quedas</button><button type="button" data-gar-aba="analise" aria-pressed="false">Análise de Garantia</button><button type="button" data-gar-aba="resumo" aria-pressed="false">Resumo de Ganhos</button>
+      <button type="button" data-gar-aba="top" class="ativo" aria-pressed="true">Top {TOP}</button><button type="button" data-gar-aba="variacao" aria-pressed="false">Aumentos e quedas</button><button type="button" data-gar-aba="situacao" aria-pressed="false">Situação de lançamento</button><button type="button" data-gar-aba="analise" aria-pressed="false">Análise de Garantia</button><button type="button" data-gar-aba="resumo" aria-pressed="false">Resumo de Ganhos</button>
     </span>
   </div>
   <p class="nota-secao">Top {TOP} matrículas pela <b>média do faturado (água + esgoto)</b> dos meses fechados disponíveis ({e(meses)});
   a lista se refaz a cada mês fechado que entra na pasta. Valores do mês atual ({e(ctx.mes_atual)}) e Situação Conta pela fatura de ciclo, sempre <b>como vieram do sistema</b> (as correções da etapa 2 não entram nesta aba).
-  Variação acima de 30% (consumo faturado ou faturamento) em <b>negrito</b>. Estrutura tarifária: {fonte_tarifa}.</p>
+  Variação acima de 30% (consumo faturado ou faturamento) em <b>negrito</b>.
+  <b>Analisada</b>: marca a matrícula que já foi olhada e não precisou ir para a garantia; a marca aparece em todas as tabelas desta aba
+  (Top {TOP}, Aumentos e quedas e Situação de lançamento), vale para o mês e fica salva na pasta para todos. Estrutura tarifária: {fonte_tarifa}.</p>
 </div>
 <div class="gar-painel" data-gar="top">
   <div class="card">
@@ -185,6 +187,7 @@ def gera_aba_garantia_html(ctx):
       <span class="gar-busca"><label for="garBuscaLig">Matrícula</label><input type="text" id="garBuscaLig" inputmode="numeric" autocomplete="off" placeholder="Filtrar por matrícula (uma ou várias)"><button type="button" class="btn-just" id="garLimparBusca" title="Limpar o filtro de matrícula" aria-label="Limpar o filtro de matrícula">✕</button></span>
       <span class="gar-dd" id="garCatDD"><span class="gar-dd-rot">Categoria</span><button type="button" class="gar-dd-btn" id="garCatBtn" aria-haspopup="true" aria-expanded="false" aria-controls="garCatLista" title="Filtrar por categoria (marque quantas quiser)">Todas ▾</button><div class="gar-dd-lista" id="garCatLista" role="group" aria-label="Categorias"></div></span>
       <button type="button" class="btn-just gar-filtro" id="garSoAnalise" aria-pressed="false">Somente em análise</button>
+      <button type="button" class="btn-just gar-filtro gar-oculta-an" aria-pressed="false">Ocultar analisadas</button>
       <button type="button" class="btn-just btn-baixar-gar" id="garBaixarTop" title="Baixar a lista na tela (Excel)" aria-label="Baixar a lista na tela (Excel)">&#11015;</button>
     </div>
     <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaTop"><thead></thead><tbody></tbody></table></div>
@@ -197,6 +200,7 @@ def gera_aba_garantia_html(ctx):
       <span class="gar-busca"><label for="garVarBusca">Matrícula</label><input type="text" id="garVarBusca" inputmode="numeric" autocomplete="off" placeholder="Filtrar por matrícula (uma ou várias)"><button type="button" class="btn-just" id="garVarLimpar" title="Limpar o filtro de matrícula" aria-label="Limpar o filtro de matrícula">✕</button></span>
       <span class="gar-dd" id="garVcatDD"><span class="gar-dd-rot">Categoria</span><button type="button" class="gar-dd-btn" id="garVcatBtn" aria-haspopup="true" aria-expanded="false" aria-controls="garVcatLista" title="Filtrar por categoria (marque quantas quiser)">Todas ▾</button><div class="gar-dd-lista" id="garVcatLista" role="group" aria-label="Categorias"></div></span>
       <button type="button" class="btn-just gar-filtro" id="garVarSoAnalise" aria-pressed="false">Somente em análise</button>
+      <button type="button" class="btn-just gar-filtro gar-oculta-an" aria-pressed="false">Ocultar analisadas</button>
     </div>
     <p class="nota-secao">Matrículas que faturaram nos dois meses ({e(nome_mes(ctx.ref_anterior)) if getattr(ctx, "ref_anterior", None) else "mês anterior"} e {e(ctx.mes_atual)}), pela variação do
     <b>faturado de água + esgoto</b> (R$). O ranking é refeito com os filtros (Superintendência, Grupo, Categoria e "Somente em análise");
@@ -208,6 +212,24 @@ def gera_aba_garantia_html(ctx):
   <div class="card"><div class="gar-topo"><h2>Top 100 quedas — {e(ctx.mes_atual)} × mês anterior</h2>
     <button type="button" class="btn-just" data-var-baixar="queda" title="Baixar o analítico das quedas (Excel, todas as matrículas com queda, com os filtros)" aria-label="Baixar o analítico das quedas">&#11015;&#8801;</button></div>
     <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaQueda"><thead></thead><tbody></tbody></table></div></div>
+</div>
+<div class="gar-painel" data-gar="situacao" hidden>
+  <div class="card">
+    <div class="gar-sitl-grupos" id="garSitlGrupos" role="group" aria-label="Leitura da situação (visão sintética)"></div>
+    <div class="gar-barra">
+      <span class="gar-contagem" id="garSitlContagem"></span>
+      <span class="gar-busca"><label for="garSitlBusca">Matrícula</label><input type="text" id="garSitlBusca" inputmode="numeric" autocomplete="off" placeholder="Filtrar por matrícula (uma ou várias)"><button type="button" class="btn-just" id="garSitlLimpar" title="Limpar o filtro de matrícula" aria-label="Limpar o filtro de matrícula">✕</button></span>
+      <span class="gar-dd" id="garScatDD"><span class="gar-dd-rot">Categoria</span><button type="button" class="gar-dd-btn" id="garScatBtn" aria-haspopup="true" aria-expanded="false" aria-controls="garScatLista" title="Filtrar por categoria (marque quantas quiser)">Todas ▾</button><div class="gar-dd-lista" id="garScatLista" role="group" aria-label="Categorias"></div></span>
+      <button type="button" class="btn-just gar-filtro" id="garSitlSoAnalise" aria-pressed="false">Somente em análise</button>
+      <button type="button" class="btn-just gar-filtro gar-oculta-an" aria-pressed="false">Ocultar analisadas</button>
+      <button type="button" class="btn-just btn-baixar-gar" id="garSitlBaixar" title="Baixar a lista na tela (Excel)" aria-label="Baixar a lista na tela (Excel)">&#11015;</button>
+    </div>
+    <p class="nota-secao">As mesmas listas da visão <b>sintética</b> da Situação de lançamento (aba Análise), sem precisar baixar: escolha a
+    leitura da situação acima. Uma linha por matrícula com Situação Lançamento no mês atual, com os filtros da tela (Superintendência,
+    Grupo, Categoria). Ordem inicial: maior diferença (R$) entre o faturado atual e a média dos meses fechados; clique no título para ordenar.</p>
+    <div class="tabela-wrap"><table class="tabela-garantia" id="garTabelaSitl"><thead></thead><tbody></tbody></table></div>
+    <div class="gar-mais" id="garSitlMais"></div>
+  </div>
 </div>
 <div class="gar-painel" data-gar="analise" hidden>
   <div class="card">
