@@ -1566,8 +1566,19 @@ document.querySelectorAll('#view-tabelas th[data-full]').forEach(th => { th.colS
 // ===== Relatório executivo (PDF): copia o que está na tela agora — filtros, orçado escolhido e botões de ocultar valem =====
 // modo 'celular' (padrão): folha em pé na largura do celular, letra grande e tabelas só com as colunas principais;
 // modo 'a4': folhas A4 deitadas, com todas as colunas (para imprimir)
-function gerarExecutivo(libs, modo) {
+function gerarExecutivo(libs, modo, arquivo) {
+    if (modo === 'resumo') return execResumoParaJuntar();               // arquivo para juntar no painel da outra superintendência
+    if (modo === 'juntar') return execJuntar(libs, arquivo);            // Interior + Leste num PDF só
+    const { cont, sup, nomeMes } = montaExecutivo(modo !== 'a4');
     const celular = modo !== 'a4';
+    // PDF gerado direto (arquivo .pdf baixado, sem a janela de impressão); sem as bibliotecas, cai na impressão
+    obterLibsPdf(libs).then(l => (l ? gerarPdfDireto(cont, l, `Executivo_${sup}_${nomeMes}` + (celular ? '_celular' : '')) : Promise.reject(new Error('sem bibliotecas'))))
+        .catch(erro => { console.warn('PDF direto indisponível, usando a impressão:', erro); imprimirDocumentoLeve(cont); });
+}
+
+// Monta as seções do Executivo (cópias dos quadros da tela, com os filtros). parte = { sup, cls } no PDF Interior + Leste:
+// cada seção leva a etiqueta da superintendência, o Resumo ganha título e os filtros vão logo abaixo dele.
+function montaExecutivo(celular, parte) {
     const antigo = document.getElementById('view-executivo'); if (antigo) antigo.remove();
     const cont = document.createElement('div'); cont.id = 'view-executivo';
     if (document.getElementById('view-tabelas').classList.contains('compacto')) cont.classList.add('compacto');
@@ -1628,7 +1639,7 @@ function gerarExecutivo(libs, modo) {
     cab.querySelector('h1').textContent = titulo;
     cab.querySelector('p').textContent = `Superintendência: ${nomeSup} · Mês: ${nomeMes} · Orçado comparado: ${refs} · Grupos: ` +
         (marcados === grupos ? `todos (${grupos})` : `${marcados} de ${grupos}`) + ` · Gerado em ${new Date().toLocaleString('pt-BR')}`;
-    cont.appendChild(cab);
+    if (!parte) cont.appendChild(cab);
     const card = (sel) => (q(sel) || { closest: () => null }).closest('.card');
     // seções do PDF: título (começa página nova) + os quadros daquela seção; seção sem quadro não entra
     const secoes = [
@@ -1648,19 +1659,135 @@ function gerarExecutivo(libs, modo) {
         blocos.forEach((b) => b.remove());
         return [c].concat(blocos.map((b) => { const w = document.createElement('div'); w.className = 'exec-just-bloco'; w.appendChild(b); return w; }));
     };
+    let primeiraSecao = true;
     secoes.forEach(([nome, els]) => {
         const copias = els.map(clona).filter(Boolean).flatMap(separaGrupos);
         if (!copias.length) return;
+        if (parte && !nome) nome = 'Resumo';
         if (nome) {
             const t = document.createElement('div'); t.className = 'exec-secao';
+            if (parte) {
+                t.classList.add(parte.cls);
+                const tag = document.createElement('span'); tag.className = 'exec-tag'; tag.textContent = parte.sup; t.appendChild(tag);
+                if (primeiraSecao) t.dataset.parte = parte.sup;             // começo da parte: destino do link da página inicial
+            }
             const h = document.createElement('h2'); h.textContent = nome; t.appendChild(h);
+            if (parte && primeiraSecao) { const f = document.createElement('p'); f.className = 'exec-parte-filtros'; f.textContent = cab.querySelector('p').textContent; t.appendChild(f); }
             cont.appendChild(t);
+            primeiraSecao = false;
         }
-        copias.forEach(c => { c.classList.add('exec-item'); cont.appendChild(c); });
+        copias.forEach(c => { c.classList.add('exec-item'); if (parte) c.classList.add(parte.cls); cont.appendChild(c); });
     });
-    // PDF gerado direto (arquivo .pdf baixado, sem a janela de impressão); sem as bibliotecas, cai na impressão
-    obterLibsPdf(libs).then(l => (l ? gerarPdfDireto(cont, l, `Executivo_${sup}_${nomeMes}` + (celular ? '_celular' : '')) : Promise.reject(new Error('sem bibliotecas'))))
-        .catch(erro => { console.warn('PDF direto indisponível, usando a impressão:', erro); imprimirDocumentoLeve(cont); });
+    return { cont, sup, mes, nomeSup, nomeMes, filtros: cab.querySelector('p').textContent };
+}
+
+// ===== Executivo Interior + Leste num PDF só =====
+// O painel da Leste baixa o "Resumo para juntar" (JSON): as seções do Executivo em HTML (texto e tabelas, não imagem) e os
+// números da página inicial. No painel do Interior, o arquivo é lido e desenhado de novo junto com as seções do Interior,
+// na mesma qualidade: página inicial com as duas lado a lado (nomes com link), depois as páginas do Interior e as da Leste.
+const EXEC_RESUMO_TIPO = 'faturamento-executivo-resumo';
+function supDoPainel() {
+    let e = ''; try { e = String((window.parent && window.parent.ESCOPO_ARMAZENAMENTO) || window.ESCOPO_ARMAZENAMENTO || ''); } catch (x) { e = ''; }
+    return /leste/i.test(e) ? 'LESTE' : 'INTERIOR';
+}
+const execParte = (sup) => ({ sup, cls: sup === 'LESTE' ? 'exec-parte-leste' : 'exec-parte-interior' });
+const execNum = (t) => { const s = String(t || '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'); const v = parseFloat(s); return isNaN(v) ? null : v; };
+// números da página inicial, lidos da tela já calculada (KPIs do Resumo, Forecast e andamento das indiretas)
+function capaDados() {
+    const sup = ESTADO.sup, mes = ESTADO.mes, q = (s) => document.querySelector(s);
+    const kpis = ['fattotal', 'fatagua', 'fatesgoto'].map((f) => {
+        const v = q(`#view-resumo [data-field="${f}-valor"]`), d = q(`#view-resumo [data-field="${f}-delta"]`);
+        const card = v && v.closest('.kpi-card');
+        return { tit: card ? card.querySelector('h3').textContent.trim() : f, val: execNum(v && v.textContent), delta: d ? d.textContent.trim() : '',
+                 neg: !!(card && card.classList.contains('negativo')) };
+    });
+    const t = q(`#view-forecast .prev-bloco[data-sup="${sup}"] table.tabela-previsao`);
+    let fonte = '', linhas = [];
+    if (t) {
+        const orcs = Array.from(t.tHead.rows[0].cells).filter((c) => c.dataset.tipo === 'orc').map((c) => c.dataset.src);
+        fonte = orcs.find((f) => /SUP/i.test(f)) || orcs[0] || '';
+        const val = (k, sel) => { const r = t.querySelector(`tr[data-k="${k}"]`); const c = r && r.querySelector(sel); return c ? execNum(c.textContent) : null; };
+        const orc = (k) => val(k, `td[data-tipo="orc"][data-src="${CSS.escape(fonte)}"]`);
+        const soma = (a, b) => (a == null && b == null ? null : (a || 0) + (b || 0));
+        const linha = (rot, ks, forte) => {
+            const real = ks.map((k) => val(k, '.p-real')).reduce(soma, null), fech = ks.map((k) => val(k, '.p-fech')).reduce(soma, null);
+            const o = ks.map(orc).reduce(soma, null);
+            return { rot, real, fech, orc: o, forte: !!forte };
+        };
+        linhas = [linha('Diretas Água', ['dA']), linha('Diretas Esgoto', ['dE']), linha('Indiretas', ['iA', 'iE']), linha('Faturamento bruto', ['bruto'], true)];
+    }
+    let ind = null;
+    const rc = q(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .ritmo-card`);
+    if (rc) {
+        const tr = rc.querySelector('.ritmo-fin tbody tr:last-child'), res = rc.querySelector('.ritmo-resumo');
+        if (tr) ind = { real: execNum(tr.cells[3].textContent), esp: execNum(tr.cells[2].textContent), pct: tr.cells[5].textContent.trim(),
+                        dia: res ? res.textContent.split('·')[0].trim() : '' };
+    }
+    return { kpis, fonte, linhas, ind };
+}
+function execBaixaTexto(texto, nome, tipo) {
+    const url = URL.createObjectURL(new Blob([texto], { type: tipo }));
+    const a = document.createElement('a'); a.href = url;
+    a.download = String(nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_.-]+/g, '_');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function execResumoParaJuntar() {
+    const sup = supDoPainel(), r = montaExecutivo(false, execParte(sup));
+    const dados = { tipo: EXEC_RESUMO_TIPO, versao: 1, sup, mes: ESTADO.mes, nomeMes: r.nomeMes, filtros: r.filtros, gerado: new Date().toISOString(),
+                    capa: capaDados(), html: Array.from(r.cont.children).map((c) => c.outerHTML).join('') };
+    execBaixaTexto(JSON.stringify(dados), `Resumo_para_juntar_${sup === 'LESTE' ? 'Leste' : 'Interior'}_${r.nomeMes}.json`, 'application/json');
+    if (typeof printAviso === 'function') printAviso(`Resumo para juntar baixado. No painel ${sup === 'LESTE' ? 'do Interior' : 'da Leste'}, use Executivo (PDF) ▾ › Interior + Leste e escolha este arquivo.`, 9000);
+    return dados;
+}
+const execMi = (v) => (v == null ? '–' : Math.abs(v) >= 1e6 ? 'R$ ' + fmtBR(v / 1e6, 1) + ' mi' : Math.abs(v) >= 1e3 ? 'R$ ' + fmtBR(v / 1e3, 1) + ' mil' : 'R$ ' + fmtBR(v, 0));
+const execEsc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function execCapaHtml(partes, nomeMes) {
+    const col = ({ sup, capa }) => {
+        const c = capa || {}, cls = sup === 'LESTE' ? 'cap-leste' : 'cap-interior';
+        const kp = (c.kpis || []).map((k) => `<div class="cap-kpi"><h3>${execEsc(k.tit)}</h3><b>${execMi(k.val)}</b>`
+            + `<small class="${k.neg ? 'cap-neg' : 'cap-pos'}">${execEsc(k.delta)}</small></div>`).join('');
+        const dp = (l) => (l.fech == null || !l.orc ? null : l.fech / l.orc - 1);
+        const linhas = (c.linhas || []).map((l) => { const d = dp(l);
+            return `<tr${l.forte ? ' class="cap-forte"' : ''}><td>${execEsc(l.rot)}</td><td>${execMi(l.real)}</td><td>${execMi(l.fech)}</td><td>${execMi(l.orc)}</td>`
+                + `<td class="${d == null ? '' : d < 0 ? 'cap-neg' : 'cap-pos'}">${d == null ? '–' : (d > 0 ? '+' : '') + fmtBR(d * 100, 1) + '%'}</td></tr>`; }).join('');
+        const ind = c.ind ? `<div class="cap-card"><h4>Indiretas — andamento do mês</h4><div class="cap-ind"><span>${execMi(c.ind.real)} realizado · esperado ${execMi(c.ind.esp)}</span>`
+            + `<b>${execEsc(c.ind.pct)} do esperado</b></div><div class="cap-barra"><i style="width:${Math.max(0, Math.min(100, c.ind.esp ? c.ind.real / c.ind.esp * 100 : 0))}%"></i></div>`
+            + `<small>${execEsc(c.ind.dia)}</small></div>` : '';
+        return `<div class="cap-col ${cls}"><div class="cap-tag-linha"><span class="cap-tag" data-link-parte="${execEsc(sup)}">${execEsc(sup)}</span><span class="cap-dica">clique para ir às páginas</span></div>`
+            + `<div class="cap-kpis">${kp}</div>`
+            + `<div class="cap-card"><h4>Fechamento previsto × orçado ${execEsc(c.fonte || '')}</h4><table class="cap-tab"><thead><tr><th>Linha</th><th>Realizado</th><th>Real. + Forecast</th><th>Orçado</th><th>Δ %</th></tr></thead>`
+            + `<tbody>${linhas || '<tr><td colspan="5">Sem forecast neste mês</td></tr>'}</tbody></table></div>${ind}</div>`;
+    };
+    const d = document.createElement('div'); d.className = 'exec-capa';
+    d.innerHTML = `<div class="cap-tit">Faturamento Água e Esgoto — Executivo Interior e Leste</div><div class="cap-sub">${execEsc(nomeMes)} · Gerado em ${execEsc(new Date().toLocaleString('pt-BR'))}</div>`
+        + `<div class="cap-cols">${partes.map(col).join('')}</div>`;
+    return d;
+}
+function execLeResumo(texto) {
+    let j; try { j = typeof texto === 'string' ? JSON.parse(texto) : texto; } catch (e) { throw new Error('o arquivo não é um Resumo para juntar (JSON inválido)'); }
+    if (!j || j.tipo !== EXEC_RESUMO_TIPO || typeof j.html !== 'string') throw new Error('o arquivo não é um Resumo para juntar do painel de faturamento');
+    const t = document.createElement('template'); t.innerHTML = j.html;
+    t.content.querySelectorAll('script, iframe, object, embed').forEach((x) => x.remove());          // só conteúdo
+    t.content.querySelectorAll('*').forEach((el) => Array.from(el.attributes).forEach((a) => { if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name); }));
+    return { ...j, elementos: Array.from(t.content.children) };
+}
+function execJuntar(libs, texto) {
+    let outro;
+    try { outro = execLeResumo(texto); } catch (e) { alert('Não foi possível juntar: ' + e.message + '.'); return null; }
+    const meu = supDoPainel();
+    if (outro.sup === meu) { alert(`Este arquivo é ${meu === 'LESTE' ? 'da Leste' : 'do Interior'}, o mesmo deste painel: escolha o Resumo para juntar do outro painel.`); return null; }
+    if (outro.mes !== ESTADO.mes && !confirm(`O resumo ${outro.sup === 'LESTE' ? 'da Leste' : 'do Interior'} é de ${outro.nomeMes || outro.mes} e este painel está em outro mês. Juntar mesmo assim?`)) return null;
+    const r = montaExecutivo(false, execParte(meu));
+    const proprio = { sup: meu, capa: capaDados(), elementos: Array.from(r.cont.children) };
+    const partes = [proprio, outro].sort((a, b) => (a.sup === 'INTERIOR' ? 0 : 1) - (b.sup === 'INTERIOR' ? 0 : 1));
+    const cont = r.cont; cont.innerHTML = '';
+    cont.classList.add('exec-juntos');
+    cont.appendChild(execCapaHtml(partes, r.nomeMes));
+    partes.forEach((p) => p.elementos.forEach((el) => cont.appendChild(el)));
+    const nome = `Executivo_Interior_e_Leste_${r.nomeMes}`;
+    return obterLibsPdf(libs).then((l) => (l ? gerarPdfDireto(cont, l, nome) : Promise.reject(new Error('sem bibliotecas'))))
+        .catch((erro) => { console.warn('PDF direto indisponível, usando a impressão:', erro); imprimirDocumentoLeve(cont); });
 }
 
 const EXEC_CEL_W = 430;      // largura (px) da folha do Executivo para celular: as letras ficam do tamanho da tela do telefone
@@ -1771,6 +1898,13 @@ async function gerarPdfDireto(cont, libs, nome) {
             } });
         const r0 = raiz.getBoundingClientRect();
         const filhos = Array.from(raiz.children);
+        // Interior + Leste: a página inicial (exec-capa) e a posição de cada nome (fração do quadro), para os links
+        const capaEl = filhos[0] && filhos[0].classList.contains('exec-capa') ? filhos[0] : null;
+        const capaLinks = capaEl ? (() => { const cb = capaEl.getBoundingClientRect();
+            return Array.from(capaEl.querySelectorAll('[data-link-parte]')).map((t) => { const r = t.getBoundingClientRect();
+                return { parte: t.dataset.linkParte, x: (r.left - cb.left) / cb.width, y: (r.top - cb.top) / cb.height, w: r.width / cb.width, h: r.height / cb.height }; }); })() : [];
+        const paginasParte = {};
+        let capaPos = null;
         // px da cópia → px da foto (a foto tem a altura da cópia × escala)
         const kFoto = medidas && medidas.altura ? foto.height / medidas.altura : ESC;
         const posicao = (el, i) => {
@@ -1843,7 +1977,14 @@ async function gerarPdfDireto(cont, libs, nome) {
             const { topo, altPx } = posicao(el, i);
             if (!altPx) continue;
             const alt = altPx * mmPorPx;
+            if (el === capaEl) {                                      // página inicial: inteira numa página, centralizada
+                const k = Math.min(1, LH / alt), ww = LW * k, hh = alt * k, x0 = M + (LW - ww) / 2;
+                pdf4.addImage(recorte(topo, altPx), 'JPEG', x0, y, ww, hh);
+                capaPos = { x0, y0: y, ww, hh }; y += hh + 3; primeira = false;
+                continue;
+            }
             if (el.classList.contains('exec-secao') && !primeira && y > M) novaPagina();
+            if (el.dataset && el.dataset.parte && !paginasParte[el.dataset.parte]) paginasParte[el.dataset.parte] = pdf4.getNumberOfPages();
             if (juntas.has(i)) {
                 pdf4.addImage(recorte(topo, altPx), 'JPEG', M, y, LW, alt);
                 y += alt + 3;
@@ -1903,6 +2044,16 @@ async function gerarPdfDireto(cont, libs, nome) {
         for (let i = 1; i <= total; i++) {                            // rodapé: página X de N
             pdf4.setPage(i); pdf4.setFontSize(8); pdf4.setTextColor(73, 102, 140);
             pdf4.text(`Águas do Rio · Relatório Executivo · página ${i} de ${total}`, W - M, H - 5, { align: 'right' });
+            if (capaPos && i > 1) pdf4.textWithLink('« Página inicial (Interior e Leste)', M, H - 5, { pageNumber: 1 });
+        }
+        if (capaPos) {                                                // nomes da página inicial levam ao começo de cada parte
+            pdf4.setPage(1);
+            capaLinks.forEach((l) => { const pg = paginasParte[l.parte]; if (!pg) return;
+                pdf4.link(capaPos.x0 + l.x * capaPos.ww, capaPos.y0 + l.y * capaPos.hh, l.w * capaPos.ww, l.h * capaPos.hh, { pageNumber: pg }); });
+            try {
+                pdf4.outline.add(null, 'Página inicial — Interior e Leste', { pageNumber: 1 });
+                Object.entries(paginasParte).forEach(([p, pg]) => pdf4.outline.add(null, p === 'LESTE' ? 'Leste' : 'Interior', { pageNumber: pg }));
+            } catch (e) { /* leitor sem marcadores */ }
         }
         baixaPdf(pdf4, nome);
     } finally {

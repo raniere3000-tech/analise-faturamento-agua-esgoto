@@ -476,7 +476,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v183</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button><span class="nuvem-msg" id="nuvemMsg" role="status" aria-live="polite"></span></span></div>
+      <div class="eyebrow">Águas do Rio • Relatório Executivo <span class="versao-nuvem"><span class="versao" id="versao">v184</span><button type="button" class="nuvem nuvem-erro" id="nuvem" title="Sem pasta conectada: as alterações ficam só neste navegador" aria-label="Situação do salvamento na nuvem"></button><span class="nuvem-msg" id="nuvemMsg" role="status" aria-live="polite"></span></span></div>
       <h1 id="titulo">Análise de Faturamento — Água e Esgoto</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -550,6 +550,8 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
       <span class="menu-pdf-lista" id="menuPdf" role="menu" hidden>
         <button type="button" role="menuitem" data-modo="celular">📱 Para ler no celular<small>Folha em pé, letra grande, colunas principais</small></button>
         <button type="button" role="menuitem" data-modo="a4">🖨 A4 para imprimir<small>Folhas deitadas, com todas as colunas</small></button>
+        <button type="button" role="menuitem" data-modo="juntar">🔗 Interior + Leste (um arquivo só)<small>A4: página inicial lado a lado, depois as páginas do Interior e as da Leste. Pede o Resumo para juntar do outro painel</small></button>
+        <button type="button" role="menuitem" data-modo="resumo">📦 Resumo para juntar<small>Baixa as seções deste painel em texto (não imagem), para juntar no painel da outra superintendência</small></button>
       </span></span>
     <span class="menu-pdf" id="menuPrintWrap"><button type="button" class="btn-top" id="btnPrint" hidden aria-haspopup="true" aria-expanded="false" aria-controls="menuPrint" title="Imagem em alta resolução de um quadro do painel, para colar na apresentação">🖼 Prints ▾</button>
       <span class="menu-pdf-lista" id="menuPrint" role="menu" hidden>
@@ -579,6 +581,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
         <button type="button" id="btnAcompZerar">↺ Zerar contagem semanal<small>Apaga as "fotos" guardadas das indiretas: o próximo arquivo começa do zero</small></button>
       </span></span>
   </div>
+  <input type="file" id="arqJuntar" accept=".json,application/json" hidden>
   <!-- aba Base (do site): analítico das matrículas coladas, como a aba Base do painel da arrecadação -->
   <section class="card-extrair" id="cardExtrair" hidden aria-labelledby="dlgExtrairTit">
     <div class="dlg-corpo" id="frmExtrair">
@@ -686,7 +689,7 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
 <script src="faturamento/assets/tarifa.js"></script>
 <script>
 (() => {
-  const VERSAO_SITE = "v183-20261125"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
+  const VERSAO_SITE = "v184-20261126"; // muda a cada alteração: o selo do cabeçalho é derivado daqui
   try { document.getElementById("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) {}
   const EXTENSOES = [".csv", ".xlsx", ".xls"];
   const SAIDAS = {
@@ -1901,8 +1904,16 @@ body.sem-pasta #btnPasta, body.sem-pasta #btnLimparCache { display: none; }
     fechaMenuPdf();
     const w = janela(); w.focus();
     if (!w.gerarExecutivo) { w.print(); return; }                 // relatório antigo (sem executivo): imprime a tela
+    if (b.dataset.modo === "juntar") { $("arqJuntar").value = ""; $("arqJuntar").click(); return; }   // escolhe o resumo do outro painel
     w.gerarExecutivo(await libsPdf(), b.dataset.modo);            // sem as bibliotecas, o relatório tenta o CDN e depois a impressão
   }));
+  // Interior + Leste: lê o "Resumo para juntar" escolhido e gera o PDF único no relatório
+  $("arqJuntar").addEventListener("change", async () => {
+    const f = $("arqJuntar").files[0]; if (!f) return;
+    const w = janela();
+    if (!w.gerarExecutivo || !w.execLeResumo) { alert("Este relatório foi gerado por uma versão anterior do painel: atualize a análise para juntar os executivos."); return; }
+    w.gerarExecutivo(await libsPdf(), "juntar", await f.text());
+  });
   // Prints da apresentação: o relatório gera o PNG (e baixa); aqui ele também vai para a área de transferência (Ctrl+V no slide).
   // O ClipboardItem recebe a promessa na hora do clique: a cópia continua valendo depois do tempo de gerar a imagem.
   const menuPrint = $("menuPrint");
