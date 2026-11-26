@@ -1663,7 +1663,8 @@ function montaExecutivo(celular, parte) {
     secoes.forEach(([nome, els]) => {
         const copias = els.map(clona).filter(Boolean).flatMap(separaGrupos);
         if (!copias.length) return;
-        if (parte && !nome) nome = 'Resumo';
+        // Interior + Leste: o Resumo vai para a página inicial (um bloco por superintendência), não entre as páginas da parte
+        if (parte && !nome) { cont.appendChild(execCapaParte(parte, cab.querySelector('p').textContent)); return; }
         if (nome) {
             const t = document.createElement('div'); t.className = 'exec-secao';
             if (parte) {
@@ -1691,40 +1692,6 @@ function supDoPainel() {
     return /leste/i.test(e) ? 'LESTE' : 'INTERIOR';
 }
 const execParte = (sup) => ({ sup, cls: sup === 'LESTE' ? 'exec-parte-leste' : 'exec-parte-interior' });
-const execNum = (t) => { const s = String(t || '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'); const v = parseFloat(s); return isNaN(v) ? null : v; };
-// números da página inicial, lidos da tela já calculada (KPIs do Resumo, Forecast e andamento das indiretas)
-function capaDados() {
-    const sup = ESTADO.sup, mes = ESTADO.mes, q = (s) => document.querySelector(s);
-    const kpis = ['fattotal', 'fatagua', 'fatesgoto'].map((f) => {
-        const v = q(`#view-resumo [data-field="${f}-valor"]`), d = q(`#view-resumo [data-field="${f}-delta"]`);
-        const card = v && v.closest('.kpi-card');
-        return { tit: card ? card.querySelector('h3').textContent.trim() : f, val: execNum(v && v.textContent), delta: d ? d.textContent.trim() : '',
-                 neg: !!(card && card.classList.contains('negativo')) };
-    });
-    const t = q(`#view-forecast .prev-bloco[data-sup="${sup}"] table.tabela-previsao`);
-    let fonte = '', linhas = [];
-    if (t) {
-        const orcs = Array.from(t.tHead.rows[0].cells).filter((c) => c.dataset.tipo === 'orc').map((c) => c.dataset.src);
-        fonte = orcs.find((f) => /SUP/i.test(f)) || orcs[0] || '';
-        const val = (k, sel) => { const r = t.querySelector(`tr[data-k="${k}"]`); const c = r && r.querySelector(sel); return c ? execNum(c.textContent) : null; };
-        const orc = (k) => val(k, `td[data-tipo="orc"][data-src="${CSS.escape(fonte)}"]`);
-        const soma = (a, b) => (a == null && b == null ? null : (a || 0) + (b || 0));
-        const linha = (rot, ks, forte) => {
-            const real = ks.map((k) => val(k, '.p-real')).reduce(soma, null), fech = ks.map((k) => val(k, '.p-fech')).reduce(soma, null);
-            const o = ks.map(orc).reduce(soma, null);
-            return { rot, real, fech, orc: o, forte: !!forte };
-        };
-        linhas = [linha('Diretas Água', ['dA']), linha('Diretas Esgoto', ['dE']), linha('Indiretas', ['iA', 'iE']), linha('Faturamento bruto', ['bruto'], true)];
-    }
-    let ind = null;
-    const rc = q(`#view-indiretas .sup-bloco[data-sup="${sup}"][data-mes="${mes}"] .ritmo-card`);
-    if (rc) {
-        const tr = rc.querySelector('.ritmo-fin tbody tr:last-child'), res = rc.querySelector('.ritmo-resumo');
-        if (tr) ind = { real: execNum(tr.cells[3].textContent), esp: execNum(tr.cells[2].textContent), pct: tr.cells[5].textContent.trim(),
-                        dia: res ? res.textContent.split('·')[0].trim() : '' };
-    }
-    return { kpis, fonte, linhas, ind };
-}
 function execBaixaTexto(texto, nome, tipo) {
     const url = URL.createObjectURL(new Blob([texto], { type: tipo }));
     const a = document.createElement('a'); a.href = url;
@@ -1734,39 +1701,66 @@ function execBaixaTexto(texto, nome, tipo) {
 }
 function execResumoParaJuntar() {
     const sup = supDoPainel(), r = montaExecutivo(false, execParte(sup));
-    const dados = { tipo: EXEC_RESUMO_TIPO, versao: 1, sup, mes: ESTADO.mes, nomeMes: r.nomeMes, filtros: r.filtros, gerado: new Date().toISOString(),
-                    capa: capaDados(), html: Array.from(r.cont.children).map((c) => c.outerHTML).join('') };
+    const dados = { tipo: EXEC_RESUMO_TIPO, versao: 2, sup, mes: ESTADO.mes, nomeMes: r.nomeMes, filtros: r.filtros, gerado: new Date().toISOString(),
+                    html: Array.from(r.cont.children).map((c) => c.outerHTML).join('') };
     execBaixaTexto(JSON.stringify(dados), `Resumo_para_juntar_${sup === 'LESTE' ? 'Leste' : 'Interior'}_${r.nomeMes}.json`, 'application/json');
     if (typeof printAviso === 'function') printAviso(`Resumo para juntar baixado. No painel ${sup === 'LESTE' ? 'do Interior' : 'da Leste'}, use Executivo (PDF) ▾ › Interior + Leste e escolha este arquivo.`, 9000);
     return dados;
 }
-const execMi = (v) => (v == null ? '–' : Math.abs(v) >= 1e6 ? 'R$ ' + fmtBR(v / 1e6, 1) + ' mi' : Math.abs(v) >= 1e3 ? 'R$ ' + fmtBR(v / 1e3, 1) + ' mil' : 'R$ ' + fmtBR(v, 0));
 const execEsc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-function execCapaHtml(partes, nomeMes) {
-    const col = ({ sup, capa }) => {
-        const c = capa || {}, cls = sup === 'LESTE' ? 'cap-leste' : 'cap-interior';
-        const kp = (c.kpis || []).map((k) => `<div class="cap-kpi"><h3>${execEsc(k.tit)}</h3><b>${execMi(k.val)}</b>`
-            + `<small class="${k.neg ? 'cap-neg' : 'cap-pos'}">${execEsc(k.delta)}</small></div>`).join('');
-        const dp = (l) => (l.fech == null || !l.orc ? null : l.fech / l.orc - 1);
-        const linhas = (c.linhas || []).map((l) => { const d = dp(l);
-            return `<tr${l.forte ? ' class="cap-forte"' : ''}><td>${execEsc(l.rot)}</td><td>${execMi(l.real)}</td><td>${execMi(l.fech)}</td><td>${execMi(l.orc)}</td>`
-                + `<td class="${d == null ? '' : d < 0 ? 'cap-neg' : 'cap-pos'}">${d == null ? '–' : (d > 0 ? '+' : '') + fmtBR(d * 100, 1) + '%'}</td></tr>`; }).join('');
-        const ind = c.ind ? `<div class="cap-card"><h4>Indiretas — andamento do mês</h4><div class="cap-ind"><span>${execMi(c.ind.real)} realizado · esperado ${execMi(c.ind.esp)}</span>`
-            + `<b>${execEsc(c.ind.pct)} do esperado</b></div><div class="cap-barra"><i style="width:${Math.max(0, Math.min(100, c.ind.esp ? c.ind.real / c.ind.esp * 100 : 0))}%"></i></div>`
-            + `<small>${execEsc(c.ind.dia)}</small></div>` : '';
-        return `<div class="cap-col ${cls}"><div class="cap-tag-linha"><span class="cap-tag" data-link-parte="${execEsc(sup)}">${execEsc(sup)}</span><span class="cap-dica">clique para ir às páginas</span></div>`
-            + `<div class="cap-kpis">${kp}</div>`
-            + `<div class="cap-card"><h4>Fechamento previsto × orçado ${execEsc(c.fonte || '')}</h4><table class="cap-tab"><thead><tr><th>Linha</th><th>Realizado</th><th>Real. + Forecast</th><th>Orçado</th><th>Δ %</th></tr></thead>`
-            + `<tbody>${linhas || '<tr><td colspan="5">Sem forecast neste mês</td></tr>'}</tbody></table></div>${ind}</div>`;
-    };
+// gráfico do Resumo para a página inicial: mais baixo (cabem dois numa folha) e, na Leste, as barras do mês atual em ciano
+function execGraficoCapa(leste) {
+    const cv = document.getElementById('graficoFaturamento'), ch = cv && window.Chart && Chart.getChart ? Chart.getChart(cv) : null;
+    if (!ch) return null;
+    const ds = ch.data.datasets[1], orig = ds ? ds.backgroundColor : null, dpr = ch.options.devicePixelRatio, w0 = ch.width, h0 = ch.height;
+    const pad = ch.options.layout && ch.options.layout.padding, padOrig = pad && typeof pad === 'object' ? { ...pad } : pad;
+    const troca = (c) => (/^#1a2740$/i.test(String(c)) ? '#16a5b8' : c);
+    const lab = ch.options.plugins && ch.options.plugins.legend && ch.options.plugins.legend.labels, gen = lab && lab.generateLabels;
+    try {
+        if (leste && ds) ds.backgroundColor = Array.isArray(orig) ? orig.map(troca) : troca(orig);
+        if (leste && gen) lab.generateLabels = (c) => gen.call(lab, c).map((x) => ({ ...x, fillStyle: troca(x.fillStyle), strokeStyle: troca(x.strokeStyle) }));
+        if (pad && typeof pad === 'object') ch.options.layout.padding = { ...pad, top: 16 };
+        ch.options.devicePixelRatio = 3; ch.resize(1000, 210); ch.update('none');
+        return ch.toBase64Image('image/png');
+    } catch (e) { return null; } finally {
+        if (ds) ds.backgroundColor = orig;
+        if (gen) lab.generateLabels = gen;
+        if (pad && typeof pad === 'object') ch.options.layout.padding = padOrig;
+        ch.options.devicePixelRatio = dpr;
+        if (w0 && h0) ch.resize(w0, h0); else ch.resize();
+        ch.update('none');
+    }
+}
+// bloco do Resumo de uma superintendência na página inicial: faixa com o nome (link para as páginas dela), os 8 cartões,
+// o gráfico por grupo e os dias de leitura
+function execCapaParte(parte, filtros) {
+    const leste = parte.sup === 'LESTE', d = document.createElement('div');
+    d.className = 'exec-capa-parte ' + (leste ? 'cap-leste' : 'cap-interior');
+    d.innerHTML = `<div class="cap-cab"><span class="cap-tag" data-link-parte="${execEsc(parte.sup)}">${execEsc(parte.sup)}</span><b>Resumo</b>`
+        + `<span class="cap-dica">clique no nome para ir às páginas ${leste ? 'da Leste' : 'do Interior'}</span>`
+        + `<small>${execEsc(String(filtros || '').replace(/ · Gerado em .*$/, ''))}</small></div>`;
+    const kp = document.querySelector('#view-resumo .kpis-grid');
+    if (kp) d.appendChild(kp.cloneNode(true));
+    const card = document.createElement('div'); card.className = 'cap-grafico';
+    const url = execGraficoCapa(leste);
+    if (url) { const img = new Image(); img.src = url; img.className = 'exec-grafico'; card.appendChild(img); }
+    const dias = document.querySelector('#view-resumo .card-faixa .obs-dias');
+    if (dias) { const f = document.createElement('div'); f.className = 'exec-dias-leitura'; f.innerHTML = '<b class="exec-dias-tit">Dias de leitura (média)</b>';
+        const v = dias.cloneNode(true); v.className = 'exec-dias-val'; f.appendChild(v); card.appendChild(f); }
+    d.appendChild(card);
+    d.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id'));
+    return d;
+}
+function execCapaHtml(blocos, nomeMes) {
     const d = document.createElement('div'); d.className = 'exec-capa';
-    d.innerHTML = `<div class="cap-tit">Faturamento Água e Esgoto — Executivo Interior e Leste</div><div class="cap-sub">${execEsc(nomeMes)} · Gerado em ${execEsc(new Date().toLocaleString('pt-BR'))}</div>`
-        + `<div class="cap-cols">${partes.map(col).join('')}</div>`;
+    d.innerHTML = `<div class="cap-tit">Faturamento Água e Esgoto — Executivo Interior e Leste · ${execEsc(nomeMes)}</div>`;
+    blocos.forEach((b) => d.appendChild(b));
     return d;
 }
 function execLeResumo(texto) {
     let j; try { j = typeof texto === 'string' ? JSON.parse(texto) : texto; } catch (e) { throw new Error('o arquivo não é um Resumo para juntar (JSON inválido)'); }
     if (!j || j.tipo !== EXEC_RESUMO_TIPO || typeof j.html !== 'string') throw new Error('o arquivo não é um Resumo para juntar do painel de faturamento');
+    if (!(j.versao >= 2)) throw new Error('o Resumo para juntar foi gerado por uma versão anterior do painel: atualize a análise no outro painel e baixe o resumo de novo');
     const t = document.createElement('template'); t.innerHTML = j.html;
     t.content.querySelectorAll('script, iframe, object, embed').forEach((x) => x.remove());          // só conteúdo
     t.content.querySelectorAll('*').forEach((el) => Array.from(el.attributes).forEach((a) => { if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name); }));
@@ -1779,12 +1773,14 @@ function execJuntar(libs, texto) {
     if (outro.sup === meu) { alert(`Este arquivo é ${meu === 'LESTE' ? 'da Leste' : 'do Interior'}, o mesmo deste painel: escolha o Resumo para juntar do outro painel.`); return null; }
     if (outro.mes !== ESTADO.mes && !confirm(`O resumo ${outro.sup === 'LESTE' ? 'da Leste' : 'do Interior'} é de ${outro.nomeMes || outro.mes} e este painel está em outro mês. Juntar mesmo assim?`)) return null;
     const r = montaExecutivo(false, execParte(meu));
-    const proprio = { sup: meu, capa: capaDados(), elementos: Array.from(r.cont.children) };
+    const proprio = { sup: meu, elementos: Array.from(r.cont.children) };
     const partes = [proprio, outro].sort((a, b) => (a.sup === 'INTERIOR' ? 0 : 1) - (b.sup === 'INTERIOR' ? 0 : 1));
+    // o Resumo de cada parte (exec-capa-parte) sobe para a página inicial; o resto segue nas páginas de cada uma
+    const blocos = partes.map((p) => p.elementos.find((el) => el.classList.contains('exec-capa-parte'))).filter(Boolean);
     const cont = r.cont; cont.innerHTML = '';
     cont.classList.add('exec-juntos');
-    cont.appendChild(execCapaHtml(partes, r.nomeMes));
-    partes.forEach((p) => p.elementos.forEach((el) => cont.appendChild(el)));
+    cont.appendChild(execCapaHtml(blocos, r.nomeMes));
+    partes.forEach((p) => p.elementos.forEach((el) => { if (!el.classList.contains('exec-capa-parte')) cont.appendChild(el); }));
     const nome = `Executivo_Interior_e_Leste_${r.nomeMes}`;
     return obterLibsPdf(libs).then((l) => (l ? gerarPdfDireto(cont, l, nome) : Promise.reject(new Error('sem bibliotecas'))))
         .catch((erro) => { console.warn('PDF direto indisponível, usando a impressão:', erro); imprimirDocumentoLeve(cont); });
