@@ -953,3 +953,49 @@ tr.gar-tr-analisada td.gar-forte { font-weight:400; }
 #garTabelaSitl td.gar-lanc { white-space:normal; min-width:120px; max-width:170px; font-size:11.5px; }
 #garTabelaSitl th { white-space:normal; }
 #garTabelaSitl td.gar-quebra { white-space:normal; max-width:110px; }
+
+/* Executivo Interior + Leste (um PDF só): página inicial lado a lado e etiqueta da superintendência em cada seção.
+   Cores da arrecadação: Interior #1A2740, Leste #16a5b8. */
+#view-executivo .exec-capa { background:#f3f6f9; padding:16px 18px 18px; border-radius:8px; font-family:var(--fonte); }
+.exec-capa .cap-tit { font-size:19px; font-weight:700; color:#1A2740; text-wrap:balance; }
+.exec-capa .cap-sub { font-size:11px; color:#64748b; margin:2px 0 12px; }
+.exec-capa .cap-cols { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+.exec-capa .cap-tag-linha { display:flex; align-items:baseline; gap:8px; margin-bottom:8px; }
+.exec-capa .cap-tag { display:inline-block; padding:4px 12px; color:#fff; font-weight:700; font-size:15px; letter-spacing:.04em; border-radius:4px; }
+.exec-capa .cap-dica { font-size:9.5px; color:#64748b; }
+.exec-capa .cap-interior .cap-tag { background:#1A2740; } .exec-capa .cap-leste .cap-tag { background:#16a5b8; }
+.exec-capa .cap-kpis { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:7px; }
+.exec-capa .cap-kpi, .exec-capa .cap-card { background:#fff; border-radius:7px; box-shadow:0 1px 3px rgba(16,40,64,.08); }
+.exec-capa .cap-kpi { padding:7px 9px; min-width:0; }
+.exec-capa .cap-kpi h3 { margin:0; font-size:9px; font-weight:600; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.exec-capa .cap-kpi b { display:block; font-size:16px; margin:1px 0; font-variant-numeric:tabular-nums; }
+.exec-capa .cap-kpi small { font-size:9px; }
+.exec-capa .cap-interior .cap-kpi b { color:#1A2740; } .exec-capa .cap-leste .cap-kpi b { color:#16a5b8; }
+.exec-capa .cap-card { padding:8px 10px; margin-top:8px; }
+.exec-capa .cap-card h4 { margin:0 0 6px; font-size:11px; color:#1A2740; }
+.exec-capa table.cap-tab { width:100%; border-collapse:collapse; font-size:10px; font-variant-numeric:tabular-nums; }
+#view-executivo .exec-capa table.cap-tab th { color:#fff !important; padding:4px 6px; text-align:right; font-weight:600; font-size:9.5px; }
+.exec-capa table.cap-tab th:first-child, .exec-capa table.cap-tab td:first-child { text-align:left; }
+#view-executivo .exec-capa .cap-interior table.cap-tab th { background:#1A2740 !important; }
+#view-executivo .exec-capa .cap-leste table.cap-tab th { background:#16a5b8 !important; }
+.exec-capa table.cap-tab td { padding:3px 6px; text-align:right; border-bottom:1px solid #eef1f5; }
+.exec-capa .cap-interior table.cap-tab td { color:#1A2740; } .exec-capa .cap-leste table.cap-tab td { color:#000; }
+.exec-capa table.cap-tab tr.cap-forte td { font-weight:700; }
+.exec-capa .cap-neg { color:#C2560C !important; } .exec-capa .cap-pos { color:#166534 !important; }
+.exec-capa .cap-ind { display:flex; justify-content:space-between; gap:8px; font-size:10px; }
+.exec-capa .cap-ind b { font-variant-numeric:tabular-nums; }
+.exec-capa .cap-barra { height:6px; background:#e6ecf2; border-radius:3px; margin:5px 0 3px; position:relative; }
+.exec-capa .cap-barra i { position:absolute; inset:0 auto 0 0; border-radius:3px; }
+.exec-capa .cap-interior .cap-barra i { background:#1A2740; } .exec-capa .cap-leste .cap-barra i { background:#16a5b8; }
+.exec-capa .cap-card > small { font-size:9px; color:#64748b; }
+#view-executivo .exec-secao .exec-tag { display:inline-block; vertical-align:middle; margin-right:8px; padding:2px 8px; border-radius:3px; color:#fff;
+  font-size:10px; font-weight:700; letter-spacing:.04em; background:#1A2740; }
+#view-executivo .exec-secao h2 { display:inline; vertical-align:middle; }
+#view-executivo .exec-secao .exec-parte-filtros { margin:4px 0 0; font-size:9px; color:#64748b; }
+#view-executivo .exec-secao.exec-parte-leste { border-left-color:#16a5b8; }
+#view-executivo .exec-secao.exec-parte-leste .exec-tag { background:#16a5b8; }
+#view-executivo .exec-secao.exec-parte-leste h2 { color:#0f7f8e; }
+#view-executivo .exec-parte-leste th { background:#16a5b8 !important; border-color:#16a5b8 !important; }
+#view-executivo .exec-parte-leste .header-sub th { background:#0f8a9b !important; }
+#view-executivo .exec-capa table.cap-tab th:first-child, #view-executivo .exec-capa table.cap-tab td:first-child { text-align:left; }
+#view-executivo .exec-capa table.cap-tab th, #view-executivo .exec-capa table.cap-tab td { border:0 !important; border-bottom:1px solid #eef1f5 !important; }
