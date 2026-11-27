@@ -735,5 +735,6 @@ def test_andamento_considera_o_forecast_ajustado_a_mao():
     assert "fcOn = ritmoPref.fc !== false" in js                         # chave começa ligada
     assert "const desconta = fcOn && man ? (fc || 0) : 0;" in js         # só o forecast ajustado à mão sai do que precisa por dia
     assert "cob: comOrc.length > 0 && comOrc.every((x) => x.cob)" in js  # subtotal coberto só com todas as classes cobertas
+    assert "mas há classes abaixo do orçado" not in js                   # subtotal que bate pelo forecast: verde, sem o aviso
     assert '<th class="ritmo-fc">Forecast</th>' in js                    # chave desligada: colunas Forecast e Real. + Forecast
     assert "document.addEventListener('forecast-recalculado', () => document.querySelectorAll('.ritmo-card[data-ritmo]')" in js
