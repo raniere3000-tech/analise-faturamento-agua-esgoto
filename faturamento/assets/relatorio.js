@@ -5015,15 +5015,20 @@ function ritmoFmt(v, ev, compacto) {
     return 'R$ ' + Math.round(v).toLocaleString('pt-BR');
 }
 const ritmoCor = (at) => (at == null ? '' : at >= 1 ? 'ritmo-ok' : at >= 0.9 ? 'ritmo-atencao' : 'ritmo-baixo');
-// contas de uma tabela: linhas simples pelo próprio orçado; Fat. de água - Indireto e Total somam as linhas de baixo
-function ritmoContas(linhas, fonte, n, tot, nCorte, totCorte, soCorte, ev) {
+// contas de uma tabela: linhas simples pelo próprio orçado; Fat. de água - Indireto e Total somam as linhas de baixo.
+// fcs: {linha: {fc, man}} = forecast da aba Forecast/Indiretas (man = ajustado à mão: ✎ ou meta 🎯).
+// Com "Considerar o forecast" (fcOn), a linha com forecast ajustado à mão desconta esse forecast do que precisa por dia útil
+// e a Situação mostra o fechamento por ele; linha com forecast automático (o próprio ritmo) fica igual.
+function ritmoContas(linhas, fonte, n, tot, nCorte, totCorte, soCorte, ev, fcs, fcOn) {
     const pre = ev ? 'ev_' : '', porK = {};
     const simples = (l) => {
         const o = l.orc[fonte], r = l.real || 0, corte = soCorte && l.k === pre + 'ri_CORTE';
-        const nn = corte ? nCorte : n, tt = corte ? totCorte : tot;
-        if (o == null) return { o: null, r, esp: null, ritmo: nn ? r / nn : null, prec: null, proj: nn ? r / nn * tt : null, falta: tt - nn };
-        return { o, r, esp: tt ? o * nn / tt : null, ritmo: nn ? r / nn : null, prec: tt - nn > 0 ? Math.max(o - r, 0) / (tt - nn) : null,
-                 proj: nn ? r / nn * tt : null, falta: tt - nn };
+        const nn = corte ? nCorte : n, tt = corte ? totCorte : tot, f = (fcs && fcs[l.k]) || {}, fc = f.fc == null ? null : f.fc, man = !!f.man;
+        const base = { o, r, ritmo: nn ? r / nn : null, proj: nn ? r / nn * tt : null, falta: tt - nn, fc, man, fech: r + (fc || 0) };
+        if (o == null) return { ...base, esp: null, prec: null, cob: false };
+        const desconta = fcOn && man ? (fc || 0) : 0;
+        return { ...base, esp: tt ? o * nn / tt : null, prec: tt - nn > 0 ? Math.max(o - r - desconta, 0) / (tt - nn) : null,
+                 cob: r >= o || (fcOn && man && base.fech >= o) };
     };
     const soma = (k) => {
         if (porK[k]) return porK[k];
@@ -5032,37 +5037,60 @@ function ritmoContas(linhas, fonte, n, tot, nCorte, totCorte, soCorte, ev) {
         if (!filhos) return (porK[k] = l ? simples(l) : null);
         const fs = filhos.map(soma).filter(Boolean), s = (c) => (fs.some((x) => x[c] != null) ? fs.reduce((a, x) => a + (x[c] || 0), 0) : null);
         const o = l ? l.orc[fonte] : null, r = l ? l.real || 0 : 0;
-        const esp = s('esp'), prec = s('prec');
-        return (porK[k] = { o: o != null ? o : s('o'), r, esp, ritmo: s('ritmo'), prec, proj: s('proj'), falta: tot - n });
+        const comOrc = fs.filter((x) => x.o != null && x.o > 0);
+        return (porK[k] = { o: o != null ? o : s('o'), r, esp: s('esp'), ritmo: s('ritmo'), prec: s('prec'), proj: s('proj'), falta: tot - n,
+                            fc: s('fc'), fech: r + (s('fc') || 0), man: fs.some((x) => x.man), filhos: true,
+                            cob: comOrc.length > 0 && comOrc.every((x) => x.cob) });
     };
     return linhas.map((l) => ({ l, c: soma(l.k.replace(/^ev_/, '')) }));
 }
-function ritmoTabela(D, linhas, fonte, n, nCorte, soCorte, ev) {
+function ritmoTabela(D, linhas, fonte, n, nCorte, soCorte, ev, fcs, fcOn) {
     const tot = D.dias.length, totCorte = D.dias.filter((d) => d[1]).length;
     // eventos por dia útil podem ser poucos: uma casa decimal (1,4 por dia) em vez de arredondar para 1
     const Fd = (v) => (ev && v != null && isFinite(v) ? v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : ritmoFmt(v, ev));
     const F = (v) => ritmoFmt(v, ev), Fc = (v) => ritmoFmt(v, ev, true), P = (v) => (v == null || !isFinite(v) ? '-' : Math.round(v * 100) + '%');
+    const colFc = !fcOn;                     // chave desligada: as contas ficam pelo ritmo e o forecast aparece em duas colunas
     const cab = `<tr><th>Classe</th><th>Orçado<br>do mês</th><th class="ritmo-dia">Esperado até<br>o ${n}º dia útil</th><th>Realizado</th>`
+        + (colFc ? '<th class="ritmo-fc">Forecast</th><th class="ritmo-fc">Real. +<br>Forecast</th>' : '')
         + '<th class="ritmo-dia">Diferença</th><th class="ritmo-dia">% do<br>esperado</th><th>Faz por<br>dia útil</th>'
         + `<th>Precisa por dia útil<br><small>faltam ${tot - n}</small></th><th class="ritmo-sit">Situação</th></tr>`;
-    const corpo = ritmoContas(linhas, fonte, n, tot, nCorte, totCorte, soCorte, ev).map(({ l, c }) => {
+    const corpo = ritmoContas(linhas, fonte, n, tot, nCorte, totCorte, soCorte, ev, fcs, fcOn).map(({ l, c }) => {
         const at = c.esp ? c.r / c.esp : null, cls = ritmoCor(at);
         let sit = '';
         if (c.o != null && c.o > 0) {
+            const pf = c.fech / c.o, lapis = c.man ? ' ✎' : '';
             if (c.r >= c.o) sit = '<span class="ritmo-ok">orçado do mês já batido</span>';
+            else if (fcOn && c.man && c.cob) sit = `<span class="ritmo-ok">orçado coberto pelo forecast${lapis}: fecha com ${Fc(c.fech)} (${P(pf)})</span>`;
+            else if (fcOn && c.man && c.filhos && pf >= 1) sit = `<span class="ritmo-atencao">pelo forecast${lapis} fecha com ${Fc(c.fech)} (${P(pf)} do orçado), mas há classes abaixo do orçado</span>`;
+            else if (fcOn && c.man) sit = `<span class="${ritmoCor(pf)}">pelo forecast${lapis} fecha com ${Fc(c.fech)} (${P(pf)} do orçado)</span>`;
             else if (c.falta <= 0) sit = `<span class="ritmo-baixo">fechou em ${P(c.r / c.o)} do orçado</span>`;
             else if (at != null && at >= 1) sit = `<span class="ritmo-ok">no ritmo: fecha o mês com ${Fc(c.proj)}</span>`;
             else sit = `<span class="${cls}">no ritmo atual fecha com ${Fc(c.proj)} (${P(c.proj / c.o)} do orçado)</span>`;
         }
         const dif = c.esp != null ? c.r - c.esp : null;
         const corte = soCorte && l.k.endsWith('ri_CORTE') ? ' <small class="ritmo-tag" title="Esperado e ritmo pelos dias de corte">dias de corte</small>' : '';
+        const precTxt = c.prec == null ? '-' : (c.o != null && (c.r >= c.o || (c.prec === 0 && fcOn && c.man))) ? '—' : Fd(c.prec);
+        const fcCel = colFc ? `<td class="num">${c.fc == null ? '-' : F(c.fc)}${c.man && !c.filhos ? ' <small class="ritmo-tag" title="Forecast ajustado à mão na aba Forecast / Indiretas">✎</small>' : ''}</td>`
+            + `<td class="num"><b>${c.fc == null ? '-' : F(c.fech)}</b></td>` : '';
         return `<tr class="${l.forte ? 'dre-forte' : 'dre-abertura'}"><td class="dre-rotulo">${String(l.rot).replace(/&/g, '&amp;').replace(/</g, '&lt;')}${corte}</td><td class="num">${F(c.o)}</td>`
-            + `<td class="num">${F(c.esp)}</td><td class="num"><b>${F(c.r)}</b></td>`
+            + `<td class="num">${F(c.esp)}</td><td class="num"><b>${F(c.r)}</b></td>${fcCel}`
             + `<td class="num ${dif == null ? '' : dif >= 0 ? 'ritmo-ok' : 'ritmo-baixo'}">${dif == null ? '-' : (dif > 0 ? '+' : dif < 0 ? '−' : '') + F(Math.abs(dif))}</td>`
             + `<td class="num"><span class="ritmo-pct ${cls}">${P(at)}</span></td><td class="num">${Fd(c.ritmo)}</td>`
-            + `<td class="num">${c.prec == null ? '-' : c.r >= (c.o || 0) && c.o != null ? '—' : Fd(c.prec)}</td><td class="ritmo-sit">${sit}</td></tr>`;
+            + `<td class="num">${precTxt}</td><td class="ritmo-sit">${sit}</td></tr>`;
     }).join('');
     return `<div class="tabela-wrap"><table class="tabela-dre ritmo-tabela"><thead>${cab}</thead><tbody>${corpo}</tbody></table></div>`;
+}
+// forecast de cada linha das tabelas de Indiretas do mesmo quadro (valores e eventos): o que está na tela, editado ou automático
+function ritmoForecasts(card) {
+    const bloco = card.closest('.sup-bloco'), r = {};
+    if (!bloco) return r;
+    bloco.querySelectorAll('table.tabela-previsao tbody tr[data-k]').forEach((tr) => {
+        const tab = tr.closest('table'), k = tr.dataset.k;
+        if (!PREV_BASICAS.includes(k) || typeof prevLinhaAgora !== 'function') return;
+        const a = prevLinhaAgora(tab, tr, k);
+        r[k] = { fc: a.fc, man: prevEdicoes[prevChave(tab, k)] !== undefined || prevEdicoes[prevChaveMeta(tab, k)] !== undefined };
+    });
+    return r;
 }
 function ritmoDesenhar(card) {
     let D; try { D = JSON.parse(card.dataset.ritmo); } catch (e) { return; }
@@ -5070,7 +5098,7 @@ function ritmoDesenhar(card) {
     const tot = D.dias.length, auto = Math.min(D.auto, tot);
     const fonte = D.fontes.includes(ritmoPref.fonte) ? ritmoPref.fonte : D.padrao;
     const manual = ritmoPref.dia[D.ref], n = manual >= 1 && manual <= tot ? manual : auto, soCorte = ritmoPref.cortes === 'corte';
-    const nCorte = D.dias.slice(0, n).filter((d) => d[1]).length;
+    const nCorte = D.dias.slice(0, n).filter((d) => d[1]).length, fcOn = ritmoPref.fc !== false;    // chave começa ligada
     const dm = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
     const quadros = D.dias.map((d, i) => `<i class="${i < n ? 'ritmo-passou' : ''}${d[1] ? '' : ' ritmo-sem-corte'}" title="${i + 1}º dia útil · ${dm(d[0])}${d[1] ? '' : ' (sem corte)'}"></i>`).join('');
     const opDia = `<option value="">Automático (${auto}º · dados até ${dm(D.corte)})</option>`
@@ -5078,20 +5106,26 @@ function ritmoDesenhar(card) {
     const opF = D.fontes.map((f) => `<option value="${e(f)}"${f === fonte ? ' selected' : ''}>${e(f)}${f === D.padrao ? ' (padrão)' : ''}</option>`).join('');
     card.querySelector('.ritmo-barra').innerHTML = `<span class="ritmo-dias" aria-hidden="true">${quadros}</span>`
         + `<span class="ritmo-resumo"><b>${n}º</b> de ${tot} dias úteis · ${n < tot ? `faltam ${tot - n}` : 'mês completo'} · dados até ${dm(D.corte)} (D-1)`
-        + `${manual ? ' · <b class="ritmo-manual">dia útil escolhido à mão</b>' : ''} · orçado ${e(fonte || '-')}${soCorte ? ' · Cortes pelos dias de corte' : ''}</span>`
+        + `${manual ? ' · <b class="ritmo-manual">dia útil escolhido à mão</b>' : ''} · orçado ${e(fonte || '-')}${soCorte ? ' · Cortes pelos dias de corte' : ''}`
+        + `${fcOn ? ' · considerando o forecast ajustado à mão (✎)' : ''}</span>`
         + '<span class="ritmo-filtros">'
+        + `<label class="ritmo-chave" title="Ligada: Precisa por dia útil e Situação consideram o forecast ajustado à mão na aba Forecast / Indiretas. Desligada: contas pelo ritmo, com as colunas Forecast e Real. + Forecast."><input type="checkbox" class="ritmo-sel" data-campo="fc"${fcOn ? ' checked' : ''}> Considerar o forecast</label>`
         + `<label>Orçado <select class="ritmo-sel" data-campo="fonte">${opF}</select></label>`
         + `<label>Dia útil de referência <select class="ritmo-sel" data-campo="dia">${opDia}</select></label>`
         + `<label>Cortes <select class="ritmo-sel" data-campo="cortes"><option value="uteis">dias úteis normais</option>`
         + `<option value="corte"${soCorte ? ' selected' : ''}>só os dias de corte (${D.dias.filter((d) => d[1]).length})</option></select></label></span>`;
     if (!D.fontes.length) card.querySelector('.ritmo-barra').insertAdjacentHTML('beforeend', '<span class="ritmo-baixo">Sem planilha de orçado na pasta.</span>');
-    card.querySelector('.ritmo-fin').innerHTML = ritmoTabela(D, D.fin, fonte, n, nCorte, soCorte, false);
-    card.querySelector('.ritmo-ev').innerHTML = ritmoTabela(D, D.ev, fonte, n, nCorte, soCorte, true);
+    const fcs = ritmoForecasts(card);
+    card.querySelector('.ritmo-fin').innerHTML = ritmoTabela(D, D.fin, fonte, n, nCorte, soCorte, false, fcs, fcOn);
+    card.querySelector('.ritmo-ev').innerHTML = ritmoTabela(D, D.ev, fonte, n, nCorte, soCorte, true, fcs, fcOn);
     card.querySelectorAll('.ritmo-sel').forEach((s) => s.addEventListener('change', () => {
         const c = s.dataset.campo;
         if (c === 'dia') { if (s.value) ritmoPref.dia[D.ref] = +s.value; else delete ritmoPref.dia[D.ref]; }
+        else if (c === 'fc') ritmoPref.fc = s.checked;
         else ritmoPref[c] = s.value;
         ritmoSalva(); document.querySelectorAll('.ritmo-card[data-ritmo]').forEach(ritmoDesenhar);
     }));
 }
 document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('.ritmo-card[data-ritmo]').forEach(ritmoDesenhar));
+// forecast editado (aqui, na aba Forecast ou pela pasta compartilhada): o quadro refaz as contas
+document.addEventListener('forecast-recalculado', () => document.querySelectorAll('.ritmo-card[data-ritmo]').forEach(ritmoDesenhar));

@@ -486,6 +486,9 @@ def ritmo_indiretas_html(ctx, sup, ref, real, ev):
             '<p class="nota-secao">Esperado = orçado do mês ÷ dias úteis do mês × dias úteis que já passaram. '
             'Faz por dia útil = realizado ÷ dias úteis que já passaram. Precisa por dia útil = o que falta para o orçado ÷ '
             'dias úteis que faltam. O dia útil anda sozinho pela data dos dados (D-1); escolha outro no seletor para fechar '
-            'um mês depois que ele acabou.</p>'
+            'um mês depois que ele acabou. <b>Considerar o forecast</b> (ligado): a linha com forecast ajustado à mão (✎) nas abas '
+            'Forecast / Indiretas desconta esse valor do que precisa por dia útil e a Situação mostra o fechamento por ele; '
+            'Fat. de água e Total só aparecem como cobertos quando todas as classes estão. Desligado: contas pelo ritmo, com as '
+            'colunas Forecast e Real. + Forecast.</p>'
             '<div class="ritmo-barra"></div><div class="ritmo-tab ritmo-fin"></div>'
             '<h3 class="ritmo-sub">Eventos faturados (quantidade)</h3><div class="ritmo-tab ritmo-ev"></div></div>')
