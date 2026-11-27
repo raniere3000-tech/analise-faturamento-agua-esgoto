@@ -5061,7 +5061,6 @@ function ritmoTabela(D, linhas, fonte, n, nCorte, soCorte, ev, fcs, fcOn) {
             const pf = c.fech / c.o, lapis = c.man ? ' ✎' : '';
             if (c.r >= c.o) sit = '<span class="ritmo-ok">orçado do mês já batido</span>';
             else if (fcOn && c.man && c.cob) sit = `<span class="ritmo-ok">orçado coberto pelo forecast${lapis}: fecha com ${Fc(c.fech)} (${P(pf)})</span>`;
-            else if (fcOn && c.man && c.filhos && pf >= 1) sit = `<span class="ritmo-atencao">pelo forecast${lapis} fecha com ${Fc(c.fech)} (${P(pf)} do orçado), mas há classes abaixo do orçado</span>`;
             else if (fcOn && c.man) sit = `<span class="${ritmoCor(pf)}">pelo forecast${lapis} fecha com ${Fc(c.fech)} (${P(pf)} do orçado)</span>`;
             else if (c.falta <= 0) sit = `<span class="ritmo-baixo">fechou em ${P(c.r / c.o)} do orçado</span>`;
             else if (at != null && at >= 1) sit = `<span class="ritmo-ok">no ritmo: fecha o mês com ${Fc(c.proj)}</span>`;
