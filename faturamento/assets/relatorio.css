@@ -987,3 +987,6 @@ tr.gar-tr-analisada td.gar-forte { font-weight:400; }
 #view-executivo .exec-secao.exec-parte-leste h2 { color:#0f7f8e; }
 #view-executivo .exec-parte-leste th { background:#16a5b8 !important; border-color:#16a5b8 !important; }
 #view-executivo .exec-parte-leste .header-sub th { background:#0f8a9b !important; }
+.ritmo-tabela th.ritmo-fc { background:#8a6a12; }
+.ritmo-filtros .ritmo-chave { font-weight:600; color:var(--marinho); min-height:32px; cursor:pointer; }
+.ritmo-filtros .ritmo-chave input { width:16px; height:16px; margin:0; cursor:pointer; }
